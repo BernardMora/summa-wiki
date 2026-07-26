@@ -39,6 +39,8 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     if (/\.md$/i.test(href)) {
       const target = pathToId.get(joined);
       if (target) resolve[href] = `/note/${encodeURIComponent(target)}`;
+    } else if (/\.pdf$/i.test(href)) {
+      resolve[href] = `/pdf?p=${encodeURIComponent(joined)}`;
     } else {
       resolve[href] = `/api/asset?p=${encodeURIComponent(joined)}`;
     }

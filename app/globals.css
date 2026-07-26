@@ -426,3 +426,35 @@ body.resizing { cursor: col-resize; user-select: none; }
   position: absolute; bottom: 10px; left: 10px; background: var(--bg);
   border: 1px solid var(--line); padding: 4px 9px; font-size: 12px; pointer-events: none;
 }
+
+/* ---------------------------------------------------------------- pdf */
+.pdfwrap { position: relative; }
+.pdfbar {
+  display: flex; gap: 8px; align-items: center; font-size: 12.5px;
+  padding: 6px 0; position: sticky; top: 95px; background: var(--bg); z-index: 20;
+}
+.pdfbar button {
+  font: inherit; font-size: 13px; padding: 2px 9px; border: 1px solid var(--line);
+  background: var(--page-bg); color: var(--fg); border-radius: 2px; cursor: pointer;
+}
+.pdfpages { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.pdfpage {
+  position: relative; border: 1px solid var(--line-soft);
+  box-shadow: 0 1px 4px rgba(0,0,0,.12); background: #fff;
+}
+.pdftext {
+  position: absolute; inset: 0; overflow: hidden; line-height: 1;
+  opacity: .22;                    /* invisible but selectable */
+}
+.pdftext span {
+  position: absolute; white-space: pre; transform-origin: 0 0; color: transparent;
+  cursor: text;
+}
+.pdftext ::selection { background: rgba(255, 214, 0, .55); }
+.pdfsel {
+  position: fixed; bottom: 54px; left: 50%; transform: translateX(-50%);
+  background: var(--bg); border: 1px solid var(--line); padding: 10px 12px;
+  max-width: min(680px, 92vw); z-index: 40; box-shadow: 0 4px 18px rgba(0,0,0,.2);
+}
+.pdfsel-q { font-size: 13px; margin-bottom: 4px; }
+.pdfsel button.primary { background: var(--link); border-color: var(--link); color: #fff; }

@@ -67,7 +67,8 @@ export function renderNote(body: string, ctx: RenderCtx, title?: string): string
         ? `${attr}="/note/${encodeURIComponent(target)}"`
         : `${attr}="#" class="broken" title="No resuelve: ${decoded}"`;
     }
-    // image, pdf, video: stream it through the asset route
+    // PDFs open in the reader; other assets stream from the asset route.
+    if (/\.pdf$/i.test(decoded)) return `${attr}="/pdf?p=${encodeURIComponent(joined)}"`;
     return `${attr}="/api/asset?p=${encodeURIComponent(joined)}"`;
   });
 }
