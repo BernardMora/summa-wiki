@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildIndex } from "./indexer.ts";
-import { search, neighbourhood, health } from "./search.ts";
+import { search, neighbourhood, health, candidates } from "./search.ts";
 import { INDEX_PATH, VAULT, vaultExists } from "./config.ts";
 import type { WikiIndex, Note } from "./types.ts";
 
@@ -125,6 +125,20 @@ switch (cmd) {
     break;
   }
 
+  case "candidates": {
+    const idx = load();
+    const min = flag("min") ? Number(flag("min")) : 3;
+    const cs = candidates(idx, min);
+    if (!cs.length) { console.log("sin candidatos"); break; }
+    for (const c of cs) {
+      console.log(`\n[${c.kind}]  ${c.label}`);
+      console.log(`   ${c.why}`);
+      for (const n of c.notes) console.log(`     - ${n.title}`);
+    }
+    console.log(`\n${cs.length} candidato(s)`);
+    break;
+  }
+
   case "stats": {
     const s = load().stats;
     console.log(JSON.stringify(s, null, 2));
@@ -141,6 +155,7 @@ switch (cmd) {
   wiki related <slug> [--depth N]    graph neighbourhood
   wiki orphans                       notes with no inbound links
   wiki health [--all]                spec section 9 validation
+  wiki candidates [--min N]          articles worth writing, from graph structure
   wiki stats                         index statistics
 
 Vault: ${VAULT}   (override with WIKI_VAULT)`);

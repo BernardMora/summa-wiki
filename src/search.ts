@@ -140,3 +140,104 @@ function daysBetween(a: string, b: string): number {
   const d = (Date.parse(b) - Date.parse(a)) / 86400000;
   return Number.isFinite(d) ? d : 0;
 }
+
+
+export interface Candidate {
+  kind: "tag-cluster" | "co-cited" | "orphan-cluster";
+  label: string;
+  why: string;
+  notes: { id: string; title: string }[];
+}
+
+/**
+ * Suggest articles worth writing, from structure rather than content.
+ *
+ * Three signals, all cheap and all explainable — a suggestion you cannot
+ * justify is noise:
+ *  - a tag shared by several notes with no hub tying them together
+ *  - notes repeatedly cited together but never linked to each other
+ *  - isolated notes that share a pillar, i.e. a topic nobody has indexed
+ */
+export function candidates(index: WikiIndex, min = 3): Candidate[] {
+  const notes = index.notes.filter(
+    (n) => n.slug !== "_index" && n.type !== "journal" && !n.path.includes("/Templates/"),
+  );
+  const byId = new Map(notes.map((n) => [n.id, n]));
+  const out: Candidate[] = [];
+  const brief = (n: Note) => ({ id: n.id, title: n.title });
+
+  // 1. Tags with several notes but no note acting as a hub for them.
+  const byTag = new Map<string, Note[]>();
+  for (const n of notes) {
+    for (const t of n.tags) {
+      const key = t.replace(/^pillar\//, "");
+      if (!key || key.length < 3) continue;
+      if (!byTag.has(key)) byTag.set(key, []);
+      byTag.get(key)!.push(n);
+    }
+  }
+  for (const [tag, group] of byTag) {
+    if (group.length < min) continue;
+    const hub = group.some(
+      (n) => n.type === "moc" || n.backlinks.length >= Math.ceil(group.length * 0.6),
+    );
+    if (hub) continue;
+    out.push({
+      kind: "tag-cluster",
+      label: tag,
+      why: `${group.length} notas comparten la etiqueta "${tag}" y ninguna las agrupa`,
+      notes: group.slice(0, 8).map(brief),
+    });
+  }
+
+  // 2. Pairs cited together by several notes but not linked to each other.
+  const pairs = new Map<string, number>();
+  for (const n of notes) {
+    const targets = [...new Set(
+      n.links.filter((l) => l.kind === "internal" && l.target).map((l) => l.target!),
+    )].filter((t) => byId.has(t));
+    for (let i = 0; i < targets.length; i++) {
+      for (let j = i + 1; j < targets.length; j++) {
+        const key = [targets[i], targets[j]].sort().join("||");
+        pairs.set(key, (pairs.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  for (const [key, count] of pairs) {
+    if (count < min) continue;
+    const [a, b] = key.split("||");
+    const na = byId.get(a)!, nb = byId.get(b)!;
+    const linked =
+      na.links.some((l) => l.target === b) || nb.links.some((l) => l.target === a);
+    if (linked) continue;
+    out.push({
+      kind: "co-cited",
+      label: `${na.title} + ${nb.title}`,
+      why: `${count} notas citan ambas, pero no se enlazan entre sí`,
+      notes: [brief(na), brief(nb)],
+    });
+  }
+
+  // 3. Isolated notes sharing a pillar: a topic nobody has indexed.
+  const outbound = new Set(
+    notes.filter((n) => n.links.some((l) => l.kind === "internal")).map((n) => n.id),
+  );
+  const isolated = notes.filter((n) => n.backlinks.length === 0 && !outbound.has(n.id));
+  const byPillar = new Map<string, Note[]>();
+  for (const n of isolated) {
+    const k = n.pillar || "(sin pilar)";
+    if (!byPillar.has(k)) byPillar.set(k, []);
+    byPillar.get(k)!.push(n);
+  }
+  for (const [pillar, group] of byPillar) {
+    if (group.length < min) continue;
+    out.push({
+      kind: "orphan-cluster",
+      label: pillar,
+      why: `${group.length} notas aisladas en el pilar "${pillar}"`,
+      notes: group.slice(0, 8).map(brief),
+    });
+  }
+
+  return out.sort((a, b) => b.notes.length - a.notes.length);
+}
