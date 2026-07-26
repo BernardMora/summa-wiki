@@ -35,7 +35,8 @@ export default function PdfViewer({
   const scroller = useRef<HTMLDivElement>(null);
   /** Bumped on every render; stale runs bail out instead of appending pages. */
   const gen = useRef(0);
-  const restored = useRef(false);
+  /** Page to land on after a render: survives zoom changes and remounts. */
+  const wantPage = useRef(1);
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -113,16 +114,16 @@ export default function PdfViewer({
           layer.appendChild(span);
         });
       }
-      // Return to wherever this PDF was last left.
-      if (!restored.current && path) {
-        restored.current = true;
-        const last = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
-        if (last > 1) {
-          requestAnimationFrame(() => {
-            host.current?.querySelector(`.pdfpage[data-page="${last}"]`)
-              ?.scrollIntoView({ block: "start" });
-          });
-        }
+      // Restore position after EVERY render, not just the first. Re-rendering
+      // for a zoom change rebuilds the DOM and drops the scroll to the top, so
+      // a one-shot guard sent you back to page 1 on every zoom.
+      const target = wantPage.current;
+      if (target > 1) {
+        requestAnimationFrame(() => {
+          if (mine !== gen.current) return;
+          host.current?.querySelector(`.pdfpage[data-page="${target}"]`)
+            ?.scrollIntoView({ block: "start" });
+        });
       }
     } catch (e: any) {
       if (mine === gen.current) setErr(e?.message ?? "no se pudo abrir el PDF");
@@ -130,6 +131,14 @@ export default function PdfViewer({
       clearTimeout(stall);
     }
   }, [src, scale, path]);
+
+  // Seed the target page before the first render so a reopened PDF lands
+  // where it was left.
+  useEffect(() => {
+    if (!path) return;
+    const last = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
+    if (last > 1) { wantPage.current = last; setPage(last); setPageInput(String(last)); }
+  }, [path]);
 
   useEffect(() => { render(); }, [render]);
 
@@ -228,6 +237,7 @@ export default function PdfViewer({
         if (best && best.r > 0) {
           setPage(best.p);
           setPageInput(String(best.p));
+          wantPage.current = best.p;
           if (path) localStorage.setItem(`wiki.pdfpage.${path}`, String(best.p));
         }
       },
@@ -239,6 +249,7 @@ export default function PdfViewer({
 
   function goToPage(n: number) {
     const target = Math.min(Math.max(1, n), pages || 1);
+    wantPage.current = target;
     host.current?.querySelector(`.pdfpage[data-page="${target}"]`)
       ?.scrollIntoView({ block: "start", behavior: "smooth" });
   }

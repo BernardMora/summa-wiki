@@ -13,10 +13,13 @@ interface Node {
   dir: boolean;
   /** Note id when this file is an indexed note. */
   id?: string;
+  /** Lowercase extension without the dot, for the type badge. */
+  ext?: string;
   children?: Node[];
 }
 
-const SHOW_EXT = /\.(md|pdf|webp|png|jpe?g|gif|canvas|xlsx|docx|pptx|html)$/i;
+/** Files never worth showing: OS noise and lockfiles. */
+const HIDE = /^(\.|Icon\r?$|Thumbs\.db$|desktop\.ini$)/i;
 
 function walk(abs: string, rel: string, byPath: Map<string, string>, depth: number): Node[] {
   if (depth > 8) return [];
@@ -39,8 +42,10 @@ function walk(abs: string, rel: string, byPath: Map<string, string>, depth: numb
         ? []
         : walk(childAbs, childRel, byPath, depth + 1);
       out.push({ name: e.name, rel: childRel, dir: true, children });
-    } else if (SHOW_EXT.test(e.name)) {
-      out.push({ name: e.name, rel: childRel, dir: false, id: byPath.get(childRel) });
+    } else if (!HIDE.test(e.name)) {
+      // Everything shows, like Obsidian; the badge tells you what it is.
+      const ext = e.name.includes(".") ? e.name.split(".").pop()!.toLowerCase() : "";
+      out.push({ name: e.name, rel: childRel, dir: false, id: byPath.get(childRel), ext });
     }
   }
   out.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, "es") : a.dir ? -1 : 1));

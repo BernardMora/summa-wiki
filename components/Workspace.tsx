@@ -295,14 +295,16 @@ export default function Workspace({ initial }: { initial: Payload }) {
                 {p.activeId === null ? (
                   <p className="dim" style={{ padding: 20 }}>Panel vacío.</p>
                 ) : isImgId(p.activeId) ? (
-                  <div className="panescroll imgview">
+                  <div className="imgview">
                     <div className="imgbar">
-                      <span className="dim">{p.activeId.slice(4).split("/").pop()}</span>
+                      <span className="imgname">{p.activeId.slice(4).split("/").pop()}</span>
                       <a className="dim" style={{ marginLeft: "auto" }}
                          href={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`} download>Descargar</a>
                     </div>
-                    <img src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}
-                         alt={p.activeId.slice(4)} />
+                    <div className="imgscroll">
+                      <img src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}
+                           alt={p.activeId.slice(4)} />
+                    </div>
                   </div>
                 ) : isPdfId(p.activeId) ? (
                   <PdfViewer

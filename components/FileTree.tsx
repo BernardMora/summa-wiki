@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
 
-interface Node { name: string; rel: string; dir: boolean; id?: string; children?: Node[]; }
+interface Node { name: string; rel: string; dir: boolean; id?: string; ext?: string; children?: Node[]; }
 interface Menu { x: number; y: number; node: Node; }
 interface Cat { id: string; label: string; }
 
@@ -140,8 +140,11 @@ export default function FileTree() {
   function openFile(n: Node, newTab: boolean) {
     const label = n.name.replace(/\.[^.]+$/, "");
     if (n.id) { tabs?.open(n.id, label, newTab); return; }
-    if (/\.pdf$/i.test(n.name)) { tabs?.open(`pdf:${n.rel}`, label, newTab); return; }
-    if (/\.(png|jpe?g|webp|gif|svg)$/i.test(n.name)) { tabs?.open(`img:${n.rel}`, label, newTab); return; }
+    if (n.ext === "pdf") { tabs?.open(`pdf:${n.rel}`, label, newTab); return; }
+    if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(n.ext ?? "")) {
+      tabs?.open(`img:${n.rel}`, label, newTab); return;
+    }
+    // No viewer for this type: hand it to the browser.
     window.open(`/api/asset?p=${encodeURIComponent(n.rel)}`, "_blank");
   }
 
@@ -214,7 +217,7 @@ export default function FileTree() {
       return (
         <div
           key={n.rel}
-          className={`row ${n.id ? "file" : /\.pdf$/i.test(n.name) ? "file pdf" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` ? " current" : ""}`}
+          className={`row ${n.id ? "file" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` || activeId === `img:${n.rel}` ? " current" : ""}`}
           style={pad}
           title={n.rel}
           onContextMenu={onCtx}
@@ -223,7 +226,8 @@ export default function FileTree() {
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openFile(n, true); } }}
         >
           <span className="caret" />
-          <span className="name">{n.name}</span>
+          <span className="name">{n.ext === "md" ? n.name.replace(/\.md$/i, "") : n.name.replace(/\.[^.]+$/, "")}</span>
+          {n.ext && n.ext !== "md" && <span className="extbadge">{n.ext}</span>}
         </div>
       );
     });

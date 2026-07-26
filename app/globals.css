@@ -471,8 +471,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   font-size: 9px; background: var(--panel-blue-head); color: var(--muted);
   padding: 1px 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle;
 }
-.tree .row.pdf .name { color: var(--link); }
-.tree .row.pdf .name::after { content: " ◲"; font-size: 9px; opacity: .6; }
 
 /* ---------------------------------------------------------------- split */
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
@@ -561,10 +559,15 @@ body.dragging-tab { cursor: grabbing; user-select: none; }
 .dropzone.right { right: 0; top: 0; bottom: 0; width: 50%; }
 .dropzone.center{ inset: 0; background: rgba(150, 120, 255, .26); }
 
-.imgview { display: flex; flex-direction: column; gap: 8px; }
-.imgbar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.imgview img {
-  max-width: 100%; height: auto; align-self: flex-start;
+.imgview { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.imgbar {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex: 0 0 auto;
+  padding: 7px 14px; background: var(--bg); border-bottom: 1px solid var(--line-soft);
+}
+.imgname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imgscroll { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
+.imgscroll img {
+  max-width: 100%; height: auto; display: block;
   border: 1px solid var(--line-soft); background: var(--panel-grey);
 }
 
@@ -590,7 +593,6 @@ body.workspace .toc { display: none; }
   flex: 0 0 auto; padding: 6px 12px 0; background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-.panescroll .imgbar { position: sticky; top: 0; z-index: 12; background: var(--bg); padding: 6px 0; }
 
 .pdfpageno { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
 .pdfpageno input {
@@ -608,3 +610,10 @@ body.workspace .toc { display: none; }
   color: transparent; border-radius: 2px; padding: 0; cursor: pointer;
 }
 .pdftext mark.hl:hover { outline: 1px solid var(--link-red); }
+
+.tree .row .extbadge {
+  margin-left: auto; flex: 0 0 auto; font-size: 8.5px; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); background: var(--panel-grey-head);
+  padding: 1px 4px; border-radius: 2px;
+}
+.tree .row.other .name { color: var(--fg); }
