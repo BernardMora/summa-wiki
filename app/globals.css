@@ -100,6 +100,7 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 .tabs {
   background: var(--bg); border-bottom: 1px solid var(--line);
   padding: 0 22px; display: flex; gap: 2px; align-items: flex-end;
+  position: sticky; top: 95px; z-index: 24;
 }
 .tabs button, .tabs a {
   font: inherit; font-size: 13px; padding: 6px 14px; cursor: pointer;

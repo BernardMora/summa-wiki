@@ -111,16 +111,33 @@ class TableWidget extends WidgetType {
 }
 
 class ImageWidget extends WidgetType {
-  constructor(private readonly src: string, private readonly alt: string) { super(); }
-  toDOM() {
+  constructor(
+    private readonly src: string,
+    private readonly alt: string,
+    /** Range of the href inside the markdown, so a click can select it. */
+    private readonly hrefFrom: number,
+    private readonly hrefTo: number,
+  ) { super(); }
+
+  toDOM(view: EditorView) {
     const img = document.createElement("img");
     img.src = this.src;
     img.alt = this.alt;
     img.className = "cm-img";
+    img.title = "Clic para seleccionar la ruta";
+    img.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      // Selecting the path puts the cursor on that line, which reveals the
+      // raw markdown — so the path ends up selected and editable.
+      view.dispatch({ selection: { anchor: this.hrefFrom, head: this.hrefTo }, scrollIntoView: true });
+      view.focus();
+    });
     return img;
   }
-  eq(o: ImageWidget) { return o.src === this.src; }
-  ignoreEvent() { return true; }
+  eq(o: ImageWidget) {
+    return o.src === this.src && o.hrefFrom === this.hrefFrom && o.hrefTo === this.hrefTo;
+  }
+  ignoreEvent() { return false; }
 }
 
 const PROV_RE = /<!--\s*(\/?)(ai|human)\s*-->/g;
@@ -197,7 +214,11 @@ function build(view: EditorView): DecorationSet {
         if (isActive(s)) continue;
         const url = resolve(decodeURIComponent(im[2]));
         if (!url) continue;
-        items.push({ from: s, to: e, deco: Decoration.replace({ widget: new ImageWidget(url, im[1]) }) });
+        const hrefFrom = s + im[0].lastIndexOf("(" + im[2]) + 1;
+        items.push({
+          from: s, to: e,
+          deco: Decoration.replace({ widget: new ImageWidget(url, im[1], hrefFrom, hrefFrom + im[2].length) }),
+        });
       }
 
       // Provenance markers -> chips.

@@ -109,7 +109,30 @@ export default function ArticleClient({
     return () => window.removeEventListener("keydown", onKey);
   }, [save]);
 
-  const resolveHref = useCallback((href: string) => resolve[href] ?? null, [resolve]);
+  /**
+   * The server precomputes href -> URL from the index, but that snapshot is
+   * taken at render time. An image pasted afterwards is not in it, which is
+   * why a freshly pasted image only appeared after a reload. Assets can be
+   * resolved from the note's own directory without the index, so fall back to
+   * building the URL directly. Note links still need the index and stay
+   * map-only.
+   */
+  const dirFromVault = meta.vaultPath.split("/").slice(0, -1).join("/");
+  const resolveHref = useCallback((href: string) => {
+    const hit = resolve[href];
+    if (hit) return hit;
+    if (/^(https?:|aios:|mailto:|#)/.test(href)) return null;
+    if (/\.md$/i.test(href)) return null;
+
+    const segs = `${dirFromVault}/${href}`.split("/");
+    const out: string[] = [];
+    for (const sg of segs) {
+      if (!sg || sg === ".") continue;
+      if (sg === "..") out.pop();
+      else out.push(sg);
+    }
+    return `/api/asset?p=${encodeURIComponent(out.join("/"))}`;
+  }, [resolve, dirFromVault]);
   const total = meta.humanWords + meta.agentWords;
 
   function doMark(kind: "human" | "ai") {
