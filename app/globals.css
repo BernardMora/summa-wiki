@@ -403,3 +403,26 @@ body.resizing { cursor: col-resize; user-select: none; }
   background: var(--panel-blue-head); border-radius: 2px;
 }
 .tree .row.current .name { color: var(--fg); font-weight: 600; }
+
+/* ---------------------------------------------------------------- graph */
+.graphwrap { position: relative; }
+.graphbar {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  font-size: 12.5px; margin-bottom: 8px;
+}
+.graphbar select {
+  font: inherit; font-size: 12.5px; padding: 3px 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 2px;
+}
+.graphlegend { display: flex; gap: 9px; flex-wrap: wrap; margin-left: auto; color: var(--muted); font-size: 11px; }
+.graphlegend span { display: flex; align-items: center; gap: 3px; }
+.graphlegend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.graphcanvas {
+  width: 100%; height: calc(100vh - 230px); min-height: 420px;
+  border: 1px solid var(--line-soft); cursor: grab; display: block;
+}
+.graphcanvas:active { cursor: grabbing; }
+.graphtip {
+  position: absolute; bottom: 10px; left: 10px; background: var(--bg);
+  border: 1px solid var(--line); padding: 4px 9px; font-size: 12px; pointer-events: none;
+}
