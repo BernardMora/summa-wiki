@@ -21,9 +21,12 @@
   --serif: "Linux Libertine", Georgia, "Times New Roman", serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --sel: rgba(60,110,220,.22);
+  color-scheme: light;
 }
+/* System preference, unless a theme was explicitly chosen. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1b1b1d; --page-bg: #101012; --fg: #eaecf0; --muted: #a2a9b1;
     --line: #4b4d50; --line-soft: #3a3c3f;
     --link: #88a5e8; --link-visited: #b697e8; --link-red: #ff6c6c;
@@ -32,8 +35,24 @@
     --panel-grey: #202024; --panel-grey-head: #303034;
     --ai-bg: #241f3a; --ai-line: #7d6ad0;
     --human-bg: #302914; --human-line: #a3862f;
+    --sel: rgba(120,150,220,.34);
+    color-scheme: dark;
   }
 }
+/* Explicit choice always wins over the media query. */
+:root[data-theme="dark"] {
+    --bg: #1b1b1d; --page-bg: #101012; --fg: #eaecf0; --muted: #a2a9b1;
+    --line: #4b4d50; --line-soft: #3a3c3f;
+    --link: #88a5e8; --link-visited: #b697e8; --link-red: #ff6c6c;
+    --panel-blue: #1c2432; --panel-blue-head: #2a3b53;
+    --panel-green: #1b2620; --panel-green-head: #2b3f30;
+    --panel-grey: #202024; --panel-grey-head: #303034;
+    --ai-bg: #241f3a; --ai-line: #7d6ad0;
+    --human-bg: #302914; --human-line: #a3862f;
+    --sel: rgba(120,150,220,.34);
+    color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -279,3 +298,11 @@ body.resizing { cursor: col-resize; user-select: none; }
 .treehint { font-size: 11px; color: var(--muted); padding: 2px 4px 6px; }
 .cm-editor { border: 1px solid var(--line); height: calc(100vh - 300px); }
 .cm-editor .cm-scroller { overflow: auto; }
+
+/* ---------------------------------------------------------------- theme toggle */
+.themebtn {
+  border: 1px solid var(--line); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; padding: 5px 9px; cursor: pointer; font-size: 13px;
+  line-height: 1; align-self: center; margin-left: 10px;
+}
+.themebtn:hover { background: var(--panel-blue); }

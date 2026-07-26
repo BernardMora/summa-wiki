@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ThemeToggle from "./ThemeToggle.tsx";
 
 interface Hit { id: string; title: string; path: string; type: string; bundle: string; }
 
@@ -61,6 +62,8 @@ export default function Masthead() {
           </div>
         )}
       </div>
+
+      <ThemeToggle />
     </header>
   );
 }

@@ -124,12 +124,20 @@ export const livePreview = ViewPlugin.fromClass(
 
 /** Visual styling so the editor reads like the rendered article. */
 export const livePreviewTheme = EditorView.theme({
-  "&": { fontSize: "14.2px" },
+  "&": { fontSize: "14.2px", backgroundColor: "var(--bg)", color: "var(--fg)" },
   ".cm-content": {
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
     lineHeight: "1.6",
     padding: "10px 14px",
+    caretColor: "var(--fg)",
   },
+  // CodeMirror draws the caret as a border, which defaults to black and so
+  // disappears on a dark background. Bind it to the foreground colour.
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--fg)", borderLeftWidth: "2px" },
+  "&.cm-focused .cm-cursor": { borderLeftColor: "var(--fg)" },
+  ".cm-selectionBackground": { background: "var(--sel)" },
+  "&.cm-focused .cm-selectionBackground": { background: "var(--sel)" },
+  ".cm-activeLine": { backgroundColor: "transparent" },
   ".cm-h1": { fontFamily: "Georgia, serif", fontSize: "1.85em", lineHeight: "1.25" },
   ".cm-h2": { fontFamily: "Georgia, serif", fontSize: "1.45em", lineHeight: "1.3" },
   ".cm-h3": { fontWeight: "700", fontSize: "1.15em" },
