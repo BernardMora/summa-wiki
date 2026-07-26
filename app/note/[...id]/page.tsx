@@ -1,11 +1,11 @@
 import path from "node:path";
-
 import ArticleClient from "@/components/ArticleClient.tsx";
 import { getIndex, readNote, VAULT } from "@/lib/server.ts";
-import { renderNote } from "@/lib/render.ts";
 import { parseFrontmatter } from "@/src/indexer.ts";
 
 export const dynamic = "force-dynamic";
+
+const LINK_RE = /!?\[[^\]]*\]\(([^)\s]+)\)/g;
 
 export default async function NotePage({ params }: { params: Promise<{ id: string[] }> }) {
   const { id: parts } = await params;
@@ -19,21 +19,36 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
   }
 
   const { body } = parseFrontmatter(file.content);
+  const dirFromVault = path.dirname(path.relative(VAULT, note.abs)).split(path.sep).join("/");
   const pathToId = new Map(
     idx.notes.map((n) => [path.relative(VAULT, n.abs).split(path.sep).join("/"), n.id]),
   );
-  const dirFromVault = path.dirname(path.relative(VAULT, note.abs)).split(path.sep).join("/");
-  const html = renderNote(body, { id, dirFromVault, pathToId }, note.title);
+
+  /**
+   * The editor is the only view now, so it must resolve links and images
+   * itself. Precompute href -> app URL here, where the index lives.
+   */
+  const resolve: Record<string, string> = {};
+  for (const m of body.matchAll(LINK_RE)) {
+    const raw = m[1];
+    if (/^(https?:|mailto:|#)/.test(raw)) continue;
+    const href = decodeURIComponent(raw);
+    if (resolve[href]) continue;
+    if (href.startsWith("aios://")) continue;
+    const joined = path.posix.normalize(path.posix.join(dirFromVault, href));
+    if (/\.md$/i.test(href)) {
+      const target = pathToId.get(joined);
+      if (target) resolve[href] = `/note/${encodeURIComponent(target)}`;
+    } else {
+      resolve[href] = `/api/asset?p=${encodeURIComponent(joined)}`;
+    }
+  }
 
   const byId = new Map(idx.notes.map((n) => [n.id, n]));
-  const backlinks = note.backlinks
-    .map((b) => byId.get(b))
-    .filter(Boolean)
+  const backlinks = note.backlinks.map((b) => byId.get(b)).filter(Boolean)
     .map((n) => ({ id: n!.id, title: n!.title, path: n!.path }));
-  const outbound = note.links
-    .filter((l) => l.kind === "internal" && l.target)
-    .map((l) => byId.get(l.target!))
-    .filter(Boolean)
+  const outbound = note.links.filter((l) => l.kind === "internal" && l.target)
+    .map((l) => byId.get(l.target!)).filter(Boolean)
     .map((n) => ({ id: n!.id, title: n!.title, path: n!.path }));
 
   return (
@@ -46,11 +61,11 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
         tags: note.tags, words: note.words,
         humanWords: note.provenance.humanWords, agentWords: note.provenance.agentWords,
       }}
-      html={html}
       initialContent={file.content}
       mtimeMs={file.mtimeMs}
       backlinks={backlinks}
       outbound={outbound}
+      resolve={resolve}
     />
   );
 }

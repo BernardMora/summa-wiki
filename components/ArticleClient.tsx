@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Editor from "./Editor.tsx";
+import { useRouter } from "next/navigation";
+import type { EditorView } from "@codemirror/view";
+import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
 
 interface Ref { id: string; title: string; path: string; }
 interface Meta {
@@ -10,86 +12,111 @@ interface Meta {
   status: string; resource: string; tags: string[]; words: number;
   humanWords: number; agentWords: number;
 }
-
 type Tab = "article" | "data" | "links";
 
+const AUTOSAVE_MS = 900;
+
 /**
- * Wikipedia-style article surface: tabs across the top, content below.
- * "Datos" and "Enlaces" replace Wikipedia's Talk/History — they show what
- * this wiki actually has, which is frontmatter and the link graph.
+ * One view, always editable — no read/edit toggle. The live-preview editor IS
+ * the article, and saves happen automatically after a pause in typing.
+ *
+ * Provenance is explicit rather than inferred. With autosave firing constantly
+ * there is no meaningful "before" to diff against, so guessing would produce
+ * marker soup. Instead you select text and mark it, or set `author:` for the
+ * file as a whole.
  */
 export default function ArticleClient({
-  id, meta, html, initialContent, mtimeMs, backlinks, outbound,
+  id, meta, initialContent, mtimeMs, backlinks, outbound, resolve,
 }: {
-  id: string; meta: Meta; html: string; initialContent: string; mtimeMs: number;
-  backlinks: Ref[]; outbound: Ref[];
+  id: string; meta: Meta; initialContent: string; mtimeMs: number;
+  backlinks: Ref[]; outbound: Ref[]; resolve: Record<string, string>;
 }) {
   const [tab, setTab] = useState<Tab>("article");
-  // ?edit=1 deep-links straight into the editor.
-  const [editing, setEditing] = useState(
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1",
-  );
   const [hideProv, setHideProv] = useState(false);
-  const [text, setText] = useState(initialContent);
-  const [savedText, setSavedText] = useState(initialContent);
-  const [mtime, setMtime] = useState(mtimeMs);
   const [status, setStatus] = useState("");
   const [conflict, setConflict] = useState<string | null>(null);
-  const [provNote, setProvNote] = useState("");
+  const [hasSel, setHasSel] = useState(false);
 
-  const dirty = text !== savedText;
-  const totalWords = meta.humanWords + meta.agentWords;
+  const viewRef = useRef<EditorView | null>(null);
+  const savedRef = useRef(initialContent);
+  const mtimeRef = useRef(mtimeMs);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
 
   useEffect(() => { document.body.classList.toggle("hide-prov", hideProv); }, [hideProv]);
 
-  useEffect(() => {
-    const warn = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
-
-  async function save(force = false) {
+  const save = useCallback(async (force = false) => {
+    const body = viewRef.current?.state.doc.toString();
+    if (body === undefined) return;
+    if (body === savedRef.current && !force) return;
     setStatus("guardando…");
     const r = await fetch("/api/note", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, content: text, mtimeMs: force ? undefined : mtime }),
+      body: JSON.stringify({ id, content: body, mtimeMs: force ? undefined : mtimeRef.current }),
     });
     if (r.status === 409) { setConflict((await r.json()).currentContent); setStatus(""); return; }
     if (!r.ok) { setStatus("error al guardar"); return; }
     const d = await r.json();
-    setMtime(d.mtimeMs); setSavedText(text); setStatus("guardado");
-    if (d.wrapped || d.authorChanged) {
-      setProvNote(
-        [d.wrapped ? "tu edición quedó marcada como humana dentro de un bloque del agente" : "",
-         d.authorChanged ? `author: ${d.authorChanged}` : ""].filter(Boolean).join(" · "),
-      );
-      setTimeout(() => setProvNote(""), 6000);
-    }
-    setTimeout(() => setStatus(""), 1800);
-  }
+    mtimeRef.current = d.mtimeMs;
+    savedRef.current = body;
+    setStatus("guardado");
+    setTimeout(() => setStatus((s) => (s === "guardado" ? "" : s)), 1400);
+  }, [id]);
+
+  const onChange = useCallback(() => {
+    setStatus("sin guardar");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => save(), AUTOSAVE_MS);
+  }, [save]);
+
+  // Flush pending work when the window loses focus or the tab is hidden.
+  useEffect(() => {
+    const flush = () => { if (timer.current) clearTimeout(timer.current); save(); };
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    const warn = (e: BeforeUnloadEvent) => {
+      if ((viewRef.current?.state.doc.toString() ?? "") !== savedRef.current) {
+        e.preventDefault(); e.returnValue = "";
+      }
+    };
+    window.addEventListener("blur", flush);
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("blur", flush);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("beforeunload", warn);
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [save]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); if (editing && dirty) save(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, dirty, text, mtime]);
+  }, [save]);
+
+  const resolveHref = useCallback((href: string) => resolve[href] ?? null, [resolve]);
+  const total = meta.humanWords + meta.agentWords;
+
+  function doMark(kind: "human" | "ai") {
+    const v = viewRef.current;
+    if (v && markSelection(v, kind)) { onChange(); setHasSel(false); }
+  }
+  function doUnmark() {
+    const v = viewRef.current;
+    if (v && unmarkSelection(v)) onChange();
+  }
 
   return (
     <>
       <div className="tabs" style={{ margin: "-20px -30px 18px", paddingTop: 6 }}>
-        <button className={tab === "article" && !editing ? "on" : ""}
-          onClick={() => { setTab("article"); setEditing(false); }}>Artículo</button>
-        <button className={tab === "data" ? "on" : ""} onClick={() => { setTab("data"); setEditing(false); }}>Datos</button>
-        <button className={tab === "links" ? "on" : ""} onClick={() => { setTab("links"); setEditing(false); }}>
+        <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
+        <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
+        <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
           Enlaces ({backlinks.length + outbound.length})
         </button>
-        <span className="right">
-          <button className={editing ? "on" : ""} onClick={() => { setEditing((v) => !v); setTab("article"); }}>
-            {editing ? "Ver" : "Editar"}
-          </button>
-        </span>
       </div>
 
       <article>
@@ -101,27 +128,29 @@ export default function ArticleClient({
           <span>creada {meta.created || "—"}</span>
           <span>actualizada {meta.updated}</span>
           <span>{meta.words} palabras</span>
-          {meta.agentWords > 0 && totalWords > 0 && (
-            <span>{Math.round((100 * meta.agentWords) / totalWords)}% agente</span>
+          {meta.agentWords > 0 && total > 0 && (
+            <span>{Math.round((100 * meta.agentWords) / total)}% agente</span>
           )}
         </p>
 
-        {tab === "article" && !editing && (
-          <div
-            className="prose"
-            onClick={(e) => {
-              const t = e.target as HTMLElement;
-              if (t.closest("a")) return;                       // let links navigate
-              if (window.getSelection()?.toString()) return;    // let text selection be
-              setEditing(true);
-            }}
-            title="Clic para editar"
-            dangerouslySetInnerHTML={{ __html: html }}
+        {/* Kept mounted across tabs so the editor never loses its buffer. */}
+        <div
+          style={{ display: tab === "article" ? "block" : "none" }}
+          onMouseUp={() => {
+            const v = viewRef.current;
+            setHasSel(Boolean(v && v.state.selection.main.from !== v.state.selection.main.to));
+          }}
+        >
+          <Editor
+            value={initialContent}
+            onChange={onChange}
+            resolve={resolveHref}
+            onNavigate={(url) => router.push(url)}
+            onReady={(v) => { viewRef.current = v; }}
           />
-        )}
-        {editing && <Editor value={text} onChange={setText} />}
+        </div>
 
-        {tab === "data" && !editing && (
+        {tab === "data" && (
           <table>
             <tbody>
               <tr><th>type</th><td>{meta.type}</td></tr>
@@ -140,7 +169,7 @@ export default function ArticleClient({
           </table>
         )}
 
-        {tab === "links" && !editing && (
+        {tab === "links" && (
           <>
             <h2>Enlaces salientes ({outbound.length})</h2>
             {outbound.length === 0 ? <p className="dim">Ninguno.</p> : (
@@ -158,8 +187,8 @@ export default function ArticleClient({
         )}
       </article>
 
-      {tab === "article" && !editing && backlinks.length > 0 && (
-        <section style={{ marginTop: 34, borderTop: "1px solid var(--line-soft)", paddingTop: 12 }}>
+      {tab === "article" && backlinks.length > 0 && (
+        <section style={{ marginTop: 28, borderTop: "1px solid var(--line-soft)", paddingTop: 12 }}>
           <h2 style={{ fontSize: 15, margin: "0 0 6px", fontFamily: "var(--sans)" }}>
             Enlaces entrantes ({backlinks.length})
           </h2>
@@ -185,13 +214,22 @@ export default function ArticleClient({
       )}
 
       <div className="bar">
-        <button onClick={() => { setEditing((v) => !v); setTab("article"); }}>{editing ? "Ver" : "Editar"}</button>
-        {editing && <button className="primary" disabled={!dirty} onClick={() => save()}>Guardar {dirty ? "•" : ""}</button>}
-        <button onClick={() => setHideProv((v) => !v)}>{hideProv ? "Mostrar autoría" : "Ocultar autoría"}</button>
+        <button onClick={() => doMark("human")} disabled={!hasSel} title="Marca la selección como escrita por ti">
+          Marcar como mío
+        </button>
+        <button onClick={() => doMark("ai")} disabled={!hasSel} title="Marca la selección como escrita por el agente">
+          Marcar como IA
+        </button>
+        <button onClick={doUnmark} title="Quita los marcadores del bloque donde está el cursor">
+          Quitar marca
+        </button>
+        <button onClick={() => setHideProv((v) => !v)}>
+          {hideProv ? "Mostrar autoría" : "Ocultar autoría"}
+        </button>
         <span className="dim">{status}</span>
-        {provNote && <span className="provnote">{provNote}</span>}
-        {dirty && !status && <span className="warn">sin guardar</span>}
-        <span style={{ marginLeft: "auto" }} className="dim">⌘S guarda</span>
+        <span style={{ marginLeft: "auto" }} className="dim">
+          guardado automático · ⌘S fuerza · ⌘clic sigue enlaces
+        </span>
       </div>
     </>
   );

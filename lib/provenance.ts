@@ -53,37 +53,22 @@ export interface ProvenanceResult {
   authorChanged: string | null;
 }
 
-export function applyHumanProvenance(oldText: string, newText: string): ProvenanceResult {
-  const span = changedSpan(oldText, newText);
-  let content = newText;
-  let wrapped = false;
+export function applyHumanProvenance(_oldText: string, newText: string): ProvenanceResult {
+  // No inference. Under autosave the "previous" content is whatever was written
+  // a second ago, so diffing would wrap fragments of half-typed sentences.
+  // Marking is explicit: select text and mark it, or set author: for the file.
+  const content0 = newText;
+  const wrapped = false;
+  let content = content0;
 
-  if (span && span.end > span.start) {
-    const inserted = newText.slice(span.start, span.end);
-    const regions = aiRegions(newText);
-    // Only wrap a real insertion that sits wholly inside an agent block and
-    // does not already carry markers or straddle one.
-    if (
-      inserted.trim().length > 0 &&
-      inside(regions, span.start, span.end) &&
-      !ALREADY_HUMAN.test(inserted) &&
-      !/<!--\s*\/?(ai|human)\s*-->/.test(inserted)
-    ) {
-      content =
-        newText.slice(0, span.start) +
-        `<!-- human -->${inserted}<!-- /human -->` +
-        newText.slice(span.end);
-      wrapped = true;
-    }
-  }
-
-  // author: reflects the file as a whole.
+  // author: is kept in sync with the markers actually present in the file.
   const m = content.match(/^(---\r?\n[\s\S]*?)^author:\s*(\S+)\s*$/m);
   let authorChanged: string | null = null;
   if (m) {
     const current = m[2];
     const hasAgent = /<!--\s*ai\s*-->/.test(content);
-    const next = hasAgent ? "mixed" : current === "agent" ? "human" : current;
+    const hasHuman = /<!--\s*human\s*-->/.test(content);
+    const next = hasAgent && hasHuman ? "mixed" : hasAgent && !hasHuman ? "agent" : current;
     if (next !== current) {
       content = content.replace(/^author:\s*\S+\s*$/m, `author: ${next}`);
       authorChanged = next;
