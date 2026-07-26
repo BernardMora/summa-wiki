@@ -275,3 +275,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 .prose { cursor: text; }
 .provnote { color: var(--ai-line); font-weight: 600; }
+
+.treehint { font-size: 11px; color: var(--muted); padding: 2px 4px 6px; }
+.cm-editor { border: 1px solid var(--line); height: calc(100vh - 300px); }
+.cm-editor .cm-scroller { overflow: auto; }

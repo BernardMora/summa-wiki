@@ -25,7 +25,10 @@ export default function ArticleClient({
   backlinks: Ref[]; outbound: Ref[];
 }) {
   const [tab, setTab] = useState<Tab>("article");
-  const [editing, setEditing] = useState(false);
+  // ?edit=1 deep-links straight into the editor.
+  const [editing, setEditing] = useState(
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1",
+  );
   const [hideProv, setHideProv] = useState(false);
   const [text, setText] = useState(initialContent);
   const [savedText, setSavedText] = useState(initialContent);

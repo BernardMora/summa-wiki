@@ -173,12 +173,7 @@ export default function FileTree() {
 
   return (
     <div ref={boxRef}>
-      <button
-        className="newbtn"
-        onClick={() => { setCreatingIn(selDir || ""); setDraft(""); setErr(""); }}
-      >
-        + Nueva nota{selDir ? ` en /${selDir}` : " en la raíz"}
-      </button>
+      <div className="treehint">Clic derecho para crear, renombrar o borrar</div>
 
       {creatingIn === "" && (
         <div className="newform">
