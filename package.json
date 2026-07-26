@@ -1,14 +1,39 @@
 {
   "name": "bernis-wiki",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local reader/editor and indexer for the AIOS knowledge base",
-  "bin": { "wiki": "./bin/wiki" },
-  "scripts": {
-    "index": "node --experimental-strip-types src/cli.ts index",
-    "search": "node --experimental-strip-types src/cli.ts search",
-    "health": "node --experimental-strip-types src/cli.ts health"
+  "description": "Local reader/editor for the AIOS knowledge base",
+  "bin": {
+    "wiki": "./bin/wiki"
   },
-  "engines": { "node": ">=22.6" }
+  "scripts": {
+    "dev": "next dev -p 4321",
+    "build": "next build",
+    "start": "next start -p 4321",
+    "wiki": "node --experimental-strip-types --no-warnings src/cli.ts",
+    "index": "node --experimental-strip-types --no-warnings src/cli.ts index",
+    "health": "node --experimental-strip-types --no-warnings src/cli.ts health"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.7.0",
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.0",
+    "marked": "^18.0.7",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
 }

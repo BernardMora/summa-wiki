@@ -1,0 +1,96 @@
+:root {
+  --bg: #fbfaf8; --fg: #24211d; --muted: #6f6a62; --line: #e5e0d8;
+  --accent: #7a5cff; --accent-soft: #efeaff;
+  --ai-bg: #f3f0ff; --ai-line: #b9a8ff;
+  --human-bg: #fff6dd; --human-line: #e6c25a;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16151a; --fg: #e8e5e0; --muted: #9b958c; --line: #2e2b33;
+    --accent: #a892ff; --accent-soft: #2a2340;
+    --ai-bg: #221d38; --ai-line: #6d5bbd;
+    --human-bg: #2e2712; --human-line: #8a7327;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.broken { color: #c0392b; cursor: not-allowed; text-decoration: line-through; }
+a.xbundle { color: var(--muted); border-bottom: 1px dotted var(--muted); cursor: help; }
+a.xbundle::after { content: " ↗"; font-size: .8em; }
+
+.shell { display: grid; grid-template-columns: 300px minmax(0,1fr); min-height: 100vh; }
+@media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .side { display: none; } }
+.side {
+  border-right: 1px solid var(--line); padding: 18px 14px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.main { padding: 30px 40px 90px; max-width: 860px; }
+@media (max-width: 640px) { .main { padding: 20px 16px 80px; } }
+
+.brand { font-weight: 650; letter-spacing: -.02em; margin-bottom: 14px; display:block; color: var(--fg); }
+.search-input {
+  width: 100%; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; font-size: 14px;
+}
+.search-input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+.meta { color: var(--muted); font-size: 13px; display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 22px; }
+.pill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600;
+}
+.hit { display: block; padding: 8px 10px; border-radius: 8px; color: var(--fg); }
+.hit:hover { background: var(--accent-soft); text-decoration: none; }
+.hit small { color: var(--muted); display: block; font-size: 12px; }
+
+/* Provenance: markers are storage, colour is presentation. */
+.prov-ai {
+  background: var(--ai-bg); border-left: 3px solid var(--ai-line);
+  padding: 2px 12px; margin: 10px 0; border-radius: 0 6px 6px 0;
+}
+.prov-human {
+  background: var(--human-bg); box-shadow: inset 0 -2px 0 var(--human-line);
+  border-radius: 3px; padding: 0 2px;
+}
+body.hide-prov .prov-ai { background: none; border-left: none; padding: 0; margin: 0; }
+body.hide-prov .prov-human { background: none; box-shadow: none; }
+
+article h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 4px; }
+article h2 { font-size: 21px; margin: 30px 0 8px; }
+article h3 { font-size: 17px; margin: 22px 0 6px; }
+article img { max-width: 100%; height: auto; border-radius: 8px; }
+article pre {
+  background: var(--accent-soft); padding: 12px 14px; border-radius: 8px;
+  overflow-x: auto; font-family: var(--mono); font-size: 13px;
+}
+article code { font-family: var(--mono); font-size: .9em; }
+article pre code { background: none; }
+article blockquote {
+  border-left: 3px solid var(--line); margin: 14px 0; padding: 2px 14px; color: var(--muted);
+}
+.table-wrap { overflow-x: auto; }
+article table { border-collapse: collapse; width: 100%; font-size: 14px; }
+article th, article td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+article th { background: var(--accent-soft); }
+
+.bar {
+  position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg);
+  border-top: 1px solid var(--line); padding: 8px 16px; display: flex;
+  gap: 10px; align-items: center; font-size: 13px; z-index: 20;
+}
+button {
+  font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: .45; cursor: default; }
+.warn { color: #c0392b; font-weight: 600; }
+.cm-editor { border: 1px solid var(--line); border-radius: 8px; height: calc(100vh - 260px); }
+.cm-editor.cm-focused { outline: none; border-color: var(--accent); }
