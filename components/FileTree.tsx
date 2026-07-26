@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTabs } from "./Tabs.tsx";
+import { REVEAL_EVENT } from "./Crumb.tsx";
 
 interface Node { name: string; rel: string; dir: boolean; id?: string; children?: Node[]; }
 interface Menu { x: number; y: number; node: Node; }
@@ -35,10 +36,48 @@ export default function FileTree() {
     const r = await fetch("/api/tree");
     setRoot((await r.json()).root ?? []);
   }
+
+  /** Walk the tree for a note id, returning the folders that contain it. */
+  function ancestorsOf(nodes: Node[], id: string, trail: string[] = []): string[] | null {
+    for (const n of nodes) {
+      if (!n.dir && n.id === id) return trail;
+      if (n.dir && n.children) {
+        const hit = ancestorsOf(n.children, id, [...trail, n.rel]);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
   useEffect(() => { load(); }, []);
   useEffect(() => {
     fetch("/api/categories").then((r) => r.json()).then((d) => setCats(d.categories ?? []));
   }, []);
+
+  // Breadcrumb click: expand every folder along the path and select the last.
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const rel = (e as CustomEvent<string>).detail;
+      if (!rel) return;
+      const segs = rel.split("/");
+      const trail = segs.map((_, i) => segs.slice(0, i + 1).join("/"));
+      setOpen((p) => { const n = new Set(p); trail.forEach((t) => n.add(t)); return n; });
+      setSelDir(rel);
+      requestAnimationFrame(() => {
+        boxRef.current?.querySelector(".row.sel")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    };
+    window.addEventListener(REVEAL_EVENT, onReveal as EventListener);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal as EventListener);
+  }, []);
+
+  // Reveal whichever note is open: expand its folders so the highlight is
+  // actually visible rather than buried in a collapsed branch.
+  const activeId = tabs?.activeId ?? null;
+  useEffect(() => {
+    if (!activeId || root.length === 0) return;
+    const trail = ancestorsOf(root, activeId);
+    if (trail?.length) setOpen((p) => { const n = new Set(p); trail.forEach((t) => n.add(t)); return n; });
+  }, [activeId, root]);
 
   useEffect(() => {
     const close = () => { setMenu(null); setPinOpen(false); };
@@ -166,7 +205,7 @@ export default function FileTree() {
       return (
         <div
           key={n.rel}
-          className={`row ${n.id ? "file" : "other"}`}
+          className={`row ${n.id ? "file" : "other"}${n.id && n.id === activeId ? " current" : ""}`}
           style={pad}
           title={n.rel}
           onContextMenu={onCtx}

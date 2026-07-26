@@ -57,6 +57,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
       meta={{
         title: note.title, type: note.type, bundle: note.bundle, pathRel: note.path,
         created: note.created, updated: note.updated, author: note.author,
+        vaultPath: path.relative(VAULT, note.abs).split(path.sep).join("/"),
         pillar: note.pillar ?? "", status: note.status ?? "", resource: note.resource ?? "",
         tags: note.tags, words: note.words,
         humanWords: note.provenance.humanWords, agentWords: note.provenance.agentWords,

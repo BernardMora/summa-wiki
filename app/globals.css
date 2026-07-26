@@ -387,3 +387,18 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .tocitem:hover { color: var(--link); text-decoration: none; background: var(--panel-grey); }
 .tocitem.on { color: var(--fg); border-left-color: var(--link); font-weight: 600; }
+
+.crumb {
+  margin-left: auto; align-self: center; font-family: var(--mono);
+  font-size: 11px; color: var(--muted); padding: 0 4px 5px;
+  max-width: 52%; overflow: hidden; white-space: nowrap;
+}
+.crumb a { color: var(--muted); }
+.crumb a:hover { color: var(--link); text-decoration: underline; }
+.crumb-sep { opacity: .5; margin: 0 2px; }
+.crumb-gap { cursor: help; opacity: .7; }
+.crumb-file { color: var(--fg); }
+.tree .row.current {
+  background: var(--panel-blue-head); border-radius: 2px;
+}
+.tree .row.current .name { color: var(--fg); font-weight: 600; }

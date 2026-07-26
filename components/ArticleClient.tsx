@@ -6,12 +6,13 @@ import type { EditorView } from "@codemirror/view";
 import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
 import { useTabs } from "./Tabs.tsx";
 import Toc, { parseHeads, type Head } from "./Toc.tsx";
+import Crumb from "./Crumb.tsx";
 
 interface Ref { id: string; title: string; path: string; }
 interface Meta {
   title: string; type: string; bundle: string; pathRel: string;
   created: string; updated: string; author: string; pillar: string;
-  status: string; resource: string; tags: string[]; words: number;
+  status: string; resource: string; tags: string[]; words: number; vaultPath: string;
   humanWords: number; agentWords: number;
 }
 type Tab = "article" | "data" | "links";
@@ -128,6 +129,7 @@ export default function ArticleClient({
         <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
           Enlaces ({backlinks.length + outbound.length})
         </button>
+        <Crumb vaultPath={meta.vaultPath} />
       </div>
 
       <div className="artrow">

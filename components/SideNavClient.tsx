@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FileTree from "./FileTree.tsx";
 import { useTabs } from "./Tabs.tsx";
+import { REVEAL_EVENT } from "./Crumb.tsx";
 
 interface NavItem { id: string; title: string; pinned?: boolean; }
 interface NavGroup { id: string; label: string; items: NavItem[]; total: number; hidden?: boolean; }
@@ -25,6 +26,14 @@ export default function SideNavClient({ groups }: { groups: NavGroup[] }) {
     if (v === "files" || v === "cat") setView(v);
   }, []);
   useEffect(() => { localStorage.setItem("wiki.sideview", view); }, [view]);
+
+  // A breadcrumb click must flip to the filesystem view, or the reveal lands
+  // on a panel that is not showing.
+  useEffect(() => {
+    const onReveal = () => setView("files");
+    window.addEventListener(REVEAL_EVENT, onReveal as EventListener);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal as EventListener);
+  }, []);
 
   useEffect(() => {
     const close = () => setMenu(null);
