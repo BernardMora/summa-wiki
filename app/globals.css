@@ -494,3 +494,18 @@ body.resizing { cursor: col-resize; user-select: none; }
 .panehead button:hover { color: var(--link-red); }
 .panebody { overflow: auto; padding: 6px 8px; }
 .panebody .pdfbar { position: static; }
+
+.otab.dragging { opacity: .45; }
+.otab { user-select: none; }
+/* ---------------------------------------------------------------- split shell */
+.splitwrap { display: grid; align-items: stretch; }
+@media (max-width: 1000px) { .splitwrap { grid-template-columns: 1fr !important; } .splitbar { display: none; } }
+.splitcol { min-width: 0; }
+.splitbar { cursor: col-resize; background: transparent; position: relative; }
+.splitbar::after {
+  content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px;
+  background: var(--line-soft);
+}
+.splitbar:hover::after, .splitbar.dragging::after { background: var(--link); width: 2px; }
+.pane { max-height: none; height: 100%; }
+.panebody { overflow: visible; }

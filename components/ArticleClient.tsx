@@ -1,312 +1,102 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
-import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
-import { useTabs } from "./Tabs.tsx";
-import Toc, { parseHeads, type Head } from "./Toc.tsx";
-import Crumb from "./Crumb.tsx";
-import SidePane from "./SidePane.tsx";
-import { useSearchParams } from "next/navigation";
+import ArticlePane, { type Payload } from "./ArticlePane.tsx";
+import PdfViewer from "./PdfViewer.tsx";
+import { useTabs, isPdfId } from "./Tabs.tsx";
 
-interface Ref { id: string; title: string; path: string; }
-interface Meta {
-  title: string; type: string; bundle: string; pathRel: string;
-  created: string; updated: string; author: string; pillar: string;
-  status: string; resource: string; tags: string[]; words: number; vaultPath: string;
-  humanWords: number; agentWords: number;
-}
-type Tab = "article" | "data" | "links";
-
-const AUTOSAVE_MS = 900;
+const MIN = 0.22, MAX = 0.78, KEY = "wiki.splitratio";
 
 /**
- * One view, always editable — no read/edit toggle. The live-preview editor IS
- * the article, and saves happen automatically after a pause in typing.
- *
- * Provenance is explicit rather than inferred. With autosave firing constantly
- * there is no meaningful "before" to diff against, so guessing would produce
- * marker soup. Instead you select text and mark it, or set `author:` for the
- * file as a whole.
+ * Shell around one or two article panes. The split divider is draggable and
+ * its ratio persists; each pane keeps its own tabs, scroll and autosave.
  */
-export default function ArticleClient({
-  id, meta, initialContent, mtimeMs, backlinks, outbound, resolve,
-}: {
-  id: string; meta: Meta; initialContent: string; mtimeMs: number;
-  backlinks: Ref[]; outbound: Ref[]; resolve: Record<string, string>;
-}) {
-  const [tab, setTab] = useState<Tab>("article");
-  const [hideProv, setHideProv] = useState(false);
-  const [status, setStatus] = useState("");
-  const [conflict, setConflict] = useState<string | null>(null);
-  const [hasSel, setHasSel] = useState(false);
-  const [heads, setHeads] = useState<Head[]>(() => parseHeads(initialContent));
-  const [viewReady, setViewReady] = useState<import("@codemirror/view").EditorView | null>(null);
-
-  const viewRef = useRef<EditorView | null>(null);
-  const savedRef = useRef(initialContent);
-  const mtimeRef = useRef(mtimeMs);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const router = useRouter();
-  const tabs = useTabs();
+export default function ArticleClient({ initial }: { initial: Payload }) {
   const params = useSearchParams();
   const splitId = params.get("split");
+  const router = useRouter();
+  const tabs = useTabs();
+  const mainEditor = useRef<EditorView | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [ratio, setRatio] = useState(0.5);
+  const [dragging, setDragging] = useState(false);
 
-  /** Insert a quote from the side pane at the main editor's cursor. */
+  useEffect(() => { tabs?.register(initial.id, initial.meta.title); }, [initial.id, initial.meta.title]);
+
+  useEffect(() => {
+    const v = Number(localStorage.getItem(KEY));
+    if (v >= MIN && v <= MAX) setRatio(v);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e: MouseEvent) => {
+      const box = wrap.current?.getBoundingClientRect();
+      if (!box) return;
+      setRatio(Math.min(MAX, Math.max(MIN, (e.clientX - box.left) / box.width)));
+    };
+    const up = () => {
+      setDragging(false);
+      document.body.classList.remove("resizing");
+      setRatio((r) => { localStorage.setItem(KEY, String(r)); return r; });
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  }, [dragging]);
+
+  /** Quotes from a PDF land at the cursor of the main note. */
   const insertQuote = useCallback((md: string) => {
-    const v = viewRef.current;
+    const v = mainEditor.current;
     if (!v) return;
-    const at = v.state.selection.main.to;
-    const line = v.state.doc.lineAt(at);
-    const pos = line.to;
+    const pos = v.state.doc.lineAt(v.state.selection.main.to).to;
     v.dispatch({ changes: { from: pos, insert: `\n\n${md}` }, selection: { anchor: pos + md.length + 2 } });
     v.focus();
-    onChangeRef.current?.();
   }, []);
-  const onChangeRef = useRef<(() => void) | null>(null);
 
-  // A note reached directly (search, backlink, URL) starts with a placeholder
-  // title in the strip; replace it with the real one.
-  useEffect(() => { tabs?.register(id, meta.title); }, [id, meta.title]);
+  const closeSplit = () => router.push(`/note/${encodeURIComponent(initial.id)}`);
 
-  useEffect(() => { document.body.classList.toggle("hide-prov", hideProv); }, [hideProv]);
-
-  const save = useCallback(async (force = false) => {
-    const body = viewRef.current?.state.doc.toString();
-    if (body === undefined) return;
-    if (body === savedRef.current && !force) return;
-    setStatus("guardando…");
-    const r = await fetch("/api/note", {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, content: body, mtimeMs: force ? undefined : mtimeRef.current }),
-    });
-    if (r.status === 409) { setConflict((await r.json()).currentContent); setStatus(""); return; }
-    if (!r.ok) { setStatus("error al guardar"); return; }
-    const d = await r.json();
-    mtimeRef.current = d.mtimeMs;
-    savedRef.current = body;
-    setStatus("guardado");
-    setTimeout(() => setStatus((s) => (s === "guardado" ? "" : s)), 1400);
-  }, [id]);
-
-  const onChange = useCallback(() => {
-    const doc = viewRef.current?.state.doc.toString();
-    if (doc !== undefined) setHeads(parseHeads(doc));
-    setStatus("sin guardar");
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => save(), AUTOSAVE_MS);
-  }, [save]);
-  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
-
-  // Flush pending work when the window loses focus or the tab is hidden.
-  useEffect(() => {
-    const flush = () => { if (timer.current) clearTimeout(timer.current); save(); };
-    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
-    const warn = (e: BeforeUnloadEvent) => {
-      if ((viewRef.current?.state.doc.toString() ?? "") !== savedRef.current) {
-        e.preventDefault(); e.returnValue = "";
-      }
-    };
-    window.addEventListener("blur", flush);
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("beforeunload", warn);
-    return () => {
-      window.removeEventListener("blur", flush);
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("beforeunload", warn);
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [save]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); save(true); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [save]);
-
-  /**
-   * The server precomputes href -> URL from the index, but that snapshot is
-   * taken at render time. An image pasted afterwards is not in it, which is
-   * why a freshly pasted image only appeared after a reload. Assets can be
-   * resolved from the note's own directory without the index, so fall back to
-   * building the URL directly. Note links still need the index and stay
-   * map-only.
-   */
-  const dirFromVault = meta.vaultPath.split("/").slice(0, -1).join("/");
-  const resolveHref = useCallback((href: string) => {
-    const hit = resolve[href];
-    if (hit) return hit;
-    if (/^(https?:|aios:|mailto:|#)/.test(href)) return null;
-    if (/\.md$/i.test(href)) return null;
-
-    const segs = `${dirFromVault}/${href}`.split("/");
-    const out: string[] = [];
-    for (const sg of segs) {
-      if (!sg || sg === ".") continue;
-      if (sg === "..") out.pop();
-      else out.push(sg);
-    }
-    return `/api/asset?p=${encodeURIComponent(out.join("/"))}`;
-  }, [resolve, dirFromVault]);
-  const total = meta.humanWords + meta.agentWords;
-
-  function doMark(kind: "human" | "ai") {
-    const v = viewRef.current;
-    if (v && markSelection(v, kind)) { onChange(); setHasSel(false); }
-  }
-  function doUnmark() {
-    const v = viewRef.current;
-    if (v && unmarkSelection(v)) onChange();
+  if (!splitId) {
+    return <ArticlePane initial={initial} onEditorReady={(v) => { mainEditor.current = v; }} />;
   }
 
   return (
-    <>
-      <div className="tabs" style={{ margin: "-20px -30px 18px", paddingTop: 6 }}>
-        <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
-        <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
-        <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
-          Enlaces ({backlinks.length + outbound.length})
-        </button>
-        <Crumb vaultPath={meta.vaultPath} />
+    <div
+      className="splitwrap"
+      ref={wrap}
+      style={{ gridTemplateColumns: `${ratio}fr 7px ${1 - ratio}fr` }}
+    >
+      <div className="splitcol">
+        <ArticlePane initial={initial} showToc={false} onEditorReady={(v) => { mainEditor.current = v; }} />
       </div>
 
-      <div className="artrow">
-      <article>
-        <h1>{meta.title}</h1>
-        <p className="infoline">
-          <span>{meta.type}</span>
-          <span>{meta.bundle}</span>
-          {meta.pillar && <span>{meta.pillar}</span>}
-          <span>creada {meta.created || "—"}</span>
-          <span>actualizada {meta.updated}</span>
-          <span>{meta.words} palabras</span>
-          {meta.agentWords > 0 && total > 0 && (
-            <span>{Math.round((100 * meta.agentWords) / total)}% agente</span>
-          )}
-        </p>
+      <div
+        className={`splitbar${dragging ? " dragging" : ""}`}
+        onMouseDown={(e) => { e.preventDefault(); setDragging(true); document.body.classList.add("resizing"); }}
+        onDoubleClick={() => { setRatio(0.5); localStorage.setItem(KEY, "0.5"); }}
+        title="Arrastra para redimensionar · doble clic para 50/50"
+      />
 
-        {/* Kept mounted across tabs so the editor never loses its buffer. */}
-        <div
-          className={splitId ? "split" : undefined}
-          // Inline display wins over the stylesheet, so the split layout has to
-          // be set here rather than relying on the .split class alone.
-          style={{ display: tab === "article" ? (splitId ? "grid" : "block") : "none" }}
-          onMouseUp={() => {
-            const v = viewRef.current;
-            setHasSel(Boolean(v && v.state.selection.main.from !== v.state.selection.main.to));
-          }}
-        >
-          <Editor
-            value={initialContent}
-            onChange={onChange}
-            resolve={resolveHref}
-            onNavigate={(url) => router.push(url)}
-            onReady={(v) => { viewRef.current = v; setViewReady(v); }}
-            onPasteImage={async (file) => {
-              const fd = new FormData();
-              fd.append("id", id);
-              fd.append("file", file);
-              const r = await fetch("/api/upload", { method: "POST", body: fd });
-              if (!r.ok) { setStatus("no se pudo subir la imagen"); return null; }
-              const d = await r.json();
-              return d.href as string;
-            }}
-          />
-          {splitId && (
-            <SidePane
-              id={splitId}
-              onClose={() => router.push(`/note/${encodeURIComponent(id)}`)}
-              onQuoteToMain={insertQuote}
-            />
-          )}
-        </div>
-
-        {tab === "data" && (
-          <table>
-            <tbody>
-              <tr><th>type</th><td>{meta.type}</td></tr>
-              <tr><th>title</th><td>{meta.title}</td></tr>
-              <tr><th>created</th><td>{meta.created || <em className="dim">vacío — no derivable</em>}</td></tr>
-              <tr><th>updated</th><td>{meta.updated}</td></tr>
-              <tr><th>author</th><td>{meta.author}</td></tr>
-              {meta.pillar && <tr><th>pillar</th><td>{meta.pillar}</td></tr>}
-              {meta.status && <tr><th>status</th><td>{meta.status}</td></tr>}
-              {meta.resource && <tr><th>resource</th><td>{meta.resource}</td></tr>}
-              <tr><th>tags</th><td>{meta.tags.join(", ") || "—"}</td></tr>
-              <tr><th>bundle</th><td>{meta.bundle}</td></tr>
-              <tr><th>ruta</th><td><code>{meta.pathRel}</code></td></tr>
-              <tr><th>autoría</th><td>{meta.humanWords} humano / {meta.agentWords} agente</td></tr>
-            </tbody>
-          </table>
+      <div className="splitcol">
+        {isPdfId(splitId) ? (
+          <section className="pane">
+            <header className="panehead">
+              <span className="panetitle"><span className="otab-kind">PDF</span>{splitId.slice(4).split("/").pop()}</span>
+              <button style={{ marginLeft: "auto" }} onClick={closeSplit} title="Cerrar panel">×</button>
+            </header>
+            <div className="panebody">
+              <PdfViewer
+                src={`/api/asset?p=${encodeURIComponent(splitId.slice(4))}`}
+                name={splitId.slice(4).split("/").pop() ?? "pdf"}
+                onQuote={insertQuote}
+              />
+            </div>
+          </section>
+        ) : (
+          <ArticlePane id={splitId} secondary onClose={closeSplit} />
         )}
-
-        {tab === "links" && (
-          <>
-            <h2>Enlaces salientes ({outbound.length})</h2>
-            {outbound.length === 0 ? <p className="dim">Ninguno.</p> : (
-              <ul>{outbound.map((r) => (
-                <li key={r.id}><Link href={`/note/${encodeURIComponent(r.id)}`}>{r.title}</Link> <span className="dim">{r.path}</span></li>
-              ))}</ul>
-            )}
-            <h2>Enlaces entrantes ({backlinks.length})</h2>
-            {backlinks.length === 0 ? <p className="dim">Ninguno — esta nota es huérfana.</p> : (
-              <ul>{backlinks.map((r) => (
-                <li key={r.id}><Link href={`/note/${encodeURIComponent(r.id)}`}>{r.title}</Link> <span className="dim">{r.path}</span></li>
-              ))}</ul>
-            )}
-          </>
-        )}
-      </article>
-      {tab === "article" && <Toc heads={heads} view={viewReady} />}
       </div>
-
-      {tab === "article" && backlinks.length > 0 && (
-        <section style={{ marginTop: 28, borderTop: "1px solid var(--line-soft)", paddingTop: 12 }}>
-          <h2 style={{ fontSize: 15, margin: "0 0 6px", fontFamily: "var(--sans)" }}>
-            Enlaces entrantes ({backlinks.length})
-          </h2>
-          <ul style={{ margin: 0, paddingLeft: 20 }}>
-            {backlinks.slice(0, 12).map((r) => (
-              <li key={r.id}><Link href={`/note/${encodeURIComponent(r.id)}`}>{r.title}</Link></li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {conflict !== null && (
-        <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--link-red)" }}>
-          <p className="warn" style={{ margin: "0 0 6px" }}>El archivo cambió en disco desde que lo abriste.</p>
-          <p className="dim" style={{ margin: "0 0 10px" }}>
-            Probablemente lo editó el agente. Guardar ahora borraría ese cambio.
-          </p>
-          <button onClick={() => location.reload()}>Recargar del disco</button>{" "}
-          <button className="primary" onClick={() => { setConflict(null); save(true); }}>
-            Sobrescribir con lo mío
-          </button>
-        </div>
-      )}
-
-      <div className="bar">
-        <button onClick={() => doMark("human")} disabled={!hasSel} title="Marca la selección como escrita por ti">
-          Marcar como mío
-        </button>
-        <button onClick={() => doMark("ai")} disabled={!hasSel} title="Marca la selección como escrita por el agente">
-          Marcar como IA
-        </button>
-        <button onClick={doUnmark} title="Quita los marcadores del bloque donde está el cursor">
-          Quitar marca
-        </button>
-        <button onClick={() => setHideProv((v) => !v)}>
-          {hideProv ? "Mostrar autoría" : "Ocultar autoría"}
-        </button>
-        <span className="dim">{status}</span>
-        <span style={{ marginLeft: "auto" }} className="dim">
-          guardado automático · ⌘S fuerza · ⌘clic sigue enlaces
-        </span>
-      </div>
-    </>
+    </div>
   );
 }

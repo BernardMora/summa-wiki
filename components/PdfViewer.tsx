@@ -40,17 +40,20 @@ export default function PdfViewer({
     const stall = setTimeout(() => setSlow(true), 8000);
     host.current.innerHTML = "";
     try {
-      const pdfjs: any = await import("pdfjs-dist");
-      // pdf.worker is an ES module. Handing pdfjs a workerSrc URL left it
-      // hanging rather than erroring; constructing the worker explicitly with
-      // type:"module" is the documented v5 path and lets the bundler resolve it.
-      if (!pdfjs.GlobalWorkerOptions.workerPort) {
-        pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-          new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
-          { type: "module" },
-        );
-      }
-      const doc = await pdfjs.getDocument({ url: src }).promise;
+      // The modern ESM build broke under webpack two different ways: a
+      // workerSrc URL left getDocument hanging, and constructing the worker via
+      // new URL() threw "Object.defineProperty called on non-object". The legacy
+      // build is bundler-tolerant and is what pdfjs recommends for webpack.
+      const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+      const doc = await pdfjs.getDocument({
+        url: src,
+        // Fonts and cmaps ship with the package; without these, PDFs with
+        // embedded CJK or unusual encodings render blank.
+        cMapUrl: "/pdf-cmaps/",
+        cMapPacked: true,
+        standardFontDataUrl: "/pdf-fonts/",
+      }).promise;
       setPages(doc.numPages);
 
       for (let p = 1; p <= doc.numPages; p++) {

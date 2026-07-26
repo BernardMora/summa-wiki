@@ -6,6 +6,7 @@ const MIN = 140, MAX = 520, KEY = "wiki.sidew";
 /** Drag handle on the sidebar's right edge. Width persists across sessions. */
 export default function Resizer() {
   const [dragging, setDragging] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const w = useRef(195);
 
   useEffect(() => {
@@ -16,6 +17,7 @@ export default function Resizer() {
     }
     if (localStorage.getItem("wiki.sidecollapsed") === "1") {
       document.documentElement.style.setProperty("--sidew", "0px");
+      setCollapsed(true);
     }
   }, []);
 
@@ -42,16 +44,15 @@ export default function Resizer() {
         className="sidetoggle"
         style={{ left: "var(--sidew)" }}
         onClick={() => {
-          const cur = getComputedStyle(document.documentElement).getPropertyValue("--sidew").trim();
-          const collapsed = cur === "0px";
-          const next = collapsed ? String(localStorage.getItem(KEY) || 195) + "px" : "0px";
+          const next = collapsed ? `${localStorage.getItem(KEY) || 195}px` : "0px";
           document.documentElement.style.setProperty("--sidew", next);
           localStorage.setItem("wiki.sidecollapsed", collapsed ? "0" : "1");
+          setCollapsed(!collapsed);
         }}
         title="Contraer / expandir la barra lateral"
         aria-label="Contraer barra lateral"
       >
-        ⋮
+        {collapsed ? "›" : "‹"}
       </button>
     <div
       className={`resizer${dragging ? " dragging" : ""}`}

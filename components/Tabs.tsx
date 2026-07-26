@@ -12,6 +12,8 @@ interface Ctx {
   close: (id: string) => void;
   /** Called by the article page so a directly-opened note gets a real title. */
   register: (id: string, title: string) => void;
+  /** Reorder: drop `src` onto the position of `dst`. */
+  move: (src: string, dst: string) => void;
 }
 
 const TabsCtx = createContext<Ctx | null>(null);
@@ -101,8 +103,20 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
     });
   }, [activeId, router]);
 
+  const move = useCallback((src: string, dst: string) => {
+    setTabs((t) => {
+      const from = t.findIndex((x) => x.id === src);
+      const to = t.findIndex((x) => x.id === dst);
+      if (from < 0 || to < 0) return t;
+      const next = [...t];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
   return (
-    <TabsCtx.Provider value={{ tabs, activeId, open, close, register }}>
+    <TabsCtx.Provider value={{ tabs, activeId, open, close, register, move }}>
       {children}
     </TabsCtx.Provider>
   );
@@ -111,6 +125,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
 export function TabBar() {
   const ctx = useTabs();
   const router = useRouter();
+  const [drag, setDrag] = useState<string | null>(null);
   if (!ctx || ctx.tabs.length === 0) return null;
 
   return (
@@ -118,7 +133,12 @@ export function TabBar() {
       {ctx.tabs.map((t) => (
         <div
           key={t.id}
-          className={`otab${t.id === ctx.activeId ? " on" : ""}`}
+          className={`otab${t.id === ctx.activeId ? " on" : ""}${drag === t.id ? " dragging" : ""}`}
+          draggable
+          onDragStart={(e) => { setDrag(t.id); e.dataTransfer.effectAllowed = "move"; }}
+          onDragEnd={() => setDrag(null)}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+          onDrop={(e) => { e.preventDefault(); if (drag && drag !== t.id) ctx.move(drag, t.id); setDrag(null); }}
           onMouseDown={(e) => {
             if (e.button === 1) { e.preventDefault(); ctx.close(t.id); }   // middle-click closes
           }}
