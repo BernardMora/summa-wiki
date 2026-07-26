@@ -1,65 +1,66 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-interface Sel {
-  page: number;
-  text: string;
-  /** pdf-plus style selection coordinates: beginIndex,beginOffset,endIndex,endOffset */
-  coords: string;
+interface Sel { page: number; text: string; coords: string; }
+interface Highlight {
+  page: number; coords: number[]; color: string; text: string;
+  noteId: string; noteTitle: string;
 }
 
+const COLORS = [
+  { id: "yellow", css: "rgba(255, 214, 0, .45)" },
+  { id: "red", css: "rgba(255, 90, 90, .40)" },
+  { id: "blue", css: "rgba(80, 150, 255, .38)" },
+  { id: "purple", css: "rgba(175, 120, 255, .40)" },
+];
+
 /**
- * PDF reader with highlight capture.
+ * PDF reader with page tracking and highlights.
  *
- * Highlights are emitted in the shape pdf-plus already uses, so Obsidian and
- * this app read each other's annotations instead of maintaining two parallel
- * sets over the same document (spec section 6):
- *
- *   [file, p.3](path/to/file.pdf#page=3&selection=1,0,1,42&color=yellow)
- *
- * The text layer is rendered so real text selection works; scanned PDFs with
- * no text layer will render but cannot be highlighted.
+ * A highlight is not stored here: it is a link written into a note, in the
+ * pdf-plus shape (spec section 6), and read back through /api/pdf-highlights.
+ * That is what lets Obsidian and this app see each other's annotations.
  */
 export default function PdfViewer({
-  src, name, onQuote,
-}: { src: string; name: string; onQuote?: (md: string) => void }) {
+  src, name, path, onQuote,
+}: {
+  src: string;
+  name: string;
+  /** Vault-relative path, used to build the link and fetch existing highlights. */
+  path?: string;
+  /** Present only when a note pane is open to receive the quote. */
+  onQuote?: (md: string) => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState(0);
-  const [rendered, setRendered] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
   const [scale, setScale] = useState(1.25);
   const [err, setErr] = useState("");
+  const [slow, setSlow] = useState(false);
   const [sel, setSel] = useState<Sel | null>(null);
   const [copied, setCopied] = useState("");
-  const [slow, setSlow] = useState(false);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
 
+  // ------------------------------------------------------------------ render
   const render = useCallback(async () => {
     if (!host.current) return;
-    setErr(""); setRendered(0); setSlow(false);
-    // Surface a stall instead of sitting on an empty page forever: pdfjs can
-    // hang rather than reject if its worker never comes up.
-    const stall = setTimeout(() => setSlow(true), 8000);
+    setErr(""); setSlow(false); setPages(0);
     host.current.innerHTML = "";
+    const stall = setTimeout(() => setSlow(true), 8000);
     try {
-      // pdfjs must NOT go through webpack. Bundling it produced
-      // "Object.defineProperty called on non-object" with both the modern and
-      // the legacy builds. webpackIgnore leaves the specifier alone so the
-      // browser loads the file natively as an ES module from /public.
       const modUrl = "/pdf.min.mjs";
       const pdfjs: any = await import(/* webpackIgnore: true */ modUrl);
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const doc = await pdfjs.getDocument({
-        url: src,
-        // Fonts and cmaps ship with the package; without these, PDFs with
-        // embedded CJK or unusual encodings render blank.
-        cMapUrl: "/pdf-cmaps/",
-        cMapPacked: true,
-        standardFontDataUrl: "/pdf-fonts/",
+        url: src, cMapUrl: "/pdf-cmaps/", cMapPacked: true, standardFontDataUrl: "/pdf-fonts/",
       }).promise;
       setPages(doc.numPages);
 
       for (let p = 1; p <= doc.numPages; p++) {
-        const page = await doc.getPage(p);
-        const viewport = page.getViewport({ scale });
+        const pg = await doc.getPage(p);
+        const viewport = pg.getViewport({ scale });
 
         const wrap = document.createElement("div");
         wrap.className = "pdfpage";
@@ -77,18 +78,14 @@ export default function PdfViewer({
 
         const layer = document.createElement("div");
         layer.className = "pdftext";
-        layer.style.width = `${viewport.width}px`;
-        layer.style.height = `${viewport.height}px`;
         wrap.appendChild(layer);
-
         host.current.appendChild(wrap);
 
         const ctx = canvas.getContext("2d")!;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+        await pg.render({ canvasContext: ctx, viewport }).promise;
 
-        const content = await page.getTextContent();
-        // Position each text run over the canvas so selection maps to real text.
+        const content = await pg.getTextContent();
         content.items.forEach((it: any, i: number) => {
           if (!it.str) return;
           const tx = pdfjs.Util.transform(viewport.transform, it.transform);
@@ -98,11 +95,8 @@ export default function PdfViewer({
           span.style.left = `${tx[4]}px`;
           span.style.top = `${tx[5] - Math.abs(tx[3] || 10)}px`;
           span.style.fontSize = `${Math.abs(tx[3] || 10)}px`;
-          span.style.transform = `scaleX(${(it.width * scale) / Math.max(1, it.str.length * Math.abs(tx[3]) * 0.5)})`;
           layer.appendChild(span);
         });
-
-        setRendered(p);
       }
     } catch (e: any) {
       setErr(e?.message ?? "no se pudo abrir el PDF");
@@ -113,7 +107,57 @@ export default function PdfViewer({
 
   useEffect(() => { render(); }, [render]);
 
-  // Capture a selection and turn it into pdf-plus coordinates.
+  // ------------------------------------------------------- existing highlights
+  const loadHighlights = useCallback(async () => {
+    if (!path) return;
+    const r = await fetch(`/api/pdf-highlights?p=${encodeURIComponent(path)}`);
+    if (r.ok) setHighlights((await r.json()).highlights ?? []);
+  }, [path]);
+  useEffect(() => { loadHighlights(); }, [loadHighlights]);
+
+  // Paint highlights onto the text layer once pages exist.
+  useEffect(() => {
+    if (!host.current || pages === 0) return;
+    host.current.querySelectorAll<HTMLElement>(".pdftext span.hl")
+      .forEach((s) => { s.classList.remove("hl"); s.style.background = ""; });
+    for (const h of highlights) {
+      const pageEl = host.current.querySelector(`.pdfpage[data-page="${h.page}"] .pdftext`);
+      if (!pageEl) continue;
+      const [a, , c] = h.coords;
+      const colour = COLORS.find((x) => x.id === h.color)?.css ?? COLORS[0].css;
+      for (let i = a; i <= (c ?? a); i++) {
+        const span = pageEl.querySelector<HTMLElement>(`span[data-idx="${i}"]`);
+        if (span) { span.classList.add("hl"); span.style.background = colour; }
+      }
+    }
+  }, [highlights, pages, scale]);
+
+  // ------------------------------------------------------------ page tracking
+  useEffect(() => {
+    if (pages === 0 || !scroller.current) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        // The page occupying most of the viewport is the one you are "on".
+        let best: { p: number; r: number } | null = null;
+        for (const e of entries) {
+          const p = Number((e.target as HTMLElement).dataset.page);
+          if (!best || e.intersectionRatio > best.r) best = { p, r: e.intersectionRatio };
+        }
+        if (best && best.r > 0) { setPage(best.p); setPageInput(String(best.p)); }
+      },
+      { root: scroller.current, threshold: [0.1, 0.35, 0.6, 0.9] },
+    );
+    host.current?.querySelectorAll(".pdfpage").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [pages, scale]);
+
+  function goToPage(n: number) {
+    const target = Math.min(Math.max(1, n), pages || 1);
+    host.current?.querySelector(`.pdfpage[data-page="${target}"]`)
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  // ---------------------------------------------------------------- selection
   useEffect(() => {
     const onUp = () => {
       const s = window.getSelection();
@@ -121,11 +165,10 @@ export default function PdfViewer({
       if (!text || !s || s.rangeCount === 0) { setSel(null); return; }
       const node = s.anchorNode?.parentElement?.closest(".pdfpage") as HTMLElement | null;
       if (!node) { setSel(null); return; }
-      const page = Number(node.dataset.page);
       const a = (s.anchorNode?.parentElement as HTMLElement)?.dataset?.idx ?? "0";
       const b = (s.focusNode?.parentElement as HTMLElement)?.dataset?.idx ?? a;
       setSel({
-        page,
+        page: Number(node.dataset.page),
         text,
         coords: `${a},${s.anchorOffset},${b},${s.focusOffset}`,
       });
@@ -134,53 +177,93 @@ export default function PdfViewer({
     return () => document.removeEventListener("mouseup", onUp);
   }, []);
 
-  function quoteMarkdown(s: Sel) {
-    const href = `${src.replace(/^\/api\/asset\?p=/, "")}#page=${s.page}&selection=${s.coords}&color=yellow`;
-    return `> ${s.text}\n>\n> — [${name}, p.${s.page}](${href})\n`;
+  const quoteMarkdown = (s: Sel, colour: string) => {
+    const href = path ?? src.replace(/^\/api\/asset\?p=/, "");
+    return `> ${s.text}\n>\n> — [${name}, p.${s.page}](${encodeURI(href)}#page=${s.page}&selection=${s.coords}&color=${colour})\n`;
+  };
+
+  function highlight(colour: string) {
+    if (!sel) return;
+    const md = quoteMarkdown(sel, colour);
+    if (onQuote) {
+      onQuote(md);
+      // Optimistic paint; the note save will make it permanent.
+      const [a, b, c, d] = sel.coords.split(",").map(Number);
+      setHighlights((h) => [...h, {
+        page: sel.page, coords: [a, b, c, d], color: colour,
+        text: sel.text, noteId: "", noteTitle: "",
+      }]);
+    } else {
+      navigator.clipboard.writeText(md);
+      setCopied("cita copiada");
+      setTimeout(() => setCopied(""), 1600);
+    }
+    window.getSelection()?.removeAllRanges();
+    setSel(null);
   }
 
   return (
     <div className="pdfwrap">
       <div className="pdfbar">
-        <button onClick={() => setScale((v) => Math.max(0.5, +(v - 0.25).toFixed(2)))}>−</button>
+        <button onClick={() => setScale((v) => Math.max(0.5, +(v - 0.25).toFixed(2)))} title="Alejar">−</button>
         <span className="dim">{Math.round(scale * 100)}%</span>
-        <button onClick={() => setScale((v) => Math.min(3, +(v + 0.25).toFixed(2)))}>+</button>
-        <span className="dim">{rendered}/{pages || "…"} páginas</span>
+        <button onClick={() => setScale((v) => Math.min(3, +(v + 0.25).toFixed(2)))} title="Acercar">+</button>
+
+        <span className="pdfpageno">
+          <input
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={(e) => { if (e.key === "Enter") goToPage(Number(pageInput)); }}
+            onBlur={() => goToPage(Number(pageInput))}
+            aria-label="Página"
+          />
+          <span className="dim"> de {pages || "…"}</span>
+        </span>
+
+        <span className="pdfcolors">
+          {COLORS.map((c) => (
+            <button
+              key={c.id}
+              className="swatch"
+              style={{ background: c.css }}
+              disabled={!sel}
+              title={sel ? `Resaltar en ${c.id}` : "Selecciona texto primero"}
+              onClick={() => highlight(c.id)}
+            />
+          ))}
+        </span>
+
+        <span className="dim">{copied}</span>
         <a href={src} download className="dim" style={{ marginLeft: "auto" }}>Descargar</a>
       </div>
 
-      <div className="pdfscroll">
-      {err && <p className="warn">Error: {err}</p>}
-      {!err && pages === 0 && !slow && <p className="dim">Cargando PDF…</p>}
-      {!err && pages === 0 && slow && (
-        <div style={{ border: "1px solid var(--link-red)", padding: 10, fontSize: 13 }}>
-          <p className="warn" style={{ margin: "0 0 4px" }}>El visor no arrancó.</p>
-          <p className="dim" style={{ margin: "0 0 8px" }}>
-            Suele ser el worker de PDF.js. El archivo sigue disponible:
-          </p>
-          <a href={src} download>Descargar {name}</a>
-        </div>
-      )}
-      <div ref={host} className="pdfpages" />
+      <div className="pdfscroll" ref={scroller}>
+        {err && <p className="warn">Error: {err}</p>}
+        {!err && pages === 0 && !slow && <p className="dim">Cargando PDF…</p>}
+        {!err && pages === 0 && slow && (
+          <div style={{ border: "1px solid var(--link-red)", padding: 10, fontSize: 13 }}>
+            <p className="warn" style={{ margin: "0 0 4px" }}>El visor no arrancó.</p>
+            <a href={src} download>Descargar {name}</a>
+          </div>
+        )}
+        <div ref={host} className="pdfpages" />
       </div>
 
       {sel && (
         <div className="pdfsel">
-          <div className="pdfsel-q">“{sel.text.slice(0, 180)}{sel.text.length > 180 ? "…" : ""}”</div>
-          <div className="dim" style={{ fontSize: 11 }}>p.{sel.page} · selection={sel.coords}</div>
-          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(quoteMarkdown(sel));
-                setCopied("copiado"); setTimeout(() => setCopied(""), 1500);
-              }}
-            >Copiar cita</button>
+          <div className="pdfsel-q">“{sel.text.slice(0, 160)}{sel.text.length > 160 ? "…" : ""}”</div>
+          <div className="dim" style={{ fontSize: 11 }}>p.{sel.page}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+            {COLORS.map((c) => (
+              <button key={c.id} className="swatch" style={{ background: c.css }}
+                      onClick={() => highlight(c.id)} title={`Resaltar en ${c.id}`} />
+            ))}
+            <button onClick={() => { navigator.clipboard.writeText(quoteMarkdown(sel, "yellow")); setCopied("copiado"); }}>
+              Copiar cita
+            </button>
             {onQuote && (
-              <button className="primary" onClick={() => onQuote(quoteMarkdown(sel))}>
-                Añadir a la nota
-              </button>
+              <button className="primary" onClick={() => highlight("yellow")}>Añadir a la nota</button>
             )}
-            <span className="dim">{copied}</span>
           </div>
         </div>
       )}

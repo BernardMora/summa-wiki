@@ -10,7 +10,7 @@ export default function PdfClient({ path }: { path: string }) {
       <h1 style={{ fontSize: 22 }}>{name}</h1>
       <p className="infoline"><span>PDF</span><span>selecciona texto para citar</span></p>
       <div style={{ marginBottom: 10 }}><Crumb vaultPath={path} /></div>
-      <PdfViewer src={`/api/asset?p=${encodeURIComponent(path)}`} name={name} />
+      <PdfViewer src={`/api/asset?p=${encodeURIComponent(path)}`} name={name} path={path} />
     </article>
   );
 }

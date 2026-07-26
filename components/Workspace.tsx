@@ -52,7 +52,11 @@ export default function Workspace({ initial }: { initial: Payload }) {
   const [barDrag, setBarDrag] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const paneEls = useRef(new Map<string, HTMLElement>());
-  const mainEditor = useRef<EditorView | null>(null);
+  // Every note pane registers its editor; a quote goes to the most recently
+  // focused one.
+  const noteEditors = useRef(new Map<string, EditorView>());
+  const lastNotePane = useRef<string | null>(null);
+  const [hasNotePane, setHasNotePane] = useState(false);
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
 
@@ -141,6 +145,19 @@ export default function Workspace({ initial }: { initial: Payload }) {
       }
       return next.filter((p) => p.tabs.length > 0);
     });
+  }, []);
+
+  /**
+   * Send a PDF quote into the most recently focused note pane. Offered only
+   * when such a pane exists — quoting into nothing would silently do nothing.
+   */
+  const insertQuote = useCallback((md: string) => {
+    const key = lastNotePane.current ?? [...noteEditors.current.keys()][0];
+    const v = key ? noteEditors.current.get(key) : undefined;
+    if (!v) return;
+    const pos = v.state.doc.lineAt(v.state.selection.main.to).to;
+    v.dispatch({ changes: { from: pos, insert: `\n\n${md}` }, selection: { anchor: pos + md.length + 2 } });
+    v.focus();
   }, []);
 
   // The sidebar and file tree live outside this subtree; expose open() to them
@@ -291,19 +308,24 @@ export default function Workspace({ initial }: { initial: Payload }) {
                   <PdfViewer
                     src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}
                     name={p.activeId.slice(4).split("/").pop() ?? "pdf"}
-                    onQuote={(md) => {
-                      const v = mainEditor.current;
-                      if (!v) return;
-                      const pos = v.state.doc.lineAt(v.state.selection.main.to).to;
-                      v.dispatch({ changes: { from: pos, insert: `\n\n${md}` } });
-                      v.focus();
-                    }}
+                    path={p.activeId.slice(4)}
+                    // Only offered when another pane holds a note to receive it.
+                    onQuote={hasNotePane ? insertQuote : undefined}
                   />
                 ) : p.activeId === initial.id ? (
                   <ArticlePane initial={initial} showToc={panes.length === 1}
-                    onEditorReady={(v) => { mainEditor.current = v; }} />
+                    onEditorReady={(v) => {
+                      noteEditors.current.set(p.key, v);
+                      lastNotePane.current = p.key;
+                      setHasNotePane(true);
+                    }} />
                 ) : (
-                  <ArticlePane id={p.activeId} showToc={panes.length === 1} />
+                  <ArticlePane id={p.activeId} showToc={panes.length === 1}
+                    onEditorReady={(v) => {
+                      noteEditors.current.set(p.key, v);
+                      lastNotePane.current = p.key;
+                      setHasNotePane(true);
+                    }} />
                 )}
               </div>
 

@@ -591,3 +591,17 @@ body.workspace .toc { display: none; }
   border-bottom: 1px solid var(--line);
 }
 .panescroll .imgbar { position: sticky; top: 0; z-index: 12; background: var(--bg); padding: 6px 0; }
+
+.pdfpageno { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+.pdfpageno input {
+  width: 46px; text-align: center; font: inherit; font-size: 12.5px; padding: 2px 4px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 2px;
+}
+.pdfcolors { display: inline-flex; gap: 4px; margin-left: 10px; }
+.swatch {
+  width: 17px; height: 17px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid var(--line);
+}
+.swatch:disabled { opacity: .35; cursor: default; }
+.swatch:not(:disabled):hover { outline: 2px solid var(--link); outline-offset: 1px; }
+.pdftext span.hl { border-radius: 2px; }
