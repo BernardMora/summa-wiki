@@ -2,7 +2,7 @@ import { getIndex } from "./server.ts";
 import { readCategories } from "./categories.ts";
 
 export interface NavItem { id: string; title: string; pinned?: boolean; }
-export interface NavGroup { id: string; label: string; items: NavItem[]; total: number; }
+export interface NavGroup { id: string; label: string; items: NavItem[]; total: number; hidden?: boolean; }
 
 /**
  * Sidebar categories. Each is a user-owned group that may auto-include a
@@ -31,7 +31,7 @@ export function navGroups(limit = 10): NavGroup[] {
       }
     }
     items.sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false) || a.title.localeCompare(b.title, "es"));
-    return { id: c.id, label: c.label, total: items.length, items: items.slice(0, limit) };
+    return { id: c.id, label: c.label, total: items.length, items: items.slice(0, limit), hidden: c.hidden };
   });
 
   const rest = notes.filter((n) => !claimed.has(n.id));

@@ -16,6 +16,8 @@ export interface Category {
   pillar?: string;
   /** Explicitly pinned note ids. */
   notes: string[];
+  /** Collapsed out of the way without losing the grouping. */
+  hidden?: boolean;
 }
 
 const SEED: Category[] = [

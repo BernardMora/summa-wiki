@@ -37,6 +37,14 @@ export async function POST(req: Request) {
       cats.splice(i, 1);
       break;
     }
+    case "hide":
+    case "show": {
+      const c = cats.find((x) => x.id === id);
+      if (!c) return NextResponse.json({ error: "no existe" }, { status: 404 });
+      // Hiding keeps the category and its pins; it only collapses the group.
+      if (action === "hide") c.hidden = true; else delete c.hidden;
+      break;
+    }
     case "pin":
     case "unpin": {
       const c = cats.find((x) => x.id === id);

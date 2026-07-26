@@ -9,7 +9,7 @@ const href = (id: string) => `/note/${encodeURIComponent(id)}`;
 export default function MainPage() {
   const idx = getIndex();
   const s = idx.stats;
-  const groups = navGroups(4);
+  const groups = navGroups(4).filter((g) => !g.hidden);
 
   // Templates carry placeholder frontmatter ("updated: YYYY-MM-DD"), which
   // sorts above every real date. They are scaffolding, not articles.
