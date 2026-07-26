@@ -1,0 +1,14 @@
+{
+  "name": "bernis-wiki",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local reader/editor and indexer for the AIOS knowledge base",
+  "bin": { "wiki": "./bin/wiki" },
+  "scripts": {
+    "index": "node --experimental-strip-types src/cli.ts index",
+    "search": "node --experimental-strip-types src/cli.ts search",
+    "health": "node --experimental-strip-types src/cli.ts health"
+  },
+  "engines": { "node": ">=22.6" }
+}

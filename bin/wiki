@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Thin wrapper so the agent and the shell can call: wiki <command>
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node --experimental-strip-types --no-warnings "$DIR/src/cli.ts" "$@"
