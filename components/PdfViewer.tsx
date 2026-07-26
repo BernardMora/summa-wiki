@@ -38,6 +38,10 @@ export default function PdfViewer({
   /** Page to land on after a render: survives zoom changes and remounts. */
   const wantPage = useRef(1);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** True while a render is settling; the tracker must not clobber the target. */
+  const restoring = useRef(false);
+  const docRef = useRef<any>(null);
+  const [drawn, setDrawn] = useState(0);
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -49,14 +53,26 @@ export default function PdfViewer({
   const [highlights, setHighlights] = useState<Highlight[]>([]);
 
   // ------------------------------------------------------------------ render
+  /**
+   * Placeholders first, pixels later.
+   *
+   * Rendering all 250 pages before restoring the scroll position meant you sat
+   * on page 1 for as long as that took, and any scroll in the meantime
+   * overwrote the target. Now every page gets a correctly sized placeholder
+   * immediately, so the target page exists within milliseconds and can be
+   * scrolled to; canvases are drawn only for pages near the viewport.
+   */
   const render = useCallback(async () => {
     if (!host.current) return;
-    // Switching zoom restarted render while the previous pass was still
-    // appending, so pages from both runs interleaved — page 55 next to 191.
     const mine = ++gen.current;
     setErr(""); setSlow(false); setPages(0);
     host.current.innerHTML = "";
     const stall = setTimeout(() => { if (mine === gen.current) setSlow(true); }, 8000);
+
+    // Freeze the destination now: the tracker must not move it mid-render.
+    const target = wantPage.current;
+    restoring.current = true;
+
     try {
       const modUrl = "/pdf.min.mjs";
       const pdfjs: any = await import(/* webpackIgnore: true */ modUrl);
@@ -65,92 +81,101 @@ export default function PdfViewer({
         url: src, cMapUrl: "/pdf-cmaps/", cMapPacked: true, standardFontDataUrl: "/pdf-fonts/",
       }).promise;
       if (mine !== gen.current) return;
+      docRef.current = doc;
       setPages(doc.numPages);
 
-      // Pages in one document can have different intrinsic sizes. Scale each
-      // to the SAME rendered width so the column does not jump about.
+      // One page decides the size for all, so every page renders the same width.
       const first = await doc.getPage(1);
-      const baseWidth = first.getViewport({ scale: 1 }).width;
+      const natural = first.getViewport({ scale: 1 });
+      const width = natural.width * scale;
+      const height = natural.height * scale;
+      if (mine !== gen.current) return;
 
+      const frag = document.createDocumentFragment();
       for (let p = 1; p <= doc.numPages; p++) {
-        if (mine !== gen.current) return;
-        const pg = await doc.getPage(p);
-        const natural = pg.getViewport({ scale: 1 });
-        const viewport = pg.getViewport({ scale: (baseWidth / natural.width) * scale });
-
         const wrap = document.createElement("div");
         wrap.className = "pdfpage";
         wrap.dataset.page = String(p);
-        wrap.style.width = `${viewport.width}px`;
-        wrap.style.height = `${viewport.height}px`;
-
-        const canvas = document.createElement("canvas");
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = viewport.width * dpr;
-        canvas.height = viewport.height * dpr;
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
-        wrap.appendChild(canvas);
-
-        const layer = document.createElement("div");
-        layer.className = "pdftext";
-        wrap.appendChild(layer);
-        host.current.appendChild(wrap);
-
-        const ctx = canvas.getContext("2d")!;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        await pg.render({ canvasContext: ctx, viewport }).promise;
-        if (mine !== gen.current) return;
-
-        const content = await pg.getTextContent();
-        content.items.forEach((it: any, i: number) => {
-          if (!it.str) return;
-          const tx = pdfjs.Util.transform(viewport.transform, it.transform);
-          const span = document.createElement("span");
-          span.textContent = it.str;
-          span.dataset.idx = String(i);
-          span.style.left = `${tx[4]}px`;
-          span.style.top = `${tx[5] - Math.abs(tx[3] || 10)}px`;
-          span.style.fontSize = `${Math.abs(tx[3] || 10)}px`;
-          layer.appendChild(span);
-        });
+        wrap.dataset.state = "pending";
+        wrap.style.width = `${width}px`;
+        wrap.style.height = `${height}px`;
+        frag.appendChild(wrap);
       }
-      // Restore position after EVERY render, not just the first. Re-rendering
-      // for a zoom change rebuilds the DOM and drops the scroll to the top, so
-      // a one-shot guard sent you back to page 1 on every zoom.
-      const target = wantPage.current;
+      host.current.appendChild(frag);
+
+      // The destination exists now, so land on it before drawing anything.
       if (target > 1) {
-        requestAnimationFrame(() => {
-          if (mine !== gen.current) return;
-          host.current?.querySelector(`.pdfpage[data-page="${target}"]`)
-            ?.scrollIntoView({ block: "start" });
-        });
+        host.current.querySelector(`.pdfpage[data-page="${target}"]`)
+          ?.scrollIntoView({ block: "start" });
       }
+      requestAnimationFrame(() => { restoring.current = false; });
+
+      drawNearby(mine);
     } catch (e: any) {
       if (mine === gen.current) setErr(e?.message ?? "no se pudo abrir el PDF");
     } finally {
       clearTimeout(stall);
+      // Always release the tracker. If the document never resolves, leaving
+      // this set would freeze the page counter for good.
+      if (mine === gen.current) restoring.current = false;
     }
   }, [src, scale, path]);
 
-  // Seed the target page before the first render so a reopened PDF lands
-  // where it was left.
-  useEffect(() => {
-    if (!path) return;
-    const cached = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
-    if (cached > 1) { wantPage.current = cached; setPage(cached); setPageInput(String(cached)); }
-    // The vault copy is authoritative: it survives a different browser.
-    fetch(`/api/pdf-state?p=${encodeURIComponent(path)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const n = Number(d?.page);
-        if (n > 1 && n !== wantPage.current) {
-          wantPage.current = n; setPage(n); setPageInput(String(n));
-          host.current?.querySelector(`.pdfpage[data-page="${n}"]`)?.scrollIntoView({ block: "start" });
-        }
-      })
-      .catch(() => {});
-  }, [path]);
+  /** Draw canvases for pages in or near the viewport; skip the rest. */
+  const drawNearby = useCallback(async (mine: number) => {
+    const sc = scroller.current, hostEl = host.current, doc = docRef.current;
+    if (!sc || !hostEl || !doc) return;
+    const modUrl = "/pdf.min.mjs";
+    const pdfjs: any = await import(/* webpackIgnore: true */ modUrl);
+    const box = sc.getBoundingClientRect();
+    const margin = box.height * 1.5;
+
+    const wraps = [...hostEl.querySelectorAll<HTMLElement>('.pdfpage[data-state="pending"]')];
+    for (const wrap of wraps) {
+      if (mine !== gen.current) return;
+      const r = wrap.getBoundingClientRect();
+      if (r.bottom < box.top - margin || r.top > box.bottom + margin) continue;
+      wrap.dataset.state = "drawing";
+
+      const p = Number(wrap.dataset.page);
+      const pg = await doc.getPage(p);
+      if (mine !== gen.current) return;
+      const nat = pg.getViewport({ scale: 1 });
+      const viewport = pg.getViewport({ scale: (parseFloat(wrap.style.width) / nat.width) });
+
+      const canvas = document.createElement("canvas");
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = viewport.width * dpr;
+      canvas.height = viewport.height * dpr;
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+      wrap.appendChild(canvas);
+
+      const layer = document.createElement("div");
+      layer.className = "pdftext";
+      wrap.appendChild(layer);
+
+      const ctx = canvas.getContext("2d")!;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      await pg.render({ canvasContext: ctx, viewport }).promise;
+      if (mine !== gen.current) return;
+
+      const content = await pg.getTextContent();
+      content.items.forEach((it: any, i: number) => {
+        if (!it.str) return;
+        const tx = pdfjs.Util.transform(viewport.transform, it.transform);
+        const span = document.createElement("span");
+        span.textContent = it.str;
+        span.dataset.idx = String(i);
+        span.style.left = `${tx[4]}px`;
+        span.style.top = `${tx[5] - Math.abs(tx[3] || 10)}px`;
+        span.style.fontSize = `${Math.abs(tx[3] || 10)}px`;
+        layer.appendChild(span);
+      });
+      wrap.dataset.state = "done";
+      setDrawn((n) => n + 1);
+    }
+  }, []);
 
   useEffect(() => { render(); }, [render]);
 
@@ -209,7 +234,7 @@ export default function PdfViewer({
         paint(span, i === a ? aOff : 0, i === c ? cOff : len, colour, h);
       }
     }
-  }, [highlights, pages, scale]);
+  }, [highlights, pages, scale, drawn]);
 
   /** Click a highlight to remove it, which deletes the quote from its note. */
   useEffect(() => {
@@ -260,6 +285,8 @@ export default function PdfViewer({
         if (r.top <= anchor) current = Number(el.dataset.page);
         else break;                                          // pages are in order
       }
+      if (restoring.current) return;
+      drawNearby(gen.current);
       if (current !== wantPage.current) {
         wantPage.current = current;
         setPage(current);
@@ -281,7 +308,7 @@ export default function PdfViewer({
     sc.addEventListener("scroll", onScroll, { passive: true });
     measure();
     return () => { sc.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
-  }, [pages, scale, path]);
+  }, [pages, scale, path, drawNearby]);
 
   function goToPage(n: number) {
     const target = Math.min(Math.max(1, n), pages || 1);

@@ -617,3 +617,11 @@ body.workspace .toc { display: none; }
   padding: 1px 4px; border-radius: 2px;
 }
 .tree .row.other .name { color: var(--fg); }
+
+/* Placeholders show as blank sheets until their canvas is drawn. */
+.pdfpage[data-state="pending"], .pdfpage[data-state="drawing"] {
+  background: #fff; display: grid; place-items: center;
+}
+.pdfpage[data-state="pending"]::after {
+  content: attr(data-page); color: #bbb; font-size: 13px;
+}
