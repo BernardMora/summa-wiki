@@ -9,8 +9,12 @@ export interface Tab { id: string; title: string; }
 export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
 
 export const isPdfId = (id: string) => id.startsWith("pdf:");
+export const isImgId = (id: string) => id.startsWith("img:");
+export const isFileId = (id: string) => isPdfId(id) || isImgId(id);
 export const hrefFor = (id: string) =>
-  isPdfId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}` : `/note/${encodeURIComponent(id)}`;
+  isPdfId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
+  : isImgId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
+  : `/note/${encodeURIComponent(id)}`;
 
 interface Ctx {
   open: (id: string, title: string, newTab?: boolean) => void;
@@ -90,8 +94,13 @@ export default function Workspace({ initial }: { initial: Payload }) {
       tabs[i] = { id, title };
       return { ...p, tabs, activeId: id };
     }));
-    if (!isPdfId(id)) router.push(hrefFor(id)); else router.push(hrefFor(id));
-  }, [activePane, router]);
+    // Deliberately no router.push: navigating remounts the workspace, which
+    // reset the pane layout and closed the split. Keep the URL roughly in
+    // sync without a Next navigation so deep links still work on reload.
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", hrefFor(id));
+    }
+  }, [activePane]);
 
   const closeTab = useCallback((paneKey: string, id: string) => {
     setPanes((ps) => {
@@ -229,12 +238,16 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       };
                       el.addEventListener("pointermove", onMove as any);
                       el.addEventListener("pointerup", () => el.removeEventListener("pointermove", onMove as any), { once: true });
-                      if (!isPdfId(t.id)) router.push(hrefFor(t.id));
+                      if (typeof window !== "undefined") {
+                        window.history.replaceState(null, "", hrefFor(t.id));
+                      }
                     }}
                     title={t.id}
                   >
                     <span className="otab-title">
-                      {isPdfId(t.id) && <span className="otab-kind">PDF</span>}{t.title}
+                      {isPdfId(t.id) && <span className="otab-kind">PDF</span>}
+                      {isImgId(t.id) && <span className="otab-kind">IMG</span>}
+                      {t.title}
                     </span>
                     <button
                       className="otab-x"
@@ -249,6 +262,16 @@ export default function Workspace({ initial }: { initial: Payload }) {
               <div className="panecontent">
                 {p.activeId === null ? (
                   <p className="dim" style={{ padding: 20 }}>Panel vacío.</p>
+                ) : isImgId(p.activeId) ? (
+                  <div className="imgview">
+                    <div className="imgbar">
+                      <span className="dim">{p.activeId.slice(4).split("/").pop()}</span>
+                      <a className="dim" style={{ marginLeft: "auto" }}
+                         href={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`} download>Descargar</a>
+                    </div>
+                    <img src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}
+                         alt={p.activeId.slice(4)} />
+                  </div>
                 ) : isPdfId(p.activeId) ? (
                   <PdfViewer
                     src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}

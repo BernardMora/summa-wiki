@@ -141,6 +141,7 @@ export default function FileTree() {
     const label = n.name.replace(/\.[^.]+$/, "");
     if (n.id) { tabs?.open(n.id, label, newTab); return; }
     if (/\.pdf$/i.test(n.name)) { tabs?.open(`pdf:${n.rel}`, label, newTab); return; }
+    if (/\.(png|jpe?g|webp|gif|svg)$/i.test(n.name)) { tabs?.open(`img:${n.rel}`, label, newTab); return; }
     window.open(`/api/asset?p=${encodeURIComponent(n.rel)}`, "_blank");
   }
 

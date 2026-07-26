@@ -40,11 +40,12 @@ export default function PdfViewer({
     const stall = setTimeout(() => setSlow(true), 8000);
     host.current.innerHTML = "";
     try {
-      // The modern ESM build broke under webpack two different ways: a
-      // workerSrc URL left getDocument hanging, and constructing the worker via
-      // new URL() threw "Object.defineProperty called on non-object". The legacy
-      // build is bundler-tolerant and is what pdfjs recommends for webpack.
-      const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      // pdfjs must NOT go through webpack. Bundling it produced
+      // "Object.defineProperty called on non-object" with both the modern and
+      // the legacy builds. webpackIgnore leaves the specifier alone so the
+      // browser loads the file natively as an ES module from /public.
+      const modUrl = "/pdf.min.mjs";
+      const pdfjs: any = await import(/* webpackIgnore: true */ modUrl);
       pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
       const doc = await pdfjs.getDocument({
         url: src,
