@@ -28,5 +28,5 @@ export async function PUT(req: Request) {
     );
   }
   if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 404 });
-  return NextResponse.json({ ok: true, mtimeMs: r.mtimeMs });
+  return NextResponse.json({ ok: true, mtimeMs: r.mtimeMs, wrapped: r.wrapped, authorChanged: r.authorChanged });
 }

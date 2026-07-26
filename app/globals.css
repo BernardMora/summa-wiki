@@ -91,7 +91,8 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 .tabs .right { margin-left: auto; display: flex; gap: 2px; }
 
 /* ---------------------------------------------------------------- layout */
-.shell { display: grid; grid-template-columns: 195px minmax(0, 1fr); align-items: start; }
+:root { --sidew: 195px; }
+.shell { display: grid; grid-template-columns: var(--sidew) minmax(0, 1fr); align-items: start; position: relative; }
 @media (max-width: 850px) { .shell { grid-template-columns: 1fr; } .side { display: none; } }
 
 .side {
@@ -236,3 +237,41 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
   border: 1px solid var(--line-soft); background: var(--bg); color: var(--fg);
 }
 .newform .err { color: var(--link-red); font-size: 11.5px; }
+
+/* ---------------------------------------------------------------- resizer */
+.resizer {
+  position: absolute; top: 0; bottom: 0; width: 7px; margin-left: -3px;
+  cursor: col-resize; z-index: 45; background: transparent;
+}
+.resizer::after {
+  content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; background: transparent;
+}
+.resizer:hover::after, .resizer.dragging::after { background: var(--link); }
+body.resizing { cursor: col-resize; user-select: none; }
+
+/* ---------------------------------------------------------------- context menu */
+.ctxmenu {
+  position: fixed; z-index: 90; min-width: 170px; background: var(--bg);
+  border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.22); padding: 3px;
+}
+.ctxhead {
+  font-size: 11px; color: var(--muted); padding: 3px 8px 5px;
+  border-bottom: 1px solid var(--line-soft); margin-bottom: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ctxmenu button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 12.5px;
+  padding: 5px 8px; border: 0; background: none; color: var(--fg); cursor: pointer; border-radius: 2px;
+}
+.ctxmenu button:hover { background: var(--panel-blue); }
+.ctxmenu button.danger { color: var(--link-red); }
+.ctxmenu button.danger:hover { background: var(--link-red); color: #fff; }
+
+.inlineedit {
+  width: 100%; font: inherit; font-size: 12.4px; padding: 1px 4px;
+  border: 1px solid var(--link); background: var(--bg); color: var(--fg);
+}
+.err { color: var(--link-red); font-size: 11.5px; }
+
+.prose { cursor: text; }
+.provnote { color: var(--ai-line); font-weight: 600; }

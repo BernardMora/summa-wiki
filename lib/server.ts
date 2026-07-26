@@ -3,6 +3,7 @@ import path from "node:path";
 import { buildIndex } from "../src/indexer.ts";
 import { VAULT, bundles } from "../src/config.ts";
 import type { WikiIndex, Note } from "../src/types.ts";
+import { applyHumanProvenance } from "./provenance.ts";
 
 /**
  * Server-side vault access. Everything here touches the real filesystem, so
@@ -63,7 +64,7 @@ export function readNote(id: string): ReadResult | null {
 }
 
 export type WriteResult =
-  | { ok: true; mtimeMs: number }
+  | { ok: true; mtimeMs: number; wrapped: boolean; authorChanged: string | null }
   | { ok: false; reason: "not-found" | "stale"; currentMtimeMs?: number; currentContent?: string };
 
 /**
@@ -103,9 +104,19 @@ export function writeNote(id: string, content: string, expectedMtimeMs?: number)
     (_m, head) => `${head}updated: ${today}`,
   );
 
-  fs.writeFileSync(abs, stamped, "utf8");
+  // Attribute the edit before writing: a human insertion inside an agent
+  // block gets wrapped, and author: is moved to mixed when warranted.
+  const before = fs.readFileSync(abs, "utf8");
+  const prov = applyHumanProvenance(before, stamped);
+
+  fs.writeFileSync(abs, prov.content, "utf8");
   invalidate();
-  return { ok: true, mtimeMs: fs.statSync(abs).mtimeMs };
+  return {
+    ok: true,
+    mtimeMs: fs.statSync(abs).mtimeMs,
+    wrapped: prov.wrapped,
+    authorChanged: prov.authorChanged,
+  };
 }
 
 /** Serve an asset (image/pdf) referenced by a note, still constrained to the vault. */

@@ -32,6 +32,7 @@ export default function ArticleClient({
   const [mtime, setMtime] = useState(mtimeMs);
   const [status, setStatus] = useState("");
   const [conflict, setConflict] = useState<string | null>(null);
+  const [provNote, setProvNote] = useState("");
 
   const dirty = text !== savedText;
   const totalWords = meta.humanWords + meta.agentWords;
@@ -54,6 +55,13 @@ export default function ArticleClient({
     if (!r.ok) { setStatus("error al guardar"); return; }
     const d = await r.json();
     setMtime(d.mtimeMs); setSavedText(text); setStatus("guardado");
+    if (d.wrapped || d.authorChanged) {
+      setProvNote(
+        [d.wrapped ? "tu edición quedó marcada como humana dentro de un bloque del agente" : "",
+         d.authorChanged ? `author: ${d.authorChanged}` : ""].filter(Boolean).join(" · "),
+      );
+      setTimeout(() => setProvNote(""), 6000);
+    }
     setTimeout(() => setStatus(""), 1800);
   }
 
@@ -95,7 +103,19 @@ export default function ArticleClient({
           )}
         </p>
 
-        {tab === "article" && !editing && <div dangerouslySetInnerHTML={{ __html: html }} />}
+        {tab === "article" && !editing && (
+          <div
+            className="prose"
+            onClick={(e) => {
+              const t = e.target as HTMLElement;
+              if (t.closest("a")) return;                       // let links navigate
+              if (window.getSelection()?.toString()) return;    // let text selection be
+              setEditing(true);
+            }}
+            title="Clic para editar"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )}
         {editing && <Editor value={text} onChange={setText} />}
 
         {tab === "data" && !editing && (
@@ -166,6 +186,7 @@ export default function ArticleClient({
         {editing && <button className="primary" disabled={!dirty} onClick={() => save()}>Guardar {dirty ? "•" : ""}</button>}
         <button onClick={() => setHideProv((v) => !v)}>{hideProv ? "Mostrar autoría" : "Ocultar autoría"}</button>
         <span className="dim">{status}</span>
+        {provNote && <span className="provnote">{provNote}</span>}
         {dirty && !status && <span className="warn">sin guardar</span>}
         <span style={{ marginLeft: "auto" }} className="dim">⌘S guarda</span>
       </div>
