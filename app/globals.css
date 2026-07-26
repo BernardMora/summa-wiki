@@ -48,6 +48,7 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 .masthead {
   background: var(--bg); border-bottom: 1px solid var(--line-soft);
   padding: 13px 22px 9px; display: flex; align-items: flex-start; gap: 24px;
+  position: sticky; top: 0; z-index: 50;
 }
 .wordmark { display: block; line-height: 1.08; }
 .wordmark .name {
@@ -93,7 +94,10 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 .shell { display: grid; grid-template-columns: 195px minmax(0, 1fr); align-items: start; }
 @media (max-width: 850px) { .shell { grid-template-columns: 1fr; } .side { display: none; } }
 
-.side { padding: 16px 10px 60px; font-size: 12.7px; }
+.side {
+  padding: 16px 10px 60px; font-size: 12.7px;
+  position: sticky; top: 62px; max-height: calc(100vh - 62px); overflow-y: auto;
+}
 .side .logo {
   width: 88px; height: 88px; margin: 0 auto 8px; border-radius: 50%;
   background: var(--panel-grey); border: 1px solid var(--line-soft);
@@ -197,3 +201,38 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
 .warn { color: var(--link-red); font-weight: 600; }
 .cm-editor { border: 1px solid var(--line); height: calc(100vh - 300px); }
 .cm-editor.cm-focused { outline: none; border-color: var(--link); }
+
+/* ---------------------------------------------------------------- file tree */
+.viewtoggle { display: flex; gap: 3px; margin-bottom: 10px; }
+.viewtoggle button {
+  flex: 1; font: inherit; font-size: 11.5px; padding: 3px 6px; cursor: pointer;
+  border: 1px solid var(--line-soft); background: var(--page-bg);
+  color: var(--link); border-radius: 2px;
+}
+.viewtoggle button.on { background: var(--bg); color: var(--fg); font-weight: 600; border-color: var(--line); }
+
+.tree { font-size: 12.4px; line-height: 1.5; }
+.tree .row {
+  display: flex; align-items: center; gap: 3px; padding: 1px 3px;
+  border-radius: 2px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tree .row:hover { background: var(--panel-grey-head); }
+.tree .row.sel { background: var(--panel-blue-head); }
+.tree .caret { width: 11px; flex: 0 0 auto; color: var(--muted); font-size: 9px; }
+.tree .name { overflow: hidden; text-overflow: ellipsis; }
+.tree .dir > .name { font-weight: 600; }
+.tree .file .name { color: var(--link); }
+.tree .other .name { color: var(--muted); }
+.newbtn {
+  width: 100%; margin: 8px 0 4px; font: inherit; font-size: 12px; padding: 4px;
+  border: 1px solid var(--line); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; cursor: pointer;
+}
+.newbtn:hover { background: var(--panel-blue); }
+.newform { border: 1px solid var(--line); padding: 7px; margin-bottom: 8px; background: var(--panel-grey); }
+.newform input, .newform select {
+  width: 100%; font: inherit; font-size: 12px; padding: 3px 5px; margin-bottom: 5px;
+  border: 1px solid var(--line-soft); background: var(--bg); color: var(--fg);
+}
+.newform .err { color: var(--link-red); font-size: 11.5px; }
