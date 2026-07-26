@@ -2,7 +2,10 @@
 
 Local reader/editor and indexer for the AIOS knowledge base.
 
-**Phase 3 (done):** the indexer and CLI. **Phase 4 (next):** the Next.js app.
+**Phases 0-4 done.** Indexer, CLI, and a local Next.js reader/editor styled as an
+encyclopedia: masthead search, categorized sidebar, article tabs, portal main page.
+
+    npm run dev     # http://localhost:4321
 
 The index is the single artifact consumed by *both* the app and the agent. This is
 deliberate — it is what replaces "fancy RAG". At ~256 notes the LLM reads what it

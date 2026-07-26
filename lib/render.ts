@@ -33,10 +33,20 @@ export function markProvenance(md: string): string {
     .replace(HU_CLOSE, "</span>");
 }
 
-export function renderNote(body: string, ctx: RenderCtx): string {
+export function renderNote(body: string, ctx: RenderCtx, title?: string): string {
   const marked = new Marked({ gfm: true, breaks: false, async: false });
 
-  const html = marked.parse(markProvenance(body)) as string;
+  // Most notes open with "# Same Title" as the frontmatter title. The page
+  // already renders the title as its heading, so drop the duplicate.
+  let src = body;
+  if (title) {
+    src = src.replace(/^\s*#\s+(.+?)\s*$/m, (m, h) => {
+      const norm = (x: string) => x.replace(/[^\p{L}\p{N}]+/gu, "").toLowerCase();
+      return norm(h) === norm(title) ? "" : m;
+    });
+  }
+
+  const html = marked.parse(markProvenance(src)) as string;
 
   return html.replace(/(href|src)="([^"]+)"/g, (whole, attr: string, url: string) => {
     if (/^(https?:|mailto:|#|\/)/.test(url)) return whole;
