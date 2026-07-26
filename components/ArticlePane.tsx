@@ -144,15 +144,18 @@ export default function ArticlePane({
         </header>
       )}
 
+      {/* Chrome: never scrolls. Sticky positioning inside the scroller kept
+          leaving this row stranded mid-article, so it now sits outside it. */}
+      <div className="tabs panechrome">
+        <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
+        <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
+        <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
+          Enlaces ({data.backlinks.length + data.outbound.length})
+        </button>
+        <Crumb vaultPath={m.vaultPath} />
+      </div>
+
       <div className="panescroll">
-        <div className="tabs">
-          <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
-          <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
-          <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
-            Enlaces ({data.backlinks.length + data.outbound.length})
-          </button>
-          {!secondary && <Crumb vaultPath={m.vaultPath} />}
-        </div>
 
         <div className="artrow">
           <article>

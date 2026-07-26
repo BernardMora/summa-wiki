@@ -427,10 +427,11 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 
 /* ---------------------------------------------------------------- pdf */
-.pdfwrap { position: relative; }
+.pdfwrap { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.pdfscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 24px; }
 .pdfbar {
-  display: flex; gap: 8px; align-items: center; font-size: 12.5px;
-  padding: 6px 0; background: var(--bg);
+  display: flex; gap: 8px; align-items: center; font-size: 12.5px; flex: 0 0 auto;
+  padding: 7px 14px; background: var(--bg); border-bottom: 1px solid var(--line-soft);
 }
 .pdfbar button {
   font: inherit; font-size: 13px; padding: 2px 9px; border: 1px solid var(--line);
@@ -491,8 +492,6 @@ body.resizing { cursor: col-resize; user-select: none; }
   border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
 }
 .panehead button:hover { color: var(--link-red); }
-.panebody { overflow: auto; padding: 6px 8px; }
-.panebody .pdfbar { position: static; }
 
 .otab.dragging { opacity: .45; }
 .otab { user-select: none; }
@@ -507,7 +506,6 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .splitbar:hover::after, .splitbar.dragging::after { background: var(--link); width: 2px; }
 .pane { max-height: none; height: 100%; }
-.panebody { overflow: visible; }
 
 /* ---------------------------------------------------------------- workspace */
 .wsgrid {
@@ -542,6 +540,7 @@ body.workspace .bar { display: none; }
   display: flex; flex-direction: column;
 }
 .panecontent > section { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.panecontent > section > .panechrome { order: -1; }
 .panescroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px 18px 24px; }
 
 /* Drag feedback: a ghost under the cursor and a painted landing region. */
@@ -587,12 +586,8 @@ body.workspace .toc { display: none; }
    container is .panescroll, so anything sticky there must anchor at 0 or it
    parks in the middle of the content. */
 .panescroll { position: relative; }
-.panescroll .tabs {
-  position: sticky; top: 0; z-index: 12; margin: 0 0 14px; padding: 6px 0 0;
-  background: var(--bg);
-}
-.panescroll .pdfbar {
-  position: sticky; top: 0; z-index: 12; background: var(--bg);
-  padding: 6px 0; margin-bottom: 6px;
+.panechrome {
+  flex: 0 0 auto; padding: 6px 12px 0; background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 .panescroll .imgbar { position: sticky; top: 0; z-index: 12; background: var(--bg); padding: 6px 0; }

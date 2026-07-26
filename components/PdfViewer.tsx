@@ -149,6 +149,7 @@ export default function PdfViewer({
         <a href={src} download className="dim" style={{ marginLeft: "auto" }}>Descargar</a>
       </div>
 
+      <div className="pdfscroll">
       {err && <p className="warn">Error: {err}</p>}
       {!err && pages === 0 && !slow && <p className="dim">Cargando PDF…</p>}
       {!err && pages === 0 && slow && (
@@ -161,6 +162,7 @@ export default function PdfViewer({
         </div>
       )}
       <div ref={host} className="pdfpages" />
+      </div>
 
       {sel && (
         <div className="pdfsel">
