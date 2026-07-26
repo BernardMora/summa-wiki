@@ -513,15 +513,21 @@ body.resizing { cursor: col-resize; user-select: none; }
 /* ---------------------------------------------------------------- workspace */
 .wsgrid {
   display: grid; align-items: stretch;
-  height: calc(100vh - 150px);      /* fixed so each pane can scroll internally */
+  height: 100%; min-height: 0;
 }
+/* The note route owns the viewport so pane tab bars never scroll away under
+   the masthead. Only pane content scrolls. */
+body.workspace .content { height: calc(100vh - 62px); overflow: hidden; padding: 0; }
+body.workspace .side { max-height: calc(100vh - 62px); }
+body.workspace .bar { display: none; }
 @media (max-width: 1000px) { .wsgrid { grid-template-columns: 1fr !important; } .wsgrid .splitbar { display: none; } }
 
 .wspane {
-  position: relative; min-width: 0; display: flex; flex-direction: column;
-  border: 1px solid transparent;
+  position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--line-soft);
 }
-.wspane.active { border-color: var(--line-soft); }
+.wspane:last-child { border-right: 0; }
+.wspane.active .panetabs { background: var(--bg); }
 
 .panetabs {
   display: flex; gap: 2px; align-items: stretch; flex-wrap: nowrap;
@@ -532,7 +538,12 @@ body.resizing { cursor: col-resize; user-select: none; }
 .panetabs::-webkit-scrollbar { height: 5px; }
 .panetabs::-webkit-scrollbar-thumb { background: var(--line-soft); border-radius: 3px; }
 .otab.ghosted { opacity: .35; }
-.panecontent { flex: 1; min-width: 0; min-height: 0; padding: 14px 18px 60px; overflow-y: auto; overflow-x: hidden; }
+.panecontent {
+  flex: 1; min-width: 0; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.panecontent > section { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.panescroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px 18px 24px; }
 
 /* Drag feedback: a ghost under the cursor and a painted landing region. */
 body.dragging-tab { cursor: grabbing; user-select: none; }
@@ -558,3 +569,17 @@ body.dragging-tab { cursor: grabbing; user-select: none; }
   max-width: 100%; height: auto; align-self: flex-start;
   border: 1px solid var(--line-soft); background: var(--panel-grey);
 }
+
+.panebar {
+  display: flex; gap: 6px; align-items: center; flex: 0 0 auto;
+  padding: 5px 10px; border-top: 1px solid var(--line-soft);
+  background: var(--page-bg); font-size: 12px;
+}
+.panebar button {
+  font: inherit; font-size: 11.5px; padding: 3px 8px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+}
+.panebar button:disabled { opacity: .4; cursor: default; }
+/* The pane owns its scroll, so the article column must not add its own. */
+body.workspace .artrow { display: block; }
+body.workspace .toc { display: none; }

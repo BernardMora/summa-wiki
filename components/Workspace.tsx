@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
 import ArticlePane, { type Payload } from "./ArticlePane.tsx";
 import PdfViewer from "./PdfViewer.tsx";
+import { publishActive, isPdfId as isPdf, isImgId as isImg } from "./Tabs.tsx";
 
 export interface Tab { id: string; title: string; }
 export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
@@ -95,11 +96,8 @@ export default function Workspace({ initial }: { initial: Payload }) {
       return { ...p, tabs, activeId: id };
     }));
     // Deliberately no router.push: navigating remounts the workspace, which
-    // reset the pane layout and closed the split. Keep the URL roughly in
-    // sync without a Next navigation so deep links still work on reload.
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", hrefFor(id));
-    }
+    // reset the pane layout and closed the split. The URL is maintained by the
+    // effect above instead.
   }, [activePane]);
 
   const closeTab = useCallback((paneKey: string, id: string) => {
@@ -145,11 +143,30 @@ export default function Workspace({ initial }: { initial: Payload }) {
     });
   }, []);
 
-  // The sidebar and file tree live outside this subtree; expose open() to them.
+  // The sidebar and file tree live outside this subtree; expose open() to them
+  // and publish the focused tab so the tree highlight follows the panes rather
+  // than the URL.
   useEffect(() => {
     (window as any).__wikiOpen = open;
     return () => { delete (window as any).__wikiOpen; };
   }, [open]);
+
+  useEffect(() => {
+    document.body.classList.add("workspace");
+    return () => document.body.classList.remove("workspace");
+  }, []);
+
+  const focused = panes.find((p) => p.key === activePane)?.activeId ?? null;
+  useEffect(() => { publishActive(focused); }, [focused]);
+
+  // Keep the address bar on the focused NOTE. File tabs deliberately do not
+  // rewrite it: /pdf is a standalone route, and pointing the URL there would
+  // reload into a single PDF instead of this workspace.
+  useEffect(() => {
+    if (focused && !isPdf(focused) && !isImg(focused)) {
+      window.history.replaceState(null, "", `/note/${encodeURIComponent(focused)}`);
+    }
+  }, [focused]);
 
   // ---------------------------------------------------------------- drag
   useEffect(() => {
@@ -238,9 +255,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       };
                       el.addEventListener("pointermove", onMove as any);
                       el.addEventListener("pointerup", () => el.removeEventListener("pointermove", onMove as any), { once: true });
-                      if (typeof window !== "undefined") {
-                        window.history.replaceState(null, "", hrefFor(t.id));
-                      }
+
                     }}
                     title={t.id}
                   >

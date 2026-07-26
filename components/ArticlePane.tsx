@@ -144,7 +144,7 @@ export default function ArticlePane({
         </header>
       )}
 
-      <div className={secondary ? "panebody" : undefined}>
+      <div className="panescroll">
         <div className="tabs" style={secondary ? { padding: "0 6px" } : { margin: "-20px -30px 18px", paddingTop: 6 }}>
           <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
           <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
@@ -236,14 +236,14 @@ export default function ArticlePane({
         )}
       </div>
 
-      {!secondary && (
-        <div className="bar">
+      {(
+        <div className="panebar">
           <button onClick={() => doMark("human")} disabled={!hasSel}>Marcar como mío</button>
           <button onClick={() => doMark("ai")} disabled={!hasSel}>Marcar como IA</button>
           <button onClick={() => { const v = viewRef.current; if (v && unmarkSelection(v)) onChange(); }}>Quitar marca</button>
           <button onClick={() => setHideProv((v) => !v)}>{hideProv ? "Mostrar autoría" : "Ocultar autoría"}</button>
           <span className="dim">{status}</span>
-          <span style={{ marginLeft: "auto" }} className="dim">guardado automático · ⌘S fuerza · ⌘clic sigue enlaces</span>
+          <span style={{ marginLeft: "auto" }} className="dim">⌘S · ⌘clic</span>
         </div>
       )}
     </section>
