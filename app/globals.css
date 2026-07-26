@@ -306,3 +306,39 @@ body.resizing { cursor: col-resize; user-select: none; }
   line-height: 1; align-self: center; margin-left: 10px;
 }
 .themebtn:hover { background: var(--panel-blue); }
+
+/* ---------------------------------------------------------------- open tabs */
+.tabstrip {
+  display: flex; gap: 2px; align-items: stretch; flex-wrap: wrap;
+  margin: -20px -30px 14px; padding: 6px 22px 0;
+  border-bottom: 1px solid var(--line); background: var(--page-bg);
+}
+@media (max-width: 850px) { .tabstrip { margin: -18px -16px 12px; padding: 6px 12px 0; } }
+.otab {
+  display: flex; align-items: center; gap: 6px; max-width: 210px;
+  padding: 5px 6px 5px 10px; font-size: 12.5px; cursor: pointer;
+  background: var(--panel-grey); color: var(--muted);
+  border: 1px solid var(--line-soft); border-bottom: 0; border-radius: 3px 3px 0 0;
+  position: relative; top: 1px;
+}
+.otab:hover { background: var(--panel-blue); }
+.otab.on { background: var(--bg); color: var(--fg); font-weight: 600; border-bottom: 1px solid var(--bg); }
+.otab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.otab-x {
+  border: 0; background: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 2px;
+}
+.otab-x:hover { background: var(--link-red); color: #fff; }
+.otab-closeall {
+  margin-left: 8px; align-self: center; font-size: 11.5px; padding: 3px 8px;
+  border: 1px solid var(--line-soft); background: var(--bg); color: var(--muted);
+  border-radius: 2px; cursor: pointer;
+}
+
+.cathead { cursor: context-menu; }
+.pinmark { color: var(--link); margin-right: 4px; font-size: 9px; vertical-align: middle; }
+.ctxsub { position: relative; }
+.ctxsubmenu {
+  margin: 2px 0 2px 8px; border-left: 2px solid var(--line-soft); padding-left: 4px;
+  max-height: 220px; overflow-y: auto;
+}

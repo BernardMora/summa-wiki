@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { livePreview, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
+import { livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
 
 /** Wrap the current selection in provenance markers. Explicit, user-driven. */
 export function markSelection(view: EditorView, kind: "human" | "ai") {
@@ -61,6 +61,7 @@ export default function Editor({
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),   // GFM: task lists, tables, strikethrough
           livePreview,
+          tableField,
           livePreviewTheme,
           linkClick,
           linkResolver.of(resolve),

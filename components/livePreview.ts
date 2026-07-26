@@ -1,5 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, StateEffect, StateField, Facet } from "@codemirror/state";
+import { RangeSetBuilder, StateField, Facet, type EditorState } from "@codemirror/state";
 import {
   Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType,
 } from "@codemirror/view";
@@ -70,6 +70,46 @@ class CheckWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
+/**
+ * Renders a GFM table as a real table when the cursor is outside it.
+ * Put the cursor inside and the pipe syntax comes back, so it stays editable.
+ */
+class TableWidget extends WidgetType {
+  constructor(private readonly src: string) { super(); }
+  toDOM() {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-tablewrap";
+    const table = document.createElement("table");
+    table.className = "cm-table";
+
+    const rows = this.src.split("\n").filter((r) => r.trim());
+    const cells = (row: string) =>
+      row.replace(/^\s*\||\|\s*$/g, "").split("|").map((c) => c.trim());
+    const isDelim = (row: string) => /^[\s|:-]+$/.test(row) && row.includes("-");
+
+    let head = true;
+    for (const row of rows) {
+      if (isDelim(row)) { head = false; continue; }
+      const tr = document.createElement("tr");
+      for (const c of cells(row)) {
+        const td = document.createElement(head ? "th" : "td");
+        // Inline markdown inside cells: bold, italic, code.
+        td.innerHTML = c
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+          .replace(/`([^`]+)`/g, "<code>$1</code>");
+        tr.appendChild(td);
+      }
+      (head ? table.createTHead() : table).appendChild(tr);
+    }
+    wrap.appendChild(table);
+    return wrap;
+  }
+  eq(o: TableWidget) { return o.src === this.src; }
+  ignoreEvent() { return false; }
+}
+
 class ImageWidget extends WidgetType {
   constructor(private readonly src: string, private readonly alt: string) { super(); }
   toDOM() {
@@ -116,6 +156,7 @@ function build(view: EditorView): DecorationSet {
       enter(node) {
         const cls = STYLED[node.name];
         if (cls) items.push({ from: node.from, to: node.to, deco: Decoration.mark({ class: cls }) });
+        if (node.name === "Table") return false;   // handled by tableField below
         if (MARKS.has(node.name) && !isActive(node.from) && node.to > node.from) {
           items.push({ from: node.from, to: node.to, deco: Decoration.replace({}) });
         }
@@ -179,6 +220,47 @@ function build(view: EditorView): DecorationSet {
   return b.finish();
 }
 
+/**
+ * Tables must live in a StateField, not the ViewPlugin: CodeMirror refuses
+ * decorations that replace line breaks when they come from a plugin
+ * ("Decorations that replace line breaks may not be specified via plugins").
+ */
+function buildTables(state: EditorState): DecorationSet {
+  const b = new RangeSetBuilder<Decoration>();
+  const sel = state.selection.main;
+  const rows: { from: number; to: number; deco: Decoration }[] = [];
+
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name !== "Table") return;
+      const cursorInside = sel.from <= node.to && sel.to >= node.from;
+      if (!cursorInside) {
+        rows.push({
+          from: node.from, to: node.to,
+          deco: Decoration.replace({
+            widget: new TableWidget(state.sliceDoc(node.from, node.to)),
+            block: true,
+          }),
+        });
+      }
+      return false;
+    },
+  });
+
+  rows.sort((a, b2) => a.from - b2.from);
+  for (const r of rows) b.add(r.from, r.to, r.deco);
+  return b.finish();
+}
+
+export const tableField = StateField.define<DecorationSet>({
+  create: (state) => buildTables(state),
+  update(value, tr) {
+    if (tr.docChanged || tr.selection) return buildTables(tr.state);
+    return value.map(tr.changes);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 export const livePreview = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -240,6 +322,12 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-task": { marginRight: "6px", verticalAlign: "middle", cursor: "pointer" },
   ".cm-task-done": { color: "var(--muted)", textDecoration: "line-through" },
   ".cm-img": { maxWidth: "100%", height: "auto", display: "block", margin: "6px 0", borderRadius: "3px" },
+  ".cm-tablewrap": { overflowX: "auto", margin: "8px 0" },
+  ".cm-table": { borderCollapse: "collapse", fontSize: "13px" },
+  ".cm-table th, .cm-table td": {
+    border: "1px solid var(--line-soft)", padding: "5px 9px", textAlign: "left",
+  },
+  ".cm-table th": { background: "var(--panel-grey)", fontWeight: "700" },
   ".cm-prov": {
     fontSize: "10px", padding: "1px 5px", borderRadius: "8px",
     fontFamily: "ui-monospace, Menlo, monospace", verticalAlign: "middle",

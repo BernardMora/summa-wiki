@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
 import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
+import { useTabs } from "./Tabs.tsx";
 
 interface Ref { id: string; title: string; path: string; }
 interface Meta {
@@ -42,6 +43,11 @@ export default function ArticleClient({
   const mtimeRef = useRef(mtimeMs);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+  const tabs = useTabs();
+
+  // A note reached directly (search, backlink, URL) starts with a placeholder
+  // title in the strip; replace it with the real one.
+  useEffect(() => { tabs?.register(id, meta.title); }, [id, meta.title]);
 
   useEffect(() => { document.body.classList.toggle("hide-prov", hideProv); }, [hideProv]);
 

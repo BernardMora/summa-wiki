@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTabs } from "./Tabs.tsx";
 
 interface Node { name: string; rel: string; dir: boolean; id?: string; children?: Node[]; }
 interface Menu { x: number; y: number; node: Node; }
+interface Cat { id: string; label: string; }
 
 const TYPES = ["knowledge", "project", "area", "moc", "journal", "source", "connection", "system"];
 
@@ -23,7 +25,10 @@ export default function FileTree() {
   const [draft, setDraft] = useState("");
   const [type, setType] = useState("knowledge");
   const [err, setErr] = useState("");
+  const [cats, setCats] = useState<Cat[]>([]);
+  const [pinOpen, setPinOpen] = useState(false);
   const router = useRouter();
+  const tabs = useTabs();
   const boxRef = useRef<HTMLDivElement>(null);
 
   async function load() {
@@ -31,9 +36,12 @@ export default function FileTree() {
     setRoot((await r.json()).root ?? []);
   }
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    fetch("/api/categories").then((r) => r.json()).then((d) => setCats(d.categories ?? []));
+  }, []);
 
   useEffect(() => {
-    const close = () => setMenu(null);
+    const close = () => { setMenu(null); setPinOpen(false); };
     window.addEventListener("click", close);
     window.addEventListener("scroll", close, true);
     return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); };
@@ -162,7 +170,9 @@ export default function FileTree() {
           style={pad}
           title={n.rel}
           onContextMenu={onCtx}
-          onClick={() => { if (n.id) router.push(`/note/${encodeURIComponent(n.id)}`); }}
+          onClick={(e) => { if (n.id) tabs?.open(n.id, n.name.replace(/\.md$/, ""), e.metaKey || e.ctrlKey); }}
+          onDoubleClick={(e) => { if (n.id) { e.preventDefault(); tabs?.open(n.id, n.name.replace(/\.md$/, ""), true); } }}
+          onAuxClick={(e) => { if (e.button === 1 && n.id) { e.preventDefault(); tabs?.open(n.id, n.name.replace(/\.md$/, ""), true); } }}
         >
           <span className="caret" />
           <span className="name">{n.name}</span>
@@ -204,6 +214,38 @@ export default function FileTree() {
               setOpen((p) => new Set(p).add(menu.node.rel));
               setDraft(""); setErr(""); setMenu(null);
             }}>Nueva nota aquí</button>
+          )}
+          {!menu.node.dir && menu.node.id && (
+            <div className="ctxsub">
+              <button onClick={() => setPinOpen((v) => !v)}>Fijar en ▸</button>
+              {pinOpen && (
+                <div className="ctxsubmenu">
+                  {cats.length === 0 && <div className="ctxhead">Sin categorías</div>}
+                  {cats.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={async () => {
+                        await fetch("/api/categories", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "pin", id: c.id, noteId: menu.node.id }),
+                        });
+                        setMenu(null); setPinOpen(false); router.refresh();
+                      }}
+                    >{c.label}</button>
+                  ))}
+                  <button
+                    className="danger"
+                    onClick={async () => {
+                      await Promise.all(cats.map((c) => fetch("/api/categories", {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "unpin", id: c.id, noteId: menu.node.id }),
+                      })));
+                      setMenu(null); setPinOpen(false); router.refresh();
+                    }}
+                  >Quitar de todas</button>
+                </div>
+              )}
+            </div>
           )}
           <button onClick={() => {
             setRenaming(menu.node);

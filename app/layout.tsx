@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Masthead from "@/components/Masthead.tsx";
 import SideNav from "@/components/SideNav.tsx";
 import Resizer from "@/components/Resizer.tsx";
+import TabsProvider, { TabBar } from "@/components/Tabs.tsx";
 
 export const metadata: Metadata = {
   title: "Berni's Wiki — La enciclopedia personal",
@@ -22,12 +23,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <Masthead />
-        <div className="shell">
-          <SideNav />
-          <Resizer />
-          <div className="content">{children}</div>
-        </div>
+        <TabsProvider>
+          <Masthead />
+          <div className="shell">
+            <SideNav />
+            <Resizer />
+            <div className="content">
+              <TabBar />
+              {children}
+            </div>
+          </div>
+        </TabsProvider>
       </body>
     </html>
   );
