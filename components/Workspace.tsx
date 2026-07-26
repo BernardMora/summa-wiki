@@ -278,7 +278,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                 {p.activeId === null ? (
                   <p className="dim" style={{ padding: 20 }}>Panel vacío.</p>
                 ) : isImgId(p.activeId) ? (
-                  <div className="imgview">
+                  <div className="panescroll imgview">
                     <div className="imgbar">
                       <span className="dim">{p.activeId.slice(4).split("/").pop()}</span>
                       <a className="dim" style={{ marginLeft: "auto" }}
@@ -288,6 +288,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                          alt={p.activeId.slice(4)} />
                   </div>
                 ) : isPdfId(p.activeId) ? (
+                  <div className="panescroll">
                   <PdfViewer
                     src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}
                     name={p.activeId.slice(4).split("/").pop() ?? "pdf"}
@@ -299,6 +300,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       v.focus();
                     }}
                   />
+                  </div>
                 ) : p.activeId === initial.id ? (
                   <ArticlePane initial={initial} showToc={panes.length === 1}
                     onEditorReady={(v) => { mainEditor.current = v; }} />

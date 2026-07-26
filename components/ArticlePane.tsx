@@ -145,7 +145,7 @@ export default function ArticlePane({
       )}
 
       <div className="panescroll">
-        <div className="tabs" style={secondary ? { padding: "0 6px" } : { margin: "-20px -30px 18px", paddingTop: 6 }}>
+        <div className="tabs">
           <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
           <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
           <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>

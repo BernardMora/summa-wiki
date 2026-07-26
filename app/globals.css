@@ -100,7 +100,6 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 .tabs {
   background: var(--bg); border-bottom: 1px solid var(--line);
   padding: 0 22px; display: flex; gap: 2px; align-items: flex-end;
-  position: sticky; top: 95px; z-index: 24;
 }
 .tabs button, .tabs a {
   font: inherit; font-size: 13px; padding: 6px 14px; cursor: pointer;
@@ -431,7 +430,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .pdfwrap { position: relative; }
 .pdfbar {
   display: flex; gap: 8px; align-items: center; font-size: 12.5px;
-  padding: 6px 0; position: sticky; top: 95px; background: var(--bg); z-index: 20;
+  padding: 6px 0; background: var(--bg);
 }
 .pdfbar button {
   font: inherit; font-size: 13px; padding: 2px 9px; border: 1px solid var(--line);
@@ -583,3 +582,17 @@ body.dragging-tab { cursor: grabbing; user-select: none; }
 /* The pane owns its scroll, so the article column must not add its own. */
 body.workspace .artrow { display: block; }
 body.workspace .toc { display: none; }
+
+/* Sticky offsets are viewport-relative by default. Inside a pane the scroll
+   container is .panescroll, so anything sticky there must anchor at 0 or it
+   parks in the middle of the content. */
+.panescroll { position: relative; }
+.panescroll .tabs {
+  position: sticky; top: 0; z-index: 12; margin: 0 0 14px; padding: 6px 0 0;
+  background: var(--bg);
+}
+.panescroll .pdfbar {
+  position: sticky; top: 0; z-index: 12; background: var(--bg);
+  padding: 6px 0; margin-bottom: 6px;
+}
+.panescroll .imgbar { position: sticky; top: 0; z-index: 12; background: var(--bg); padding: 6px 0; }
