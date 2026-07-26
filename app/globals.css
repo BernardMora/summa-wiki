@@ -604,4 +604,7 @@ body.workspace .toc { display: none; }
 }
 .swatch:disabled { opacity: .35; cursor: default; }
 .swatch:not(:disabled):hover { outline: 2px solid var(--link); outline-offset: 1px; }
-.pdftext span.hl { border-radius: 2px; }
+.pdftext mark.hl {
+  color: transparent; border-radius: 2px; padding: 0; cursor: pointer;
+}
+.pdftext mark.hl:hover { outline: 1px solid var(--link-red); }

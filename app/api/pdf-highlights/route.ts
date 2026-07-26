@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
-import { getIndex } from "@/lib/server.ts";
+import { getIndex, resolveId, invalidate } from "@/lib/server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -46,4 +46,39 @@ export async function GET(req: Request) {
     }
   }
   return NextResponse.json({ highlights: out });
+}
+
+
+/**
+ * Remove a highlight: delete the link from the note that holds it, plus the
+ * blockquote it sits in, since a pdf-plus quote is written as
+ *   > text
+ *   >
+ *   > — [file, p.N](path#page=N&selection=...)
+ * Leaving the quote behind without its link would strand the text.
+ */
+export async function DELETE(req: Request) {
+  const { noteId, page, coords } = await req.json();
+  if (!noteId || !page || !coords) {
+    return NextResponse.json({ error: "noteId, page y coords requeridos" }, { status: 400 });
+  }
+  const abs = resolveId(noteId);
+  if (!abs || !fs.existsSync(abs)) return NextResponse.json({ error: "nota no encontrada" }, { status: 404 });
+
+  const needle = `#page=${page}&selection=${coords}`;
+  const lines = fs.readFileSync(abs, "utf8").split("\n");
+  const at = lines.findIndex((l) => l.includes(needle));
+  if (at < 0) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+
+  // Expand over the contiguous blockquote around the link.
+  let from = at, to = at;
+  while (from > 0 && lines[from - 1].trimStart().startsWith(">")) from--;
+  while (to < lines.length - 1 && lines[to + 1].trimStart().startsWith(">")) to++;
+  // Swallow one blank line after the block so paragraphs do not double-space.
+  if (lines[to + 1]?.trim() === "") to++;
+
+  lines.splice(from, to - from + 1);
+  fs.writeFileSync(abs, lines.join("\n"), "utf8");
+  invalidate();
+  return NextResponse.json({ ok: true });
 }

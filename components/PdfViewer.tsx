@@ -33,6 +33,9 @@ export default function PdfViewer({
 }) {
   const host = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  /** Bumped on every render; stale runs bail out instead of appending pages. */
+  const gen = useRef(0);
+  const restored = useRef(false);
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -46,9 +49,12 @@ export default function PdfViewer({
   // ------------------------------------------------------------------ render
   const render = useCallback(async () => {
     if (!host.current) return;
+    // Switching zoom restarted render while the previous pass was still
+    // appending, so pages from both runs interleaved — page 55 next to 191.
+    const mine = ++gen.current;
     setErr(""); setSlow(false); setPages(0);
     host.current.innerHTML = "";
-    const stall = setTimeout(() => setSlow(true), 8000);
+    const stall = setTimeout(() => { if (mine === gen.current) setSlow(true); }, 8000);
     try {
       const modUrl = "/pdf.min.mjs";
       const pdfjs: any = await import(/* webpackIgnore: true */ modUrl);
@@ -56,11 +62,19 @@ export default function PdfViewer({
       const doc = await pdfjs.getDocument({
         url: src, cMapUrl: "/pdf-cmaps/", cMapPacked: true, standardFontDataUrl: "/pdf-fonts/",
       }).promise;
+      if (mine !== gen.current) return;
       setPages(doc.numPages);
 
+      // Pages in one document can have different intrinsic sizes. Scale each
+      // to the SAME rendered width so the column does not jump about.
+      const first = await doc.getPage(1);
+      const baseWidth = first.getViewport({ scale: 1 }).width;
+
       for (let p = 1; p <= doc.numPages; p++) {
+        if (mine !== gen.current) return;
         const pg = await doc.getPage(p);
-        const viewport = pg.getViewport({ scale });
+        const natural = pg.getViewport({ scale: 1 });
+        const viewport = pg.getViewport({ scale: (baseWidth / natural.width) * scale });
 
         const wrap = document.createElement("div");
         wrap.className = "pdfpage";
@@ -84,6 +98,7 @@ export default function PdfViewer({
         const ctx = canvas.getContext("2d")!;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         await pg.render({ canvasContext: ctx, viewport }).promise;
+        if (mine !== gen.current) return;
 
         const content = await pg.getTextContent();
         content.items.forEach((it: any, i: number) => {
@@ -98,12 +113,23 @@ export default function PdfViewer({
           layer.appendChild(span);
         });
       }
+      // Return to wherever this PDF was last left.
+      if (!restored.current && path) {
+        restored.current = true;
+        const last = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
+        if (last > 1) {
+          requestAnimationFrame(() => {
+            host.current?.querySelector(`.pdfpage[data-page="${last}"]`)
+              ?.scrollIntoView({ block: "start" });
+          });
+        }
+      }
     } catch (e: any) {
-      setErr(e?.message ?? "no se pudo abrir el PDF");
+      if (mine === gen.current) setErr(e?.message ?? "no se pudo abrir el PDF");
     } finally {
       clearTimeout(stall);
     }
-  }, [src, scale]);
+  }, [src, scale, path]);
 
   useEffect(() => { render(); }, [render]);
 
@@ -115,22 +141,78 @@ export default function PdfViewer({
   }, [path]);
   useEffect(() => { loadHighlights(); }, [loadHighlights]);
 
-  // Paint highlights onto the text layer once pages exist.
+  /**
+   * Paint highlights using the stored character offsets, so only the selected
+   * portion is marked. Previously whole text runs were coloured, which lit up
+   * entire lines regardless of what was actually selected.
+   */
   useEffect(() => {
     if (!host.current || pages === 0) return;
-    host.current.querySelectorAll<HTMLElement>(".pdftext span.hl")
-      .forEach((s) => { s.classList.remove("hl"); s.style.background = ""; });
+    // Reset: unwrap any marks from a previous pass.
+    host.current.querySelectorAll<HTMLElement>(".pdftext mark.hl").forEach((mk) => {
+      const parent = mk.parentElement;
+      if (!parent) return;
+      parent.replaceChild(document.createTextNode(mk.textContent ?? ""), mk);
+      parent.normalize();
+    });
+
+    const paint = (span: HTMLElement, from: number, to: number, colour: string, h: Highlight) => {
+      const text = span.textContent ?? "";
+      const a = Math.max(0, Math.min(from, text.length));
+      const b = Math.max(a, Math.min(to, text.length));
+      if (a === b) return;
+      const mk = document.createElement("mark");
+      mk.className = "hl";
+      mk.style.background = colour;
+      mk.textContent = text.slice(a, b);
+      mk.dataset.page = String(h.page);
+      mk.dataset.coords = h.coords.join(",");
+      mk.dataset.note = h.noteId;
+      mk.title = "Clic para quitar el resaltado";
+      span.textContent = "";
+      if (a > 0) span.appendChild(document.createTextNode(text.slice(0, a)));
+      span.appendChild(mk);
+      if (b < text.length) span.appendChild(document.createTextNode(text.slice(b)));
+    };
+
     for (const h of highlights) {
       const pageEl = host.current.querySelector(`.pdfpage[data-page="${h.page}"] .pdftext`);
       if (!pageEl) continue;
-      const [a, , c] = h.coords;
       const colour = COLORS.find((x) => x.id === h.color)?.css ?? COLORS[0].css;
-      for (let i = a; i <= (c ?? a); i++) {
+      let [a, aOff, c, cOff] = h.coords;
+      if (c < a || (c === a && cOff < aOff)) { [a, c] = [c, a]; [aOff, cOff] = [cOff, aOff]; }
+      for (let i = a; i <= c; i++) {
         const span = pageEl.querySelector<HTMLElement>(`span[data-idx="${i}"]`);
-        if (span) { span.classList.add("hl"); span.style.background = colour; }
+        if (!span) continue;
+        const len = (span.textContent ?? "").length;
+        paint(span, i === a ? aOff : 0, i === c ? cOff : len, colour, h);
       }
     }
   }, [highlights, pages, scale]);
+
+  /** Click a highlight to remove it, which deletes the quote from its note. */
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const onClick = async (e: MouseEvent) => {
+      const mk = (e.target as HTMLElement).closest("mark.hl") as HTMLElement | null;
+      if (!mk) return;
+      e.preventDefault(); e.stopPropagation();
+      if (!confirm("¿Quitar este resaltado? Se borra también la cita de la nota.")) return;
+      const noteId = mk.dataset.note;
+      if (noteId) {
+        await fetch("/api/pdf-highlights", {
+          method: "DELETE", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ noteId, page: Number(mk.dataset.page), coords: mk.dataset.coords }),
+        });
+      }
+      setHighlights((hs) => hs.filter(
+        (h) => !(h.page === Number(mk.dataset.page) && h.coords.join(",") === mk.dataset.coords),
+      ));
+    };
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, []);
 
   // ------------------------------------------------------------ page tracking
   useEffect(() => {
@@ -143,13 +225,17 @@ export default function PdfViewer({
           const p = Number((e.target as HTMLElement).dataset.page);
           if (!best || e.intersectionRatio > best.r) best = { p, r: e.intersectionRatio };
         }
-        if (best && best.r > 0) { setPage(best.p); setPageInput(String(best.p)); }
+        if (best && best.r > 0) {
+          setPage(best.p);
+          setPageInput(String(best.p));
+          if (path) localStorage.setItem(`wiki.pdfpage.${path}`, String(best.p));
+        }
       },
       { root: scroller.current, threshold: [0.1, 0.35, 0.6, 0.9] },
     );
     host.current?.querySelectorAll(".pdfpage").forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [pages, scale]);
+  }, [pages, scale, path]);
 
   function goToPage(n: number) {
     const target = Math.min(Math.max(1, n), pages || 1);
@@ -237,7 +323,16 @@ export default function PdfViewer({
         <a href={src} download className="dim" style={{ marginLeft: "auto" }}>Descargar</a>
       </div>
 
-      <div className="pdfscroll" ref={scroller}>
+      <div
+        className="pdfscroll"
+        ref={scroller}
+        onWheel={(e) => {
+          // Trackpad pinch arrives as ctrl+wheel; without this only the % buttons zoom.
+          if (!e.ctrlKey && !e.metaKey) return;
+          e.preventDefault();
+          setScale((v) => Math.min(3, Math.max(0.4, +(v * (e.deltaY < 0 ? 1.08 : 1 / 1.08)).toFixed(3))));
+        }}
+      >
         {err && <p className="warn">Error: {err}</p>}
         {!err && pages === 0 && !slow && <p className="dim">Cargando PDF…</p>}
         {!err && pages === 0 && slow && (
