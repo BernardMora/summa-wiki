@@ -37,6 +37,7 @@ export default function PdfViewer({
   const gen = useRef(0);
   /** Page to land on after a render: survives zoom changes and remounts. */
   const wantPage = useRef(1);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -136,8 +137,19 @@ export default function PdfViewer({
   // where it was left.
   useEffect(() => {
     if (!path) return;
-    const last = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
-    if (last > 1) { wantPage.current = last; setPage(last); setPageInput(String(last)); }
+    const cached = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
+    if (cached > 1) { wantPage.current = cached; setPage(cached); setPageInput(String(cached)); }
+    // The vault copy is authoritative: it survives a different browser.
+    fetch(`/api/pdf-state?p=${encodeURIComponent(path)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const n = Number(d?.page);
+        if (n > 1 && n !== wantPage.current) {
+          wantPage.current = n; setPage(n); setPageInput(String(n));
+          host.current?.querySelector(`.pdfpage[data-page="${n}"]`)?.scrollIntoView({ block: "start" });
+        }
+      })
+      .catch(() => {});
   }, [path]);
 
   useEffect(() => { render(); }, [render]);
@@ -224,27 +236,51 @@ export default function PdfViewer({
   }, []);
 
   // ------------------------------------------------------------ page tracking
+  /**
+   * Which page you are on, read from the scroll position.
+   *
+   * This used to use an IntersectionObserver attached in an effect keyed on
+   * `pages`. That effect ran the moment the page count was known, which is
+   * BEFORE the page elements are appended — so it observed nothing and the
+   * counter sat at 1 forever, which in turn made every zoom restore to 1.
+   * Reading positions on scroll has no attach-timing problem.
+   */
   useEffect(() => {
-    if (pages === 0 || !scroller.current) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        // The page occupying most of the viewport is the one you are "on".
-        let best: { p: number; r: number } | null = null;
-        for (const e of entries) {
-          const p = Number((e.target as HTMLElement).dataset.page);
-          if (!best || e.intersectionRatio > best.r) best = { p, r: e.intersectionRatio };
+    const sc = scroller.current;
+    if (!sc) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const els = host.current?.querySelectorAll<HTMLElement>(".pdfpage");
+      if (!els || els.length === 0) return;
+      const anchor = sc.getBoundingClientRect().top + 60;   // just below the toolbar
+      let current = 1;
+      for (const el of els) {
+        const r = el.getBoundingClientRect();
+        if (r.top <= anchor) current = Number(el.dataset.page);
+        else break;                                          // pages are in order
+      }
+      if (current !== wantPage.current) {
+        wantPage.current = current;
+        setPage(current);
+        setPageInput(String(current));
+        if (path) {
+          localStorage.setItem(`wiki.pdfpage.${path}`, String(current));
+          clearTimeout(saveTimer.current);
+          // Debounced so scrolling does not hammer the disk.
+          saveTimer.current = setTimeout(() => {
+            fetch("/api/pdf-state", {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ p: path, page: current }),
+            }).catch(() => {});
+          }, 1200);
         }
-        if (best && best.r > 0) {
-          setPage(best.p);
-          setPageInput(String(best.p));
-          wantPage.current = best.p;
-          if (path) localStorage.setItem(`wiki.pdfpage.${path}`, String(best.p));
-        }
-      },
-      { root: scroller.current, threshold: [0.1, 0.35, 0.6, 0.9] },
-    );
-    host.current?.querySelectorAll(".pdfpage").forEach((el) => io.observe(el));
-    return () => io.disconnect();
+      }
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    measure();
+    return () => { sc.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); };
   }, [pages, scale, path]);
 
   function goToPage(n: number) {
