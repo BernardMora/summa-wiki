@@ -112,7 +112,6 @@ export default function SideNavClient({ groups }: { groups: NavGroup[] }) {
       <ul>
         <li><Link href="/">Portada</Link></li>
         <li><Link href="/random">Artículo aleatorio</Link></li>
-        <li><Link href="/search">Búsqueda avanzada</Link></li>
         <li><Link href="/categories">Todas las categorías</Link></li>
         <li><Link href="/health">Salud del wiki</Link></li>
       </ul>

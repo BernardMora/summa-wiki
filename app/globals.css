@@ -219,8 +219,9 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
 .bar button.primary { background: var(--link); border-color: var(--link); color: #fff; }
 .bar button:disabled { opacity: .45; cursor: default; }
 .warn { color: var(--link-red); font-weight: 600; }
-.cm-editor { border: 1px solid var(--line); height: calc(100vh - 300px); }
-.cm-editor.cm-focused { outline: none; border-color: var(--link); }
+.cm-editor { border: 0; height: auto; }
+.cm-editor .cm-scroller { overflow: visible; }
+.cm-editor.cm-focused { outline: none; }
 
 /* ---------------------------------------------------------------- file tree */
 .viewtoggle { display: flex; gap: 3px; margin-bottom: 10px; }
@@ -296,8 +297,8 @@ body.resizing { cursor: col-resize; user-select: none; }
 .provnote { color: var(--ai-line); font-weight: 600; }
 
 .treehint { font-size: 11px; color: var(--muted); padding: 2px 4px 6px; }
-.cm-editor { border: 1px solid var(--line); height: calc(100vh - 300px); }
-.cm-editor .cm-scroller { overflow: auto; }
+.cm-editor { border: 0; height: auto; }
+.cm-editor .cm-scroller { overflow: visible; }
 
 /* ---------------------------------------------------------------- theme toggle */
 .themebtn {
@@ -309,10 +310,15 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 /* ---------------------------------------------------------------- open tabs */
 .tabstrip {
-  display: flex; gap: 2px; align-items: stretch; flex-wrap: wrap;
+  display: flex; gap: 2px; align-items: stretch; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
   margin: -20px -30px 14px; padding: 6px 22px 0;
   border-bottom: 1px solid var(--line); background: var(--page-bg);
+  position: sticky; top: 61px; z-index: 25;
 }
+.tabstrip::-webkit-scrollbar { height: 6px; }
+.tabstrip::-webkit-scrollbar-thumb { background: var(--line-soft); border-radius: 3px; }
+.otab { flex: 0 0 auto; }
 @media (max-width: 850px) { .tabstrip { margin: -18px -16px 12px; padding: 6px 12px 0; } }
 .otab {
   display: flex; align-items: center; gap: 6px; max-width: 210px;
@@ -357,3 +363,27 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .newbtn.danger { color: var(--link-red); border-color: var(--link-red); }
 .newbtn.danger:hover { background: var(--link-red); color: #fff; }
+
+/* ---------------------------------------------------------------- contents rail */
+.artrow { display: flex; gap: 22px; align-items: flex-start; }
+.artrow > article { flex: 1 1 auto; min-width: 0; }
+.toc {
+  flex: 0 0 210px; position: sticky; top: 108px; align-self: flex-start;
+  max-height: calc(100vh - 150px); overflow-y: auto;
+  border-left: 1px solid var(--line-soft); padding-left: 10px;
+}
+.toc.closed { flex-basis: 34px; border-left: 0; padding-left: 0; }
+@media (max-width: 1100px) { .toc { display: none; } }
+.toctoggle {
+  width: 100%; text-align: left; font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--muted); background: none; border: 0; cursor: pointer;
+  padding: 2px 4px 6px; text-transform: uppercase; letter-spacing: .04em;
+}
+.toctoggle:hover { color: var(--fg); }
+.tocitem {
+  display: block; font-size: 12.2px; line-height: 1.4; padding: 3px 4px;
+  color: var(--muted); border-left: 2px solid transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tocitem:hover { color: var(--link); text-decoration: none; background: var(--panel-grey); }
+.tocitem.on { color: var(--fg); border-left-color: var(--link); font-weight: 600; }

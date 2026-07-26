@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
 import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
 import { useTabs } from "./Tabs.tsx";
+import Toc, { parseHeads, type Head } from "./Toc.tsx";
 
 interface Ref { id: string; title: string; path: string; }
 interface Meta {
@@ -37,6 +38,8 @@ export default function ArticleClient({
   const [status, setStatus] = useState("");
   const [conflict, setConflict] = useState<string | null>(null);
   const [hasSel, setHasSel] = useState(false);
+  const [heads, setHeads] = useState<Head[]>(() => parseHeads(initialContent));
+  const [viewReady, setViewReady] = useState<import("@codemirror/view").EditorView | null>(null);
 
   const viewRef = useRef<EditorView | null>(null);
   const savedRef = useRef(initialContent);
@@ -70,6 +73,8 @@ export default function ArticleClient({
   }, [id]);
 
   const onChange = useCallback(() => {
+    const doc = viewRef.current?.state.doc.toString();
+    if (doc !== undefined) setHeads(parseHeads(doc));
     setStatus("sin guardar");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => save(), AUTOSAVE_MS);
@@ -125,6 +130,7 @@ export default function ArticleClient({
         </button>
       </div>
 
+      <div className="artrow">
       <article>
         <h1>{meta.title}</h1>
         <p className="infoline">
@@ -152,7 +158,16 @@ export default function ArticleClient({
             onChange={onChange}
             resolve={resolveHref}
             onNavigate={(url) => router.push(url)}
-            onReady={(v) => { viewRef.current = v; }}
+            onReady={(v) => { viewRef.current = v; setViewReady(v); }}
+            onPasteImage={async (file) => {
+              const fd = new FormData();
+              fd.append("id", id);
+              fd.append("file", file);
+              const r = await fetch("/api/upload", { method: "POST", body: fd });
+              if (!r.ok) { setStatus("no se pudo subir la imagen"); return null; }
+              const d = await r.json();
+              return d.href as string;
+            }}
           />
         </div>
 
@@ -192,6 +207,8 @@ export default function ArticleClient({
           </>
         )}
       </article>
+      {tab === "article" && <Toc heads={heads} view={viewReady} />}
+      </div>
 
       {tab === "article" && backlinks.length > 0 && (
         <section style={{ marginTop: 28, borderTop: "1px solid var(--line-soft)", paddingTop: 12 }}>

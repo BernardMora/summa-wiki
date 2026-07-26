@@ -38,13 +38,15 @@ export function unmarkSelection(view: EditorView) {
 }
 
 export default function Editor({
-  value, onChange, resolve, onNavigate, onReady,
+  value, onChange, resolve, onNavigate, onReady, onPasteImage,
 }: {
   value: string;
   onChange: (v: string) => void;
   resolve: (href: string) => string | null;
   onNavigate: (url: string) => void;
   onReady?: (view: EditorView) => void;
+  /** Uploads a pasted image and returns the href to link, or null on failure. */
+  onPasteImage?: (file: File) => Promise<string | null>;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -67,6 +69,38 @@ export default function Editor({
           linkResolver.of(resolve),
           navigate.of(onNavigate),
           EditorView.lineWrapping,
+          // Paste an image straight into the note, Obsidian-style.
+          EditorView.domEventHandlers({
+            paste(event, view) {
+              const items = event.clipboardData?.items;
+              if (!items || !onPasteImage) return false;
+              for (const it of items) {
+                if (it.kind !== "file" || !it.type.startsWith("image/")) continue;
+                const file = it.getAsFile();
+                if (!file) continue;
+                event.preventDefault();
+                const at = view.state.selection.main;
+                // Placeholder first, so a slow upload does not look frozen.
+                const token = `![subiendo…]()`;
+                view.dispatch({ changes: { from: at.from, to: at.to, insert: token } });
+                onPasteImage(file).then((href) => {
+                  const doc = view.state.doc.toString();
+                  const i = doc.indexOf(token);
+                  if (i < 0) return;
+                  const alt = href ? href.split("/").pop()!.replace(/\.[^.]+$/, "") : "";
+                  view.dispatch({
+                    changes: {
+                      from: i, to: i + token.length,
+                      insert: href ? `![${alt}](${encodeURI(href)})` : "",
+                    },
+                  });
+                  onChange(view.state.doc.toString());
+                });
+                return true;
+              }
+              return false;
+            },
+          }),
           EditorView.updateListener.of((u) => { if (u.docChanged) onChange(u.state.doc.toString()); }),
         ],
       }),

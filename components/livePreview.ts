@@ -299,7 +299,7 @@ export const livePreviewTheme = EditorView.theme({
   "&": { fontSize: "14.2px", backgroundColor: "var(--bg)", color: "var(--fg)" },
   ".cm-content": {
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-    lineHeight: "1.6", padding: "12px 16px", caretColor: "var(--fg)",
+    lineHeight: "1.6", padding: "4px 0 40px", caretColor: "var(--fg)",
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--fg)", borderLeftWidth: "2px" },
   "&.cm-focused .cm-cursor": { borderLeftColor: "var(--fg)" },
