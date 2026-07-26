@@ -69,9 +69,25 @@ export default function PdfViewer({
     host.current.innerHTML = "";
     const stall = setTimeout(() => { if (mine === gen.current) setSlow(true); }, 8000);
 
-    // Freeze the destination now: the tracker must not move it mid-render.
-    const target = wantPage.current;
     restoring.current = true;
+
+    // Resolve the destination here rather than in a separate effect. A seed
+    // effect raced the render — and when this file was restructured it was
+    // dropped entirely, which is why reopening always landed on page 1.
+    let target = wantPage.current;
+    if (target <= 1 && path) {
+      const cached = Number(localStorage.getItem(`wiki.pdfpage.${path}`));
+      if (cached > 1) target = cached;
+      try {
+        const r = await fetch(`/api/pdf-state?p=${encodeURIComponent(path)}`);
+        if (r.ok) {
+          const n = Number((await r.json())?.page);
+          if (n > 1) target = n;          // the vault wins over the local cache
+        }
+      } catch { /* offline or first run: keep whatever we have */ }
+      if (mine !== gen.current) return;
+      if (target > 1) { wantPage.current = target; setPage(target); setPageInput(String(target)); }
+    }
 
     try {
       const modUrl = "/pdf.min.mjs";
@@ -401,8 +417,9 @@ export default function PdfViewer({
         className="pdfscroll"
         ref={scroller}
         onWheel={(e) => {
-          // Trackpad pinch arrives as ctrl+wheel; without this only the % buttons zoom.
-          if (!e.ctrlKey && !e.metaKey) return;
+          // Trackpad pinch arrives as ctrl+wheel. ZoomGuard blocks it page-wide
+          // and lets it through here, so this is the only place it zooms.
+          if (!e.ctrlKey) return;
           e.preventDefault();
           setScale((v) => Math.min(3, Math.max(0.4, +(v * (e.deltaY < 0 ? 1.08 : 1 / 1.08)).toFixed(3))));
         }}
