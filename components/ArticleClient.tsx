@@ -7,6 +7,8 @@ import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
 import { useTabs } from "./Tabs.tsx";
 import Toc, { parseHeads, type Head } from "./Toc.tsx";
 import Crumb from "./Crumb.tsx";
+import SidePane from "./SidePane.tsx";
+import { useSearchParams } from "next/navigation";
 
 interface Ref { id: string; title: string; path: string; }
 interface Meta {
@@ -48,6 +50,21 @@ export default function ArticleClient({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const tabs = useTabs();
+  const params = useSearchParams();
+  const splitId = params.get("split");
+
+  /** Insert a quote from the side pane at the main editor's cursor. */
+  const insertQuote = useCallback((md: string) => {
+    const v = viewRef.current;
+    if (!v) return;
+    const at = v.state.selection.main.to;
+    const line = v.state.doc.lineAt(at);
+    const pos = line.to;
+    v.dispatch({ changes: { from: pos, insert: `\n\n${md}` }, selection: { anchor: pos + md.length + 2 } });
+    v.focus();
+    onChangeRef.current?.();
+  }, []);
+  const onChangeRef = useRef<(() => void) | null>(null);
 
   // A note reached directly (search, backlink, URL) starts with a placeholder
   // title in the strip; replace it with the real one.
@@ -80,6 +97,7 @@ export default function ArticleClient({
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => save(), AUTOSAVE_MS);
   }, [save]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   // Flush pending work when the window loses focus or the tab is hidden.
   useEffect(() => {
@@ -172,7 +190,10 @@ export default function ArticleClient({
 
         {/* Kept mounted across tabs so the editor never loses its buffer. */}
         <div
-          style={{ display: tab === "article" ? "block" : "none" }}
+          className={splitId ? "split" : undefined}
+          // Inline display wins over the stylesheet, so the split layout has to
+          // be set here rather than relying on the .split class alone.
+          style={{ display: tab === "article" ? (splitId ? "grid" : "block") : "none" }}
           onMouseUp={() => {
             const v = viewRef.current;
             setHasSel(Boolean(v && v.state.selection.main.from !== v.state.selection.main.to));
@@ -194,6 +215,13 @@ export default function ArticleClient({
               return d.href as string;
             }}
           />
+          {splitId && (
+            <SidePane
+              id={splitId}
+              onClose={() => router.push(`/note/${encodeURIComponent(id)}`)}
+              onQuoteToMain={insertQuote}
+            />
+          )}
         </div>
 
         {tab === "data" && (

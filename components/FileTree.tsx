@@ -136,6 +136,14 @@ export default function FileTree() {
     }
   }
 
+  /** Notes and PDFs both open as tabs; other assets stream from the API. */
+  function openFile(n: Node, newTab: boolean) {
+    const label = n.name.replace(/\.[^.]+$/, "");
+    if (n.id) { tabs?.open(n.id, label, newTab); return; }
+    if (/\.pdf$/i.test(n.name)) { tabs?.open(`pdf:${n.rel}`, label, newTab); return; }
+    window.open(`/api/asset?p=${encodeURIComponent(n.rel)}`, "_blank");
+  }
+
   function render(nodes: Node[], depth = 0): React.ReactNode {
     return nodes.map((n) => {
       const pad = { paddingLeft: 4 + depth * 11 };
@@ -205,13 +213,13 @@ export default function FileTree() {
       return (
         <div
           key={n.rel}
-          className={`row ${n.id ? "file" : "other"}${n.id && n.id === activeId ? " current" : ""}`}
+          className={`row ${n.id ? "file" : /\.pdf$/i.test(n.name) ? "file pdf" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` ? " current" : ""}`}
           style={pad}
           title={n.rel}
           onContextMenu={onCtx}
-          onClick={(e) => { if (n.id) tabs?.open(n.id, n.name.replace(/\.md$/, ""), e.metaKey || e.ctrlKey); }}
-          onDoubleClick={(e) => { if (n.id) { e.preventDefault(); tabs?.open(n.id, n.name.replace(/\.md$/, ""), true); } }}
-          onAuxClick={(e) => { if (e.button === 1 && n.id) { e.preventDefault(); tabs?.open(n.id, n.name.replace(/\.md$/, ""), true); } }}
+          onClick={(e) => openFile(n, e.metaKey || e.ctrlKey)}
+          onDoubleClick={(e) => { e.preventDefault(); openFile(n, true); }}
+          onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openFile(n, true); } }}
         >
           <span className="caret" />
           <span className="name">{n.name}</span>
@@ -253,6 +261,19 @@ export default function FileTree() {
               setOpen((p) => new Set(p).add(menu.node.rel));
               setDraft(""); setErr(""); setMenu(null);
             }}>Nueva nota aquí</button>
+          )}
+          {!menu.node.dir && (menu.node.id || /\.pdf$/i.test(menu.node.name)) && (
+            <button onClick={() => {
+              const sid = menu.node.id ?? `pdf:${menu.node.rel}`;
+              const cur = tabs?.activeId;
+              setMenu(null);
+              // Splitting only makes sense against a note in the main pane.
+              if (cur && !cur.startsWith("pdf:")) {
+                router.push(`/note/${encodeURIComponent(cur)}?split=${encodeURIComponent(sid)}`);
+              } else {
+                alert("Abre primero una nota; el panel lateral se abre junto a ella.");
+              }
+            }}>Abrir al lado</button>
           )}
           {!menu.node.dir && menu.node.id && (
             <div className="ctxsub">

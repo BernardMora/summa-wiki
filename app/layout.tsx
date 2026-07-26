@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Masthead from "@/components/Masthead.tsx";
 import SideNav from "@/components/SideNav.tsx";
 import Resizer from "@/components/Resizer.tsx";
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <Suspense fallback={null}>
         <TabsProvider>
           <Masthead />
           <div className="shell">
@@ -34,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </TabsProvider>
+        </Suspense>
       </body>
     </html>
   );

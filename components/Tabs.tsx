@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export interface Tab { id: string; title: string; }
 
@@ -18,16 +18,30 @@ const TabsCtx = createContext<Ctx | null>(null);
 export const useTabs = () => useContext(TabsCtx);
 
 const KEY = "wiki.tabs";
-const noteHref = (id: string) => `/note/${encodeURIComponent(id)}`;
-const idFromPath = (p: string) =>
-  p.startsWith("/note/") ? decodeURIComponent(p.slice("/note/".length)) : null;
+
+/**
+ * A tab holds either a note ("bundle:path") or a PDF ("pdf:<vault path>").
+ * PDFs are first-class here so they can sit in the strip and in a split pane
+ * alongside the note being written about them.
+ */
+export const isPdfId = (id: string) => id.startsWith("pdf:");
+export const hrefFor = (id: string) =>
+  isPdfId(id)
+    ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
+    : `/note/${encodeURIComponent(id)}`;
 
 export default function TabsProvider({ children }: { children: React.ReactNode }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [ready, setReady] = useState(false);
   const pathname = usePathname();
+  const params = useSearchParams();
   const router = useRouter();
-  const activeId = idFromPath(pathname ?? "");
+  const activeId =
+    pathname === "/pdf"
+      ? (params.get("p") ? `pdf:${params.get("p")}` : null)
+      : pathname?.startsWith("/note/")
+        ? decodeURIComponent(pathname.slice("/note/".length))
+        : null;
 
   useEffect(() => {
     try {
@@ -72,7 +86,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       next[i] = { id, title };
       return next;
     });
-    router.push(noteHref(id));
+    router.push(hrefFor(id));
   }, [activeId, router]);
 
   const close = useCallback((id: string) => {
@@ -81,7 +95,7 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
       const next = t.filter((x) => x.id !== id);
       if (id === activeId) {
         const fallback = next[Math.min(i, next.length - 1)];
-        router.push(fallback ? noteHref(fallback.id) : "/");
+        router.push(fallback ? hrefFor(fallback.id) : "/");
       }
       return next;
     });
@@ -108,10 +122,10 @@ export function TabBar() {
           onMouseDown={(e) => {
             if (e.button === 1) { e.preventDefault(); ctx.close(t.id); }   // middle-click closes
           }}
-          onClick={() => router.push(`/note/${encodeURIComponent(t.id)}`)}
+          onClick={() => router.push(hrefFor(t.id))}
           title={t.id}
         >
-          <span className="otab-title">{t.title}</span>
+          <span className="otab-title">{isPdfId(t.id) && <span className="otab-kind">PDF</span>}{t.title}</span>
           <button
             className="otab-x"
             onClick={(e) => { e.stopPropagation(); ctx.close(t.id); }}

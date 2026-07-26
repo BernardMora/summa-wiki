@@ -116,7 +116,7 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 @media (max-width: 850px) { .shell { grid-template-columns: 1fr; } .side { display: none; } }
 
 .side {
-  padding: 16px 10px 60px; font-size: 12.7px;
+  padding: 16px 10px 60px; font-size: 12.7px; overflow-x: hidden;
   position: sticky; top: 62px; max-height: calc(100vh - 62px); overflow-y: auto;
 }
 .side .logo {
@@ -458,3 +458,39 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .pdfsel-q { font-size: 13px; margin-bottom: 4px; }
 .pdfsel button.primary { background: var(--link); border-color: var(--link); color: #fff; }
+
+.sidetoggle {
+  position: absolute; top: 8px; z-index: 46; transform: translateX(-50%);
+  width: 15px; height: 30px; padding: 0; line-height: 1;
+  border: 1px solid var(--line-soft); background: var(--bg); color: var(--muted);
+  border-radius: 3px; cursor: pointer; font-size: 11px;
+}
+.sidetoggle:hover { background: var(--panel-blue); color: var(--fg); }
+
+.otab-kind {
+  font-size: 9px; background: var(--panel-blue-head); color: var(--muted);
+  padding: 1px 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle;
+}
+.tree .row.pdf .name { color: var(--link); }
+.tree .row.pdf .name::after { content: " ◲"; font-size: 9px; opacity: .6; }
+
+/* ---------------------------------------------------------------- split */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
+.split > div:first-child { min-width: 0; }
+.pane {
+  min-width: 0; border: 1px solid var(--line-soft);
+  max-height: calc(100vh - 220px); display: flex; flex-direction: column;
+}
+.panehead {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  background: var(--panel-grey); border-bottom: 1px solid var(--line-soft); font-size: 12.5px;
+}
+.panetitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panehead .dim { margin-left: auto; font-size: 11px; }
+.panehead button {
+  border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.panehead button:hover { color: var(--link-red); }
+.panebody { overflow: auto; padding: 6px 8px; }
+.panebody .pdfbar { position: static; }

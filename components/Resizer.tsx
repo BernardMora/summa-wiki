@@ -14,6 +14,9 @@ export default function Resizer() {
       w.current = saved;
       document.documentElement.style.setProperty("--sidew", `${saved}px`);
     }
+    if (localStorage.getItem("wiki.sidecollapsed") === "1") {
+      document.documentElement.style.setProperty("--sidew", "0px");
+    }
   }, []);
 
   useEffect(() => {
@@ -34,6 +37,22 @@ export default function Resizer() {
   }, [dragging]);
 
   return (
+    <>
+      <button
+        className="sidetoggle"
+        style={{ left: "var(--sidew)" }}
+        onClick={() => {
+          const cur = getComputedStyle(document.documentElement).getPropertyValue("--sidew").trim();
+          const collapsed = cur === "0px";
+          const next = collapsed ? String(localStorage.getItem(KEY) || 195) + "px" : "0px";
+          document.documentElement.style.setProperty("--sidew", next);
+          localStorage.setItem("wiki.sidecollapsed", collapsed ? "0" : "1");
+        }}
+        title="Contraer / expandir la barra lateral"
+        aria-label="Contraer barra lateral"
+      >
+        ⋮
+      </button>
     <div
       className={`resizer${dragging ? " dragging" : ""}`}
       style={{ left: "var(--sidew)" }}
@@ -47,5 +66,6 @@ export default function Resizer() {
       role="separator"
       aria-orientation="vertical"
     />
+    </>
   );
 }
