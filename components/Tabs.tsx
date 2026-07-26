@@ -78,6 +78,11 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const open = useCallback((id: string, title: string, newTab = false) => {
+    // The workspace owns pane/tab placement when it is mounted.
+    if (typeof window !== "undefined" && (window as any).__wikiOpen) {
+      (window as any).__wikiOpen(id, title, newTab);
+      return;
+    }
     setTabs((t) => {
       if (t.some((x) => x.id === id)) return t;
       if (newTab || !activeId) return [...t, { id, title }];
@@ -122,7 +127,13 @@ export default function TabsProvider({ children }: { children: React.ReactNode }
   );
 }
 
+/** The global strip is gone: panes own their tabs now. Kept as a no-op so the
+ *  layout does not need a conditional. */
 export function TabBar() {
+  return null;
+}
+
+export function LegacyTabBar() {
   const ctx = useTabs();
   const router = useRouter();
   const [drag, setDrag] = useState<string | null>(null);

@@ -509,3 +509,42 @@ body.resizing { cursor: col-resize; user-select: none; }
 .splitbar:hover::after, .splitbar.dragging::after { background: var(--link); width: 2px; }
 .pane { max-height: none; height: 100%; }
 .panebody { overflow: visible; }
+
+/* ---------------------------------------------------------------- workspace */
+.wsgrid { display: grid; align-items: stretch; min-height: calc(100vh - 150px); }
+@media (max-width: 1000px) { .wsgrid { grid-template-columns: 1fr !important; } .wsgrid .splitbar { display: none; } }
+
+.wspane {
+  position: relative; min-width: 0; display: flex; flex-direction: column;
+  border: 1px solid transparent;
+}
+.wspane.active { border-color: var(--line-soft); }
+
+.panetabs {
+  display: flex; gap: 2px; align-items: stretch; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+  border-bottom: 1px solid var(--line); background: var(--page-bg);
+  padding: 5px 8px 0; position: sticky; top: 61px; z-index: 22;
+}
+.panetabs::-webkit-scrollbar { height: 5px; }
+.panetabs::-webkit-scrollbar-thumb { background: var(--line-soft); border-radius: 3px; }
+.otab.ghosted { opacity: .35; }
+.panecontent { flex: 1; min-width: 0; padding: 14px 18px 80px; overflow: visible; }
+
+/* Drag feedback: a ghost under the cursor and a painted landing region. */
+body.dragging-tab { cursor: grabbing; user-select: none; }
+.dragghost {
+  position: fixed; z-index: 200; pointer-events: none;
+  background: #2b2b31; color: #fff; border-radius: 6px;
+  padding: 6px 11px; font-size: 12.5px; display: flex; align-items: center; gap: 7px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.dragghost-ico { opacity: .8; }
+.dropzone {
+  position: absolute; z-index: 60; pointer-events: none;
+  background: rgba(150, 120, 255, .42);
+  border: 1px solid rgba(120, 90, 240, .6);
+}
+.dropzone.left  { left: 0; top: 0; bottom: 0; width: 50%; }
+.dropzone.right { right: 0; top: 0; bottom: 0; width: 50%; }
+.dropzone.center{ inset: 0; background: rgba(150, 120, 255, .26); }
