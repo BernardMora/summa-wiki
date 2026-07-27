@@ -145,8 +145,10 @@ export default function FileTree() {
     if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(n.ext ?? "")) {
       tabs?.open(`img:${n.rel}`, label, newTab); return;
     }
-    // No viewer for this type: hand it to the browser.
-    window.open(`/api/asset?p=${encodeURIComponent(n.rel)}`, "_blank");
+    // Antes se abría /api/asset en una pestaña del navegador, que en la
+    // práctica descargaba el archivo sin avisar. Ahora se abre una ficha
+    // dentro de la app con el botón de descarga explícito.
+    tabs?.open(`raw:${n.rel}`, label, newTab);
   }
 
   function render(nodes: Node[], depth = 0): React.ReactNode {

@@ -14,12 +14,15 @@ import { useSyncExternalStore } from "react";
 export const GRAPH_ID = "graph:";
 export const isGraphId = (id: string) => id === GRAPH_ID;
 export const isCanvasId = (id: string) => id.startsWith("canvas:");
+/** Archivo sin visor propio: se muestra una ficha, no se descarga en silencio. */
+export const isRawId = (id: string) => id.startsWith("raw:");
 export const isPdfId = (id: string) => id.startsWith("pdf:");
 export const isImgId = (id: string) => id.startsWith("img:");
-export const isFileId = (id: string) => isPdfId(id) || isImgId(id) || isCanvasId(id);
+export const isFileId = (id: string) => isPdfId(id) || isImgId(id) || isCanvasId(id) || isRawId(id);
 export const hrefFor = (id: string) =>
   isGraphId(id) ? "/graph"
-  : isCanvasId(id) ? `/pdf?p=${encodeURIComponent(id.slice(7))}`
+  : isCanvasId(id) ? `/canvas?p=${encodeURIComponent(id.slice(7))}`
+  : isRawId(id) ? `/api/asset?p=${encodeURIComponent(id.slice(4))}`
   : isFileId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
   : `/note/${encodeURIComponent(id)}`;
 

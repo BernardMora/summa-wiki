@@ -6,7 +6,8 @@ import ArticlePane, { type Payload } from "./ArticlePane.tsx";
 import PdfViewer from "./PdfViewer.tsx";
 import GraphView from "./GraphView.tsx";
 import CanvasEditor from "./CanvasEditor.tsx";
-import { publishActive, isPdfId, isImgId, isCanvasId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
+import RawFilePane from "./RawFilePane.tsx";
+import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 
 export interface Tab { id: string; title: string; }
@@ -14,7 +15,7 @@ export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
 
 // Definidos una sola vez en Tabs.tsx: la copia que vivía aquí no conocía el
 // grafo y habría producido /note/graph%3A al sincronizar la URL.
-export { isPdfId, isImgId, isCanvasId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
+export { isPdfId, isImgId, isCanvasId, isRawId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
 
 interface Ctx {
   open: (id: string, title: string, newTab?: boolean) => void;
@@ -377,6 +378,8 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       <GraphView />
                     </article>
                   </div>
+                ) : isRawId(p.activeId) ? (
+                  <RawFilePane rel={p.activeId.slice(4)} />
                 ) : isCanvasId(p.activeId) ? (
                   <CanvasEditor path={p.activeId.slice(7)} />
                 ) : isImgId(p.activeId) ? (
