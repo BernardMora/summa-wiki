@@ -286,6 +286,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .ctxmenu button:hover { background: var(--panel-blue); }
 .ctxmenu button.danger { color: var(--link-red); }
 .ctxmenu button.danger:hover { background: var(--link-red); color: #fff; }
+.ctxsep { height: 1px; background: var(--line-soft); margin: 3px 0; }
 
 .inlineedit {
   width: 100%; font: inherit; font-size: 12.4px; padding: 1px 4px;

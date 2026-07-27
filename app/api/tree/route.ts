@@ -21,7 +21,11 @@ interface Node {
 /** Files never worth showing: OS noise and lockfiles. */
 const HIDE = /^(\.|Icon\r?$|Thumbs\.db$|desktop\.ini$)/i;
 
-function walk(abs: string, rel: string, byPath: Map<string, string>, depth: number): Node[] {
+function walk(
+  abs: string, rel: string, byPath: Map<string, string>, depth: number,
+  /** Carpetas montadas por symlink -> su destino real, para el menú «copiar ruta». */
+  links: Record<string, string>,
+): Node[] {
   if (depth > 8) return [];
   let entries: fs.Dirent[];
   try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { return []; }
@@ -34,13 +38,18 @@ function walk(abs: string, rel: string, byPath: Map<string, string>, depth: numb
     const childRel = rel ? `${rel}/${e.name}` : e.name;
 
     let isDir = e.isDirectory();
-    if (e.isSymbolicLink()) { try { isDir = fs.statSync(childAbs).isDirectory(); } catch { continue; } }
+    if (e.isSymbolicLink()) {
+      try { isDir = fs.statSync(childAbs).isDirectory(); } catch { continue; }
+      // El bundle de Veridia vive en Drive: su ruta real no se puede deducir
+      // desde el cliente concatenando la del vault.
+      if (isDir) { try { links[childRel] = fs.realpathSync(childAbs); } catch { /* enlace roto */ } }
+    }
 
     if (isDir) {
       // 05-Projects holds codebases; show the folder but never descend.
       const children = childRel.startsWith("05-Projects") && rel !== ""
         ? []
-        : walk(childAbs, childRel, byPath, depth + 1);
+        : walk(childAbs, childRel, byPath, depth + 1, links);
       out.push({ name: e.name, rel: childRel, dir: true, children });
     } else if (!HIDE.test(e.name)) {
       // Everything shows, like Obsidian; the badge tells you what it is.
@@ -57,5 +66,7 @@ export async function GET() {
   const byPath = new Map(
     idx.notes.map((n) => [path.relative(VAULT, n.abs).split(path.sep).join("/"), n.id]),
   );
-  return NextResponse.json({ root: walk(VAULT, "", byPath, 0) });
+  const links: Record<string, string> = {};
+  const root = walk(VAULT, "", byPath, 0, links);
+  return NextResponse.json({ root, vault: VAULT, links });
 }

@@ -56,13 +56,59 @@ export default function FileTree() {
   const [err, setErr] = useState("");
   const [cats, setCats] = useState<Cat[]>([]);
   const [pinOpen, setPinOpen] = useState(false);
+  const [vault, setVault] = useState("");
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
   const router = useRouter();
   const tabs = useTabs();
   const boxRef = useRef<HTMLDivElement>(null);
 
   async function load() {
     const r = await fetch("/api/tree");
-    setRoot((await r.json()).root ?? []);
+    const d = await r.json();
+    setRoot(d.root ?? []);
+    setVault(d.vault ?? "");
+    setLinks(d.links ?? {});
+  }
+
+  /**
+   * Las tres rutas de un nodo.
+   *
+   * `abs` es la ruta dentro del vault; `real` solo difiere cuando el nodo cuelga
+   * de una carpeta montada por symlink — hoy el bundle de Veridia, que vive en
+   * Drive. Ahí «ruta absoluta» es ambiguo, así que se ofrecen las dos en vez de
+   * elegir en silencio: la del vault sirve para el terminal y para esta app, la
+   * real es la que ven Finder y Drive.
+   */
+  function pathsOf(n: Node): { rel: string; abs: string; real: string } {
+    const abs = vault ? `${vault}/${n.rel}` : n.rel;
+    let real = abs;
+    for (const [mount, target] of Object.entries(links)) {
+      if (n.rel === mount || n.rel.startsWith(`${mount}/`)) {
+        real = target + n.rel.slice(mount.length);
+        break;
+      }
+    }
+    return { rel: n.rel, abs, real };
+  }
+
+  /** Copia y confirma en el propio botón; sin toast, el menú ya está bajo el ratón. */
+  async function copy(text: string, tag: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Sin permiso de portapapeles (o contexto no seguro): el textarea oculto
+      // sigue funcionando en todos los navegadores.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* nada más que intentar */ }
+      ta.remove();
+    }
+    setCopied(tag);
+    setTimeout(() => { setCopied(null); setMenu(null); }, 700);
   }
 
   /** Walk the tree for a note id, returning the folders that contain it. */
@@ -419,6 +465,26 @@ export default function FileTree() {
               )}
             </div>
           )}
+          {(() => {
+            const p = pathsOf(menu.node);
+            return (
+              <>
+                <div className="ctxsep" />
+                <button onClick={() => copy(p.rel, "rel")}>
+                  {copied === "rel" ? "✓ copiada" : "Copiar ruta relativa"}
+                </button>
+                <button onClick={() => copy(p.abs, "abs")}>
+                  {copied === "abs" ? "✓ copiada" : "Copiar ruta absoluta"}
+                </button>
+                {p.real !== p.abs && (
+                  <button onClick={() => copy(p.real, "real")}>
+                    {copied === "real" ? "✓ copiada" : "Copiar ruta real (Drive)"}
+                  </button>
+                )}
+                <div className="ctxsep" />
+              </>
+            );
+          })()}
           <button onClick={() => {
             setRenaming(menu.node);
             setDraft(menu.node.dir ? menu.node.name : menu.node.name.replace(/\.md$/, ""));
