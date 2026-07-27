@@ -1,7 +1,7 @@
 import { getIndex } from "./server.ts";
 import { readCategories } from "./categories.ts";
 
-export interface NavItem { id: string; title: string; pinned?: boolean; }
+export interface NavItem { id: string; title: string; pinned?: boolean; rank?: number; }
 export interface NavGroup { id: string; label: string; items: NavItem[]; total: number; hidden?: boolean; }
 
 /**
@@ -20,17 +20,20 @@ export function navGroups(limit = 10): NavGroup[] {
     const items: NavItem[] = [];
     for (const nid of c.notes) {
       const n = byId.get(nid);
-      if (n && !items.some((i) => i.id === nid)) { items.push({ id: n.id, title: n.title, pinned: true }); claimed.add(nid); }
+      if (n && !items.some((i) => i.id === nid)) { items.push({ id: n.id, title: n.title, pinned: true, rank: n.backlinks.length }); claimed.add(nid); }
     }
     if (c.pillar) {
       for (const n of notes) {
         if (n.pillar === c.pillar && !items.some((i) => i.id === n.id)) {
-          items.push({ id: n.id, title: n.title });
+          items.push({ id: n.id, title: n.title, rank: n.backlinks.length });
           claimed.add(n.id);
         }
       }
     }
-    items.sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false) || a.title.localeCompare(b.title, "es"));
+    items.sort((a, b) =>
+      Number(b.pinned ?? false) - Number(a.pinned ?? false) ||
+      (b.rank ?? 0) - (a.rank ?? 0) ||
+      a.title.localeCompare(b.title, "es"));
     return { id: c.id, label: c.label, total: items.length, items: items.slice(0, limit), hidden: c.hidden };
   });
 
@@ -40,8 +43,8 @@ export function navGroups(limit = 10): NavGroup[] {
       id: "__uncategorised",
       label: "Sin categoría",
       total: rest.length,
-      items: rest.sort((a, b) => a.title.localeCompare(b.title, "es")).slice(0, limit)
-        .map((n) => ({ id: n.id, title: n.title })),
+      items: rest.sort((a, b) => b.backlinks.length - a.backlinks.length || a.title.localeCompare(b.title, "es"))
+        .slice(0, limit).map((n) => ({ id: n.id, title: n.title })),
     });
   }
   return groups.filter((g) => g.total > 0 || g.id !== "__uncategorised");

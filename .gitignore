@@ -4,3 +4,4 @@ index.json
 .next/
 next-env.d.ts
 *.tsbuildinfo
+ocr/.venv/

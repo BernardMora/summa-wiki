@@ -108,7 +108,7 @@ export function neighbourhood(index: WikiIndex, id: string, depth = 1): Note[] {
 
 /** Spec section 9 validation, plus the staleness and gap checks from Phase 5. */
 export function health(index: WikiIndex) {
-  const VALID = new Set(["moc", "area", "project", "knowledge", "journal", "source", "connection", "system"]);
+  const VALID = new Set(["moc", "area", "project", "knowledge", "journal", "source", "connection", "system", "person"]);
   const issues: { kind: string; note: string; detail: string }[] = [];
   const today = new Date().toISOString().slice(0, 10);
 

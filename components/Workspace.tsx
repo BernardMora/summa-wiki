@@ -1,10 +1,11 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
 import ArticlePane, { type Payload } from "./ArticlePane.tsx";
 import PdfViewer from "./PdfViewer.tsx";
 import { publishActive, isPdfId as isPdf, isImgId as isImg } from "./Tabs.tsx";
+import QuickSwitcher from "./QuickSwitcher.tsx";
 
 export interface Tab { id: string; title: string; }
 export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
@@ -234,9 +235,10 @@ export default function Workspace({ initial }: { initial: Payload }) {
 
   return (
     <WsCtx.Provider value={{ open, panes, activePane }}>
+      <QuickSwitcher onOpen={open} />
       <div className="wsgrid" ref={wrap} style={{ gridTemplateColumns: cols }}>
         {panes.map((p, i) => (
-          <>
+          <Fragment key={p.key}>
             {i > 0 && (
               <div
                 key={`bar${p.key}`}
@@ -315,14 +317,17 @@ export default function Workspace({ initial }: { initial: Payload }) {
                     onQuote={hasNotePane ? insertQuote : undefined}
                   />
                 ) : p.activeId === initial.id ? (
-                  <ArticlePane initial={initial} showToc={panes.length === 1}
+                  <ArticlePane key={p.activeId} initial={initial} showToc={panes.length === 1}
                     onEditorReady={(v) => {
                       noteEditors.current.set(p.key, v);
                       lastNotePane.current = p.key;
                       setHasNotePane(true);
                     }} />
                 ) : (
-                  <ArticlePane id={p.activeId} showToc={panes.length === 1}
+                  // Keyed by note: switching tabs must remount. Without this
+                  // React reused the pane, and CodeMirror — whose document is
+                  // built once — kept showing the previous note.
+                  <ArticlePane key={p.activeId} id={p.activeId} showToc={panes.length === 1}
                     onEditorReady={(v) => {
                       noteEditors.current.set(p.key, v);
                       lastNotePane.current = p.key;
@@ -333,7 +338,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
 
               {overlayFor(p.key)}
             </div>
-          </>
+          </Fragment>
         ))}
       </div>
 

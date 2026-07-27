@@ -1,0 +1,3 @@
+Fetching 10 files:   0%|          | 0/10 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 10 files:  10%|█         | 1/10 [00:01<00:11,  1.29s/it]Fetching 10 files:  50%|█████     | 5/10 [05:01<05:20, 64.15s/it]Fetching 10 files: 100%|██████████| 10/10 [05:01<00:00, 30.19s/it]
+DONE /Users/bernardomr/.cache/huggingface/hub/models--sahilchachra--unlimited-ocr-8bit-mlx/snapshots/c9b4c9de5528223a16194791949fb7bbf40faf61
