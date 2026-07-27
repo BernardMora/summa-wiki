@@ -1,38 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fuzzy } from "@/lib/fuzzy.ts";
 
 interface Item {
   id: string; title: string; path: string; type: string;
   updated: string; words: number;
-}
-
-const norm = (s: string) =>
-  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
-
-/**
- * Subsequence match — the Obsidian/VS Code behaviour: "prehis" hits
- * "notas-los-origenes...prehistoria". Returns a score and the matched
- * character positions so the UI can bold them; null when it doesn't match.
- */
-function fuzzy(hay: string, needle: string): { score: number; hits: number[] } | null {
-  if (!needle) return { score: 0, hits: [] };
-  const h = norm(hay), n = norm(needle);
-  const hits: number[] = [];
-  let hi = 0, score = 0, streak = 0;
-
-  for (const ch of n) {
-    let found = -1;
-    for (let i = hi; i < h.length; i++) if (h[i] === ch) { found = i; break; }
-    if (found < 0) return null;
-    // Consecutive characters and word starts are what people actually mean.
-    if (found === hi && hits.length) { streak++; score += 8 + streak * 2; }
-    else { streak = 0; score += 1; }
-    if (found === 0 || /[\s\-_/.]/.test(h[found - 1] ?? "")) score += 10;
-    hits.push(found);
-    hi = found + 1;
-  }
-  score -= (h.length - n.length) * 0.05;   // shorter targets win ties
-  return { score, hits };
 }
 
 function Marked({ text, hits }: { text: string; hits: number[] }) {
