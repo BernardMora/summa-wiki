@@ -377,8 +377,16 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-quote": { color: "var(--muted)", fontStyle: "italic" },
   ".cm-task": { marginRight: "6px", verticalAlign: "middle", cursor: "pointer" },
   ".cm-task-done": { color: "var(--muted)", textDecoration: "line-through" },
-  ".cm-img": { maxWidth: "100%", height: "auto", display: "block", margin: "6px 0", borderRadius: "3px" },
-  ".cm-tablewrap": { overflowX: "auto", margin: "8px 0" },
+  // Mismo motivo que .cm-tablewrap: el margen de un widget no entra en la altura
+  // que mide CodeMirror.
+  ".cm-img": { maxWidth: "100%", height: "auto", display: "block", padding: "6px 0", borderRadius: "3px" },
+  // Padding, nunca margin. CodeMirror mide el widget con getBoundingClientRect,
+  // que excluye los márgenes propios del nodo — pero el DOM sí los aplica al
+  // colocar lo que viene después. Cada tabla dejaba al mapa de alturas 16px
+  // corto; con dos tablas el desfase superaba el alto de una línea y posAtCoords
+  // devolvía la línea equivocada: la flecha arriba saltaba decenas de renglones
+  // y la selección abarcaba texto que no era el señalado.
+  ".cm-tablewrap": { overflowX: "auto", padding: "8px 0" },
   ".cm-table": { borderCollapse: "collapse", fontSize: "13px" },
   ".cm-table th, .cm-table td": {
     border: "1px solid var(--line-soft)", padding: "5px 9px", textAlign: "left",
