@@ -19,7 +19,7 @@ import {
 export const linkResolver = Facet.define<(href: string) => string | null, (href: string) => string | null>({
   combine: (v) => v[0] ?? (() => null),
 });
-export const navigate = Facet.define<(url: string) => void, (url: string) => void>({
+export const navigate = Facet.define<(url: string, text: string) => void, (url: string, text: string) => void>({
   combine: (v) => v[0] ?? (() => {}),
 });
 
@@ -309,7 +309,7 @@ export const linkClick = EditorView.domEventHandlers({
       if (col >= m.index! && col <= m.index! + m[0].length) {
         const href = decodeURIComponent(m[2]);
         const url = view.state.facet(linkResolver)(href);
-        if (url) { event.preventDefault(); view.state.facet(navigate)(url); return true; }
+        if (url) { event.preventDefault(); view.state.facet(navigate)(url, m[1]); return true; }
       }
     }
     return false;

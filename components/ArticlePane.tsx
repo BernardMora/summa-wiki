@@ -6,6 +6,7 @@ import type { EditorView } from "@codemirror/view";
 import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
 import Toc, { parseHeads, type Head } from "./Toc.tsx";
 import Crumb from "./Crumb.tsx";
+import { useTabs } from "./Tabs.tsx";
 
 export interface Ref { id: string; title: string; path: string; }
 export interface Meta {
@@ -55,6 +56,7 @@ export default function ArticlePane({
   const mtimeRef = useRef(initial?.mtimeMs ?? 0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+  const tabs = useTabs();
 
   const noteId = data?.id ?? id ?? "";
 
@@ -185,7 +187,22 @@ export default function ArticlePane({
                 value={data.content}
                 onChange={onChange}
                 resolve={resolveHref}
-                onNavigate={(url) => router.push(url)}
+                onNavigate={(url, text) => {
+                  // ⌘clic abre en pestaña nueva. Antes hacía router.push, que
+                  // remonta el workspace entero y cierra los paneles divididos.
+                  if (url.startsWith("/note/")) {
+                    tabs.open(decodeURIComponent(url.slice("/note/".length)), text, true);
+                    return;
+                  }
+                  const m = url.match(/^\/pdf\?p=(.+)$/);
+                  if (m) {
+                    const p = decodeURIComponent(m[1]);
+                    const kind = /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(p) ? "img:" : "pdf:";
+                    tabs.open(kind + p, text || p.split("/").pop() || p, true);
+                    return;
+                  }
+                  router.push(url);
+                }}
                 onReady={(v) => { viewRef.current = v; setView(v); onEditorReady?.(v); }}
                 onPasteImage={async (file) => {
                   const fd = new FormData();
