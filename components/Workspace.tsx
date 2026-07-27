@@ -373,7 +373,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       <h1>Grafo</h1>
                       <p className="infoline">
                         <span>arrastra un nodo para moverlo</span><span>rueda para zoom</span>
-                        <span>clic abre la nota</span><span>⌘clic en pestaña nueva</span>
+                        <span>clic explora el vecindario</span><span>⌘clic abre la nota</span><span>esc sale</span>
                       </p>
                       <GraphView />
                     </article>
