@@ -10,7 +10,13 @@ interface NavItem { id: string; title: string; pinned?: boolean; }
 interface NavGroup { id: string; label: string; items: NavItem[]; total: number; hidden?: boolean; }
 interface Menu { x: number; y: number; group: NavGroup; }
 
-export default function SideNavClient({ groups }: { groups: NavGroup[] }) {
+interface QLink { id: string; title: string; count: number; }
+
+export default function SideNavClient({ groups, centre, questions }: {
+  groups: NavGroup[];
+  centre: { id: string; title: string } | null;
+  questions: QLink[];
+}) {
   const [view, setView] = useState<"cat" | "files">("cat");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -116,6 +122,32 @@ export default function SideNavClient({ groups }: { groups: NavGroup[] }) {
         <button className={view === "cat" ? "on" : ""} onClick={() => setView("cat")}>Categorías</button>
         <button className={view === "files" ? "on" : ""} onClick={() => setView("files")}>Archivos</button>
       </div>
+
+      {/* The identity map is the primary navigation: the vault is organised by
+          these questions, so the sidebar leads with them and keeps the utility
+          links below. */}
+      {centre && (
+        <>
+          <h4>El wiki</h4>
+          <ul className="navid">
+            <li className="navcentre">
+              <a href={`/note/${encodeURIComponent(centre.id)}`}
+                 onClick={(e) => openNote(e, { id: centre.id, title: centre.title })}>
+                {centre.title}
+              </a>
+            </li>
+            {questions.map((q) => (
+              <li key={q.id}>
+                <a href={`/note/${encodeURIComponent(q.id)}`}
+                   onClick={(e) => openNote(e, { id: q.id, title: q.title })}>
+                  {q.title}
+                </a>
+                {q.count > 0 && <span className="navcount">{q.count}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h4>Navegación</h4>
       <ul>

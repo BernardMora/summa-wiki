@@ -145,6 +145,90 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * What a per-folder _index.md was for, without the 48 files.
+   *
+   * Generated from the index, so it only shows folders that actually hold
+   * notes, and it cannot go stale. An agent reads one command instead of
+   * walking the tree; a human sees where the mass sits.
+   */
+  case "tree": {
+    const idx = load();
+    const root = args[1] && !args[1].startsWith("--") ? args[1].replace(/\/$/, "") : "";
+    const maxDepth = Number(flag("depth") ?? 99);
+
+    /**
+     * A note's `path` is relative to *its bundle*, so veridia notes look like
+     * "01 - Servicios/…" and used to surface as if they were vault top-level
+     * folders — and no path prefix could ever select them. Rebuild the path
+     * relative to the vault instead, derived from the bundle roots rather than
+     * hardcoded, so the tree matches what is actually on disk.
+     */
+    const vaultRoot = idx.bundles.find((b) => b.id === "personal")?.root ?? "";
+    const shared = new Set(idx.bundles.filter((b) => b.shared).map((b) => b.id));
+    const vaultPath = (n: Note) =>
+      (n.abs && vaultRoot && n.abs.startsWith(vaultRoot + "/")
+        ? n.abs.slice(vaultRoot.length + 1)
+        : n.path
+      ).normalize("NFC");
+
+    const notes = idx.notes.filter((n) => {
+      const p = vaultPath(n);
+      return !p.startsWith("05-Projects/") &&
+        (!root || p === root || p.startsWith(root + "/"));
+    });
+    if (!notes.length) {
+      console.log(root ? `Nada bajo "${root}".` : "El índice está vacío.");
+      break;
+    }
+
+    interface Node { notes: number; words: number; kids: Map<string, Node>; titles: string[]; bundles: Set<string> }
+    const mk = (): Node => ({ notes: 0, words: 0, kids: new Map(), titles: [], bundles: new Set() });
+    const tree = mk();
+
+    for (const n of notes) {
+      const parts = vaultPath(n).split("/");
+      const dirs = parts.slice(0, -1);
+      let cur = tree;
+      cur.notes++; cur.words += n.words; cur.bundles.add(n.bundle);
+      for (const d of dirs) {
+        if (!cur.kids.has(d)) cur.kids.set(d, mk());
+        cur = cur.kids.get(d)!;
+        cur.notes++; cur.words += n.words; cur.bundles.add(n.bundle);
+      }
+      cur.titles.push(n.title);
+    }
+
+    const walk = (node: Node, prefix: string, depth: number) => {
+      const kids = [...node.kids.entries()].sort((a, b) => b[1].notes - a[1].notes);
+      kids.forEach(([name, kid], i) => {
+        const last = i === kids.length - 1;
+        const w = kid.words >= 1000 ? `${(kid.words / 1000).toFixed(1)}k` : String(kid.words);
+        // Flag the shared subtree: everything under it syncs to someone else.
+        const tag = [...kid.bundles].every((b) => shared.has(b)) ? "  ⇄ compartido" : "";
+        console.log(`${prefix}${last ? "└─ " : "├─ "}${name}/  ${kid.notes} nota${kid.notes === 1 ? "" : "s"} · ${w} pal.${tag}`);
+        const next = prefix + (last ? "   " : "│  ");
+        if (depth + 1 < maxDepth) walk(kid, next, depth + 1);
+        else if (kid.kids.size) console.log(`${next}└─ … ${kid.kids.size} subcarpeta(s) más`);
+        if (has("titles") && kid.titles.length && depth + 1 <= maxDepth)
+          for (const t of kid.titles) console.log(`${next}   · ${t}`);
+      });
+    };
+
+    // Descend to the requested folder so its ancestors are not re-printed.
+    let start = tree;
+    for (const seg of root ? root.split("/") : []) {
+      const next = start.kids.get(seg);
+      if (!next) break;
+      start = next;
+    }
+
+    console.log(`${root || "(vault)"}  —  ${tree.notes} notas · ${tree.words.toLocaleString()} palabras\n`);
+    if (has("titles") && start.titles.length) for (const t of start.titles) console.log(`  · ${t}`);
+    walk(start, "", 0);
+    break;
+  }
+
   default:
     console.log(`Berni's Wiki CLI — index and query the knowledge base.
 
@@ -156,6 +240,7 @@ switch (cmd) {
   wiki orphans                       notes with no inbound links
   wiki health [--all]                spec section 9 validation
   wiki candidates [--min N]          articles worth writing, from graph structure
+  wiki tree [path] [--depth N]       folder overview with note counts (--titles)
   wiki stats                         index statistics
 
 Vault: ${VAULT}   (override with WIKI_VAULT)`);

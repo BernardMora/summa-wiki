@@ -6,6 +6,8 @@ interface Node {
   id: string; title: string; type: string; bundle: string; pillar: string;
   words: number; degree: number; isIndex: boolean;
   x: number; y: number; vx: number; vy: number;
+  /** Set once dragged: the node keeps the position it was dropped at. */
+  pinned?: boolean;
 }
 interface Edge { s: string; t: string; }
 
@@ -30,16 +32,28 @@ export default function GraphView() {
   const adj = useRef(new Map<string, Set<string>>());
   const raf = useRef(0);
   const view = useRef({ x: 0, y: 0, k: 1 });
-  const drag = useRef<{ node: Node | null; panX: number; panY: number; panning: boolean }>({
-    node: null, panX: 0, panY: 0, panning: false,
-  });
+  /**
+   * `moved` is what separates a drag from a click. Without it every drag also
+   * fired onClick on release, which opened the note and tore the canvas down
+   * before the drag was ever visible.
+   */
+  const drag = useRef<{
+    node: Node | null; panX: number; panY: number; panning: boolean;
+    downX: number; downY: number; moved: boolean;
+  }>({ node: null, panX: 0, panY: 0, panning: false, downX: 0, downY: 0, moved: false });
   const hover = useRef<Node | null>(null);
+  /** Simulation temperature. A ref so dragging can reheat it from outside. */
+  const alpha = useRef(1);
+  const DRAG_PX = 4;
 
   const [ready, setReady] = useState(false);
   const [stats, setStats] = useState({ n: 0, e: 0 });
   const [bundle, setBundle] = useState("all");
   const [hideIndexes, setHideIndexes] = useState(false);
   const [label, setLabel] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [overNode, setOverNode] = useState(false);
+  const [pinned, setPinned] = useState(0);
   const tabs = useTabs();
 
   // ---------------------------------------------------------------- data
@@ -77,12 +91,12 @@ export default function GraphView() {
   // ---------------------------------------------------------------- physics
   useEffect(() => {
     if (!ready) return;
-    let alpha = 1;
+    alpha.current = 1;
 
     const step = () => {
       const ns = nodes.current;
       const es = edges.current;
-      if (alpha > 0.005) {
+      if (alpha.current > 0.005) {
         // Repulsion. O(n^2) is fine at a few hundred nodes and avoids a quadtree.
         for (let i = 0; i < ns.length; i++) {
           for (let j = i + 1; j < ns.length; j++) {
@@ -109,11 +123,11 @@ export default function GraphView() {
         for (const n of ns) {
           n.vx -= n.x * 0.0016;                       // gentle pull to centre
           n.vy -= n.y * 0.0016;
-          if (drag.current.node === n) { n.vx = 0; n.vy = 0; continue; }
-          n.x += (n.vx *= 0.82) * alpha;
-          n.y += (n.vy *= 0.82) * alpha;
+          if (drag.current.node === n || n.pinned) { n.vx = 0; n.vy = 0; continue; }
+          n.x += (n.vx *= 0.82) * alpha.current;
+          n.y += (n.vy *= 0.82) * alpha.current;
         }
-        alpha *= 0.995;
+        alpha.current *= 0.995;
       }
       draw();
       raf.current = requestAnimationFrame(step);
@@ -157,13 +171,32 @@ export default function GraphView() {
         ctx.fillStyle = COLOR[n.type] ?? "#888";
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
         if (n === hi) { ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 2; ctx.stroke(); }
-        // Label only the hubs, or the graph becomes unreadable.
-        if (!dim && (n.degree >= 6 || n === hi) && k > 0.55) {
-          ctx.globalAlpha = dim ? 0.2 : 0.85;
-          ctx.fillStyle = css.getPropertyValue("--fg") || "#222";
-          ctx.font = `${n === hi ? 12 : 10}px -apple-system, sans-serif`;
-          ctx.fillText(n.title.slice(0, 26), n.x + r + 3, n.y + 3);
+        else if (n.pinned) {
+          ctx.strokeStyle = css.getPropertyValue("--muted") || "#666";
+          ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]);
         }
+      }
+
+      // Only the hovered node is labelled. Drawing every hub's title turned the
+      // canvas into overlapping text; on hover it reads cleanly and the dimming
+      // of everything else already shows the neighbourhood.
+      if (hi) {
+        const r = 3 + Math.min(9, Math.sqrt(hi.degree) * 2);
+        ctx.globalAlpha = 1;
+        ctx.font = "600 12px -apple-system, system-ui, sans-serif";
+        const text = hi.title;
+        const tw = ctx.measureText(text).width;
+        const bx = hi.x + r + 5, by = hi.y - 8;
+        // Plate behind the text so it stays legible over edges and nodes.
+        ctx.fillStyle = css.getPropertyValue("--bg") || "#fff";
+        ctx.globalAlpha = 0.88;
+        ctx.fillRect(bx - 4, by - 2, tw + 8, 18);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = css.getPropertyValue("--line-soft") || "#ccc";
+        ctx.lineWidth = 1 / k;
+        ctx.strokeRect(bx - 4, by - 2, tw + 8, 18);
+        ctx.fillStyle = css.getPropertyValue("--fg") || "#222";
+        ctx.fillText(text, bx, by + 11);
       }
       ctx.restore();
     };
@@ -203,6 +236,17 @@ export default function GraphView() {
           <input type="checkbox" checked={hideIndexes} onChange={(e) => setHideIndexes(e.target.checked)} />
           {" "}ocultar índices
         </label>
+        <button
+          onClick={() => {
+            for (const n of nodes.current) n.pinned = false;
+            alpha.current = 0.5;                 // reheat so they settle again
+            setPinned(0);
+          }}
+          disabled={!pinned}
+          title="Los nodos que arrastras se quedan fijos; esto los suelta"
+        >
+          Soltar fijados{pinned ? ` (${pinned})` : ""}
+        </button>
         <span className="dim">{stats.n} notas · {stats.e} enlaces</span>
         <span className="graphlegend">
           {Object.entries(COLOR).map(([t, c]) => (
@@ -214,27 +258,54 @@ export default function GraphView() {
       <canvas
         ref={canvas}
         className="graphcanvas"
+        style={{ cursor: dragging ? "grabbing" : overNode ? "grab" : "default" }}
         onMouseDown={(e) => {
+          const d = drag.current;
+          d.downX = e.clientX; d.downY = e.clientY; d.moved = false;
           const n = pick(at(e));
-          if (n) drag.current.node = n;
-          else { drag.current.panning = true; drag.current.panX = e.clientX; drag.current.panY = e.clientY; }
+          if (n) { d.node = n; setDragging(true); }
+          else { d.panning = true; d.panX = e.clientX; d.panY = e.clientY; }
         }}
         onMouseMove={(e) => {
+          const d = drag.current;
           const p = at(e);
-          if (drag.current.node) { drag.current.node.x = p.x; drag.current.node.y = p.y; return; }
-          if (drag.current.panning) {
-            view.current.x += e.clientX - drag.current.panX;
-            view.current.y += e.clientY - drag.current.panY;
-            drag.current.panX = e.clientX; drag.current.panY = e.clientY;
+          if ((d.node || d.panning) && !d.moved &&
+              Math.hypot(e.clientX - d.downX, e.clientY - d.downY) > DRAG_PX) {
+            d.moved = true;
+          }
+          if (d.node) {
+            d.node.x = p.x; d.node.y = p.y;
+            d.node.vx = 0; d.node.vy = 0;
+            // Pin it. Without this the reheated springs pull the node back and
+            // it is no longer under the cursor when you let go.
+            d.node.pinned = true;
+            // Reheat so neighbours follow instead of the graph sitting frozen.
+            alpha.current = Math.max(alpha.current, 0.12);
+            return;
+          }
+          if (d.panning) {
+            view.current.x += e.clientX - d.panX;
+            view.current.y += e.clientY - d.panY;
+            d.panX = e.clientX; d.panY = e.clientY;
             return;
           }
           const n = pick(p);
           hover.current = n;
+          setOverNode(Boolean(n));
           setLabel(n ? n.title : null);
         }}
-        onMouseUp={() => { drag.current.node = null; drag.current.panning = false; }}
-        onMouseLeave={() => { drag.current.node = null; drag.current.panning = false; hover.current = null; setLabel(null); }}
+        onMouseUp={() => {
+          if (drag.current.node?.pinned) setPinned(nodes.current.filter((n) => n.pinned).length);
+          drag.current.node = null; drag.current.panning = false; setDragging(false);
+        }}
+        onMouseLeave={() => {
+          drag.current.node = null; drag.current.panning = false; drag.current.moved = false;
+          hover.current = null; setDragging(false); setOverNode(false); setLabel(null);
+        }}
         onClick={(e) => {
+          // A drag is not a click. Without this the node opened on release and
+          // the canvas unmounted mid-drag.
+          if (drag.current.moved) { drag.current.moved = false; return; }
           const n = pick(at(e));
           if (n) tabs?.open(n.id, n.title, e.metaKey || e.ctrlKey);
         }}

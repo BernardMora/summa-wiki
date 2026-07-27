@@ -7,7 +7,7 @@ import { VAULT } from "../src/config.ts";
  * versioned and travel with it; JSON rather than markdown because they are
  * structured config, and the .json extension keeps them out of the note index.
  */
-export const CATEGORIES_PATH = path.join(VAULT, "00-System/wiki-categories.json");
+export const CATEGORIES_PATH = path.join(VAULT, "04-Sistema/wiki-categories.json");
 
 export interface Category {
   id: string;

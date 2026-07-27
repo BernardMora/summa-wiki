@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * browser or machine and travels with the notes, the same reasoning as
  * wiki-categories.json. A .json extension keeps it out of the note index.
  */
-const STATE = path.join(VAULT, "00-System/wiki-pdf-state.json");
+const STATE = path.join(VAULT, "04-Sistema/wiki-pdf-state.json");
 
 function read(): Record<string, number> {
   try {

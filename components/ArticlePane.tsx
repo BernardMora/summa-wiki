@@ -98,9 +98,14 @@ export default function ArticlePane({
   }, [save]);
 
   useEffect(() => {
-    const flush = () => { if (timer.current) clearTimeout(timer.current); save(); };
+    const flush = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } save(); };
     window.addEventListener("blur", flush);
-    return () => { window.removeEventListener("blur", flush); if (timer.current) clearTimeout(timer.current); };
+    return () => {
+      window.removeEventListener("blur", flush);
+      // Flush on unmount, do not just cancel. Switching tabs unmounts the pane,
+      // and dropping the pending timer silently discarded the last edits.
+      if (timer.current) { clearTimeout(timer.current); timer.current = null; save(); }
+    };
   }, [save]);
 
   useEffect(() => {

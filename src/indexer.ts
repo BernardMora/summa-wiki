@@ -161,7 +161,7 @@ export function buildIndex(): WikiIndex {
       provenance: analyzeProvenance(body, fm.author ?? ""),
     };
     notes.push(note);
-    byAbs.set(abs, note);
+    byAbs.set(abs.normalize("NFC"), note);
   }
 
   // Second pass: resolve links now that every note id exists.
@@ -196,7 +196,10 @@ export function buildIndex(): WikiIndex {
       if (href.startsWith("#")) continue;
       if (!href.endsWith(".md")) continue;
 
-      const abs = path.resolve(dir, decodeURIComponent(href));
+      // macOS stores filenames in NFD (í = i + combining acute) but editors
+      // write NFC. Same trap as the case-only renames: the file is right there
+      // and the lookup still misses. Normalise both sides.
+      const abs = path.resolve(dir, decodeURIComponent(href)).normalize("NFC");
       const t = byAbs.get(abs);
       note.links.push({
         href, text,

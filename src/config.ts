@@ -15,7 +15,7 @@ export const bundles: BundleConfig[] = [
   { id: "personal", root: VAULT, shared: false },
   {
     id: "veridia",
-    root: path.join(VAULT, "01-Pillars/01-Veridia/veridia-drive"),
+    root: path.join(VAULT, "01-Hacer/01-veridia"),
     shared: true,
   },
 ];

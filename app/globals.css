@@ -625,3 +625,100 @@ body.workspace .toc { display: none; }
 .pdfpage[data-state="pending"]::after {
   content: attr(data-page); color: #bbb; font-size: 13px;
 }
+
+/* ---------------------------------------------------------- quick switcher */
+/* Cmd/Ctrl+O. Replaces what a per-folder index used to do for a human:
+   get to the note you already have in mind without walking the tree. */
+.qsback {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0, 0, 0, .35);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 12vh;
+}
+.qsbox {
+  width: min(720px, 92vw);
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+  display: flex; flex-direction: column;
+  max-height: 70vh; overflow: hidden;
+}
+.qsinput {
+  border: 0; border-bottom: 1px solid var(--line-soft);
+  background: transparent; color: var(--fg);
+  font-size: 17px; padding: 14px 16px; outline: none; font-family: inherit;
+}
+.qslist { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; }
+.qsrow {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) max-content;
+  gap: 10px; align-items: baseline;
+  padding: 7px 16px; cursor: pointer;
+}
+.qsrow.on { background: var(--panel-blue-head); }
+.qstitle { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qspath {
+  color: var(--muted); font-size: 12px; direction: rtl; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qsmeta {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .04em; white-space: nowrap;
+}
+.qshit { color: var(--link); font-weight: 700; }
+.qsrow.on .qshit { color: inherit; text-decoration: underline; }
+.qsempty { padding: 18px 16px; color: var(--muted); }
+.qsfoot {
+  display: flex; gap: 16px; padding: 8px 16px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted); font-size: 11px; background: var(--panel-grey);
+}
+
+/* ------------------------------------------------- portada: mapa de identidad */
+.centrecard {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  border: 1px solid var(--line); border-left: 4px solid var(--link);
+  background: var(--panel-blue);
+  padding: 16px 20px; margin: 0 0 18px; border-radius: 3px;
+}
+.centrecard h2 { margin: 0 0 4px; border: 0; font-size: 22px; padding: 0; }
+.centrecard h2 a { text-decoration: none; }
+.centrecard p { margin: 0; color: var(--muted); max-width: 62ch; }
+.centrego {
+  white-space: nowrap; padding: 8px 16px; border: 1px solid var(--link);
+  border-radius: 3px; text-decoration: none; font-weight: 600;
+}
+.centrego:hover { background: var(--link); color: #fff; }
+
+.qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.qcard {
+  border: 1px solid var(--line-soft); border-radius: 3px;
+  padding: 12px 14px; background: var(--bg); min-width: 0;
+}
+.qcard h3 { margin: 0 0 6px; font-size: 15px; }
+.qcard h3 a { text-decoration: none; }
+.qblurb { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.qmeta { margin: 0; font-size: 11.5px; color: var(--muted); }
+.qmeta code { font-size: 11px; }
+.qlist { margin: 8px 0 0; padding-left: 16px; font-size: 13px; }
+.qlist li { margin: 2px 0; }
+
+.structtable { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 13.5px; }
+.structtable td { padding: 4px 8px 4px 0; vertical-align: top; border: 0; }
+.structtable td:first-child { white-space: nowrap; width: 1%; }
+
+kbd {
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px;
+  padding: 1px 5px; font-size: 11px; font-family: var(--mono, monospace);
+}
+
+/* ------------------------------------------------- barra: mapa de identidad */
+.navid { margin-bottom: 14px; }
+.navid li { display: flex; align-items: baseline; gap: 6px; }
+.navid a { flex: 1; min-width: 0; }
+.navcentre { font-weight: 700; margin-bottom: 4px; }
+.navcount {
+  font-size: 10.5px; color: var(--muted); background: var(--panel-grey);
+  border: 1px solid var(--line-soft); border-radius: 8px; padding: 0 5px;
+}
