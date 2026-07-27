@@ -581,9 +581,16 @@ body.dragging-tab { cursor: grabbing; user-select: none; }
   border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
 }
 .panebar button:disabled { opacity: .4; cursor: default; }
-/* The pane owns its scroll, so the article column must not add its own. */
-body.workspace .artrow { display: block; }
-body.workspace .toc { display: none; }
+/* El TOC se ocultaba por completo dentro del workspace porque su `sticky`
+   estaba anclado al viewport (top: 108px) y quedaba varado a media nota: el
+   contenedor de scroll aquí es .panescroll, no la ventana. Se ancla en 0 y
+   vuelve a mostrarse; el caso de panel dividido ya lo gobierna showToc en
+   React, así que no hace falta esconderlo con CSS. */
+body.workspace .artrow { display: flex; }
+body.workspace .toc { position: sticky; top: 0; max-height: calc(100vh - 190px); }
+/* La consulta de ancho vive antes en el archivo, así que se repite aquí para
+   que no la gane la regla de arriba. */
+@media (max-width: 1100px) { body.workspace .toc { display: none; } }
 
 /* Sticky offsets are viewport-relative by default. Inside a pane the scroll
    container is .panescroll, so anything sticky there must anchor at 0 or it

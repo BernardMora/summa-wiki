@@ -121,7 +121,7 @@ export default function MainPage() {
             <h2>Explorar</h2>
             <div>
               <ul>
-                <li><Link href="/graph">Grafo</Link> — el mapa de enlaces; el hover muestra el título</li>
+                <li><Link href="/graph">Grafo</Link> — el mapa de enlaces; el hover muestra el título, ⌘clic lo abre en pestaña</li>
                 <li><Link href="/random">Artículo aleatorio</Link></li>
                 <li><Link href="/categories">Categorías</Link> — agrupaciones propias, aparte de la estructura</li>
                 <li><Link href="/health">Salud del wiki</Link> — validación contra la spec</li>
