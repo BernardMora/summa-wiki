@@ -13,11 +13,13 @@ import { useSyncExternalStore } from "react";
 /** Pestaña virtual del grafo: no es un archivo, pero se abre y arrastra igual. */
 export const GRAPH_ID = "graph:";
 export const isGraphId = (id: string) => id === GRAPH_ID;
+export const isCanvasId = (id: string) => id.startsWith("canvas:");
 export const isPdfId = (id: string) => id.startsWith("pdf:");
 export const isImgId = (id: string) => id.startsWith("img:");
-export const isFileId = (id: string) => isPdfId(id) || isImgId(id);
+export const isFileId = (id: string) => isPdfId(id) || isImgId(id) || isCanvasId(id);
 export const hrefFor = (id: string) =>
   isGraphId(id) ? "/graph"
+  : isCanvasId(id) ? `/pdf?p=${encodeURIComponent(id.slice(7))}`
   : isFileId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
   : `/note/${encodeURIComponent(id)}`;
 

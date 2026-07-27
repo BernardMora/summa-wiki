@@ -745,3 +745,54 @@ kbd {
 }
 body.dragging-tab .otab { cursor: grabbing; }
 .otab.ghosted { opacity: .4; }
+
+/* ------------------------------------------------------- editor de canvas */
+.cvwrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cvbar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-soft); background: var(--panel-grey);
+}
+.cvbar button {
+  font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+}
+.cvbar button:disabled { opacity: .4; cursor: default; }
+.cvcolors { display: inline-flex; gap: 4px; }
+.cvcolor { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; }
+
+/* El escenario recorta y hace de contenedor de scroll; la capa se transforma. */
+.cvstage {
+  position: relative; flex: 1 1 auto; min-height: 420px; overflow: hidden;
+  background: var(--page-bg); cursor: grab;
+}
+body.canvas-dragging .cvstage { cursor: grabbing; }
+.cvlayer { position: absolute; inset: 0; transform-origin: 0 0; }
+.cvsvg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Trazo invisible y ancho: una curva de 2 px es imposible de clicar. */
+.cvedgehit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+
+.cvnode {
+  position: absolute; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); overflow: hidden; cursor: move;
+}
+.cvnode.on { border-width: 2px; }
+.cvtext {
+  width: 100%; height: 100%; box-sizing: border-box; padding: 8px 10px;
+  font: inherit; font-size: 13px; line-height: 1.45; color: var(--fg);
+  white-space: pre-wrap; overflow: auto; word-break: break-word;
+}
+textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none; cursor: text; }
+.cvtext.read { user-select: none; }
+
+.cvport {
+  position: absolute; width: 11px; height: 11px; margin: -6px 0 0 -6px;
+  border-radius: 50%; background: var(--bg); border: 2px solid var(--link);
+  cursor: crosshair;
+}
+.cvresize {
+  position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px;
+  border: 2px solid var(--link); border-radius: 2px; background: var(--bg);
+  cursor: nwse-resize;
+}
+.cvhelp { padding: 6px 10px; font-size: 11.5px; border-top: 1px solid var(--line-soft); margin: 0; }
