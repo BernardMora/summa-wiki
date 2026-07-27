@@ -4,19 +4,16 @@ import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
 import ArticlePane, { type Payload } from "./ArticlePane.tsx";
 import PdfViewer from "./PdfViewer.tsx";
-import { publishActive, isPdfId as isPdf, isImgId as isImg } from "./Tabs.tsx";
+import GraphView from "./GraphView.tsx";
+import { publishActive, isPdfId, isImgId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 
 export interface Tab { id: string; title: string; }
 export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
 
-export const isPdfId = (id: string) => id.startsWith("pdf:");
-export const isImgId = (id: string) => id.startsWith("img:");
-export const isFileId = (id: string) => isPdfId(id) || isImgId(id);
-export const hrefFor = (id: string) =>
-  isPdfId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
-  : isImgId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
-  : `/note/${encodeURIComponent(id)}`;
+// Definidos una sola vez en Tabs.tsx: la copia que vivía aquí no conocía el
+// grafo y habría producido /note/graph%3A al sincronizar la URL.
+export { isPdfId, isImgId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
 
 interface Ctx {
   open: (id: string, title: string, newTab?: boolean) => void;
@@ -214,8 +211,8 @@ export default function Workspace({ initial }: { initial: Payload }) {
   // rewrite it: /pdf is a standalone route, and pointing the URL there would
   // reload into a single PDF instead of this workspace.
   useEffect(() => {
-    if (focused && !isPdf(focused) && !isImg(focused)) {
-      window.history.replaceState(null, "", `/note/${encodeURIComponent(focused)}`);
+    if (focused && !isPdfId(focused) && !isImgId(focused)) {
+      window.history.replaceState(null, "", hrefFor(focused));
     }
   }, [focused]);
 
@@ -367,6 +364,17 @@ export default function Workspace({ initial }: { initial: Payload }) {
               <div className="panecontent">
                 {p.activeId === null ? (
                   <p className="dim" style={{ padding: 20 }}>Panel vacío.</p>
+                ) : isGraphId(p.activeId) ? (
+                  <div className="panescroll">
+                    <article>
+                      <h1>Grafo</h1>
+                      <p className="infoline">
+                        <span>arrastra un nodo para moverlo</span><span>rueda para zoom</span>
+                        <span>clic abre la nota</span><span>⌘clic en pestaña nueva</span>
+                      </p>
+                      <GraphView />
+                    </article>
+                  </div>
                 ) : isImgId(p.activeId) ? (
                   <div className="imgview">
                     <div className="imgbar">

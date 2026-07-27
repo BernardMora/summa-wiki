@@ -10,11 +10,16 @@ import { useSyncExternalStore } from "react";
  * their own state, and the two drifted apart. The workspace is now the single
  * source of truth and publishes into this store.
  */
+/** Pestaña virtual del grafo: no es un archivo, pero se abre y arrastra igual. */
+export const GRAPH_ID = "graph:";
+export const isGraphId = (id: string) => id === GRAPH_ID;
 export const isPdfId = (id: string) => id.startsWith("pdf:");
 export const isImgId = (id: string) => id.startsWith("img:");
 export const isFileId = (id: string) => isPdfId(id) || isImgId(id);
 export const hrefFor = (id: string) =>
-  isFileId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}` : `/note/${encodeURIComponent(id)}`;
+  isGraphId(id) ? "/graph"
+  : isFileId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
+  : `/note/${encodeURIComponent(id)}`;
 
 let activeId: string | null = null;
 const listeners = new Set<() => void>();

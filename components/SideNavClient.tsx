@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import FileTree from "./FileTree.tsx";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
+import { GRAPH_ID } from "./Tabs.tsx";
 
 interface NavItem { id: string; title: string; pinned?: boolean; }
 interface NavGroup { id: string; label: string; items: NavItem[]; total: number; hidden?: boolean; }
@@ -153,7 +154,10 @@ export default function SideNavClient({ groups, centre, questions }: {
       <ul>
         <li><Link href="/">Portada</Link></li>
         <li><Link href="/random">Artículo aleatorio</Link></li>
-        <li><Link href="/graph">Grafo</Link></li>
+        <li>
+          {/* El grafo es una pestaña más: ⌘clic lo abre en una nueva. */}
+          <a href="/graph" onClick={(e) => openNote(e, { id: GRAPH_ID, title: "Grafo" })}>Grafo</a>
+        </li>
         <li><Link href="/categories">Todas las categorías</Link></li>
         <li><Link href="/health">Salud del wiki</Link></li>
       </ul>
