@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
@@ -404,7 +405,7 @@ export default function FileTree() {
 
       <div className="tree">{render(root)}</div>
 
-      {menu && (
+      {menu && createPortal(
         <div className="ctxmenu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <div className="ctxhead">{menu.node.name}</div>
           {menu.node.dir && (
@@ -493,7 +494,8 @@ export default function FileTree() {
           <button className="danger" onClick={() => { const n = menu.node; setMenu(null); askDelete(n); }}>
             Borrar
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
