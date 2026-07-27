@@ -42,6 +42,14 @@ export default function GraphView() {
     downX: number; downY: number; moved: boolean;
   }>({ node: null, panX: 0, panY: 0, panning: false, downX: 0, downY: 0, moved: false });
   const hover = useRef<Node | null>(null);
+  /**
+   * Nodo enfocado. El clic dejó de abrir la nota: ahora fija el vecindario y
+   * acerca la cámara, de modo que el grafo se puede recorrer saltando de un
+   * nodo a otro. Abrir la nota pasó a ⌘clic y al botón del panel.
+   */
+  const focus = useRef<Node | null>(null);
+  /** Destino de cámara al que se interpola; null cuando no hay animación. */
+  const camera = useRef<{ x: number; y: number; k: number } | null>(null);
   /** Simulation temperature. A ref so dragging can reheat it from outside. */
   const alpha = useRef(1);
   const DRAG_PX = 4;
@@ -50,10 +58,10 @@ export default function GraphView() {
   const [stats, setStats] = useState({ n: 0, e: 0 });
   const [bundle, setBundle] = useState("all");
   const [hideIndexes, setHideIndexes] = useState(false);
-  const [label, setLabel] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [overNode, setOverNode] = useState(false);
   const [pinned, setPinned] = useState(0);
+  const [focused, setFocused] = useState<Node | null>(null);
   const tabs = useTabs();
 
   // ---------------------------------------------------------------- data
@@ -129,6 +137,19 @@ export default function GraphView() {
         }
         alpha.current *= 0.995;
       }
+      // Interpolación hacia el nodo enfocado. Saltar de golpe hace perder el
+      // hilo de dónde estabas; el desplazamiento suave lo conserva.
+      const cam = camera.current;
+      if (cam) {
+        const v = view.current;
+        v.x += (cam.x - v.x) * 0.18;
+        v.y += (cam.y - v.y) * 0.18;
+        v.k += (cam.k - v.k) * 0.18;
+        if (Math.abs(cam.x - v.x) < 0.5 && Math.abs(cam.y - v.y) < 0.5 && Math.abs(cam.k - v.k) < 0.005) {
+          v.x = cam.x; v.y = cam.y; v.k = cam.k;
+          camera.current = null;
+        }
+      }
       draw();
       raf.current = requestAnimationFrame(step);
     };
@@ -151,26 +172,36 @@ export default function GraphView() {
       ctx.translate(w / 2 + tx, h / 2 + ty);
       ctx.scale(k, k);
 
+      // El foco manda sobre el hover: fijado el vecindario, pasar el ratón por
+      // encima solo etiqueta, no reordena lo que está resaltado.
+      const fo = focus.current;
       const hi = hover.current;
-      const near = hi ? adj.current.get(hi.id)! : null;
+      const anchor = fo ?? hi;
+      const near = anchor ? adj.current.get(anchor.id)! : null;
 
       ctx.lineWidth = 0.7;
       for (const e of edges.current) {
         const a = byId.current.get(e.s)!, b = byId.current.get(e.t)!;
-        const lit = hi && (e.s === hi.id || e.t === hi.id);
+        const lit = anchor && (e.s === anchor.id || e.t === anchor.id);
         ctx.strokeStyle = lit ? "#3366cc" : (css.getPropertyValue("--line-soft") || "#ccc");
-        ctx.globalAlpha = hi ? (lit ? 0.9 : 0.12) : 0.42;
+        ctx.globalAlpha = anchor ? (lit ? 0.9 : 0.1) : 0.42;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
 
       ctx.globalAlpha = 1;
       for (const n of nodes.current) {
         const r = 3 + Math.min(9, Math.sqrt(n.degree) * 2);
-        const dim = hi && n !== hi && !near!.has(n.id);
-        ctx.globalAlpha = dim ? 0.18 : 1;
+        const dim = anchor && n !== anchor && !near!.has(n.id);
+        ctx.globalAlpha = dim ? 0.14 : 1;
         ctx.fillStyle = COLOR[n.type] ?? "#888";
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
-        if (n === hi) { ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 2; ctx.stroke(); }
+        if (n === fo) {
+          // El enfocado lleva un anillo doble para distinguirlo de sus vecinos.
+          ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 2.5; ctx.stroke();
+          ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 1; ctx.globalAlpha = 0.5; ctx.stroke();
+          ctx.globalAlpha = 1;
+        } else if (n === hi) { ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 2; ctx.stroke(); }
         else if (n.pinned) {
           ctx.strokeStyle = css.getPropertyValue("--muted") || "#666";
           ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]);
@@ -180,30 +211,51 @@ export default function GraphView() {
       // Only the hovered node is labelled. Drawing every hub's title turned the
       // canvas into overlapping text; on hover it reads cleanly and the dimming
       // of everything else already shows the neighbourhood.
-      if (hi) {
-        const r = 3 + Math.min(9, Math.sqrt(hi.degree) * 2);
-        ctx.globalAlpha = 1;
-        ctx.font = "600 12px -apple-system, system-ui, sans-serif";
-        const text = hi.title;
+      const label = (n: Node, strong: boolean) => {
+        const r = 3 + Math.min(9, Math.sqrt(n.degree) * 2);
+        ctx.font = `${strong ? 700 : 600} 12px -apple-system, system-ui, sans-serif`;
+        const text = n.title;
         const tw = ctx.measureText(text).width;
-        const bx = hi.x + r + 5, by = hi.y - 8;
-        // Plate behind the text so it stays legible over edges and nodes.
+        const bx = n.x + r + 5, by = n.y - 8;
+        // Placa detrás del texto para que se lea sobre aristas y nodos.
         ctx.fillStyle = css.getPropertyValue("--bg") || "#fff";
-        ctx.globalAlpha = 0.88;
+        ctx.globalAlpha = 0.9;
         ctx.fillRect(bx - 4, by - 2, tw + 8, 18);
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = css.getPropertyValue("--line-soft") || "#ccc";
-        ctx.lineWidth = 1 / k;
+        ctx.strokeStyle = strong ? "#3366cc" : (css.getPropertyValue("--line-soft") || "#ccc");
+        ctx.lineWidth = (strong ? 1.5 : 1) / k;
         ctx.strokeRect(bx - 4, by - 2, tw + 8, 18);
         ctx.fillStyle = css.getPropertyValue("--fg") || "#222";
         ctx.fillText(text, bx, by + 11);
-      }
+      };
+      // El enfocado se etiqueta siempre; el resto solo al pasar por encima,
+      // que es lo que mantiene legible un vecindario grande.
+      if (hi && hi !== fo) label(hi, false);
+      if (fo) label(fo, true);
       ctx.restore();
     };
 
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current);
   }, [ready]);
+
+  /** Centra un nodo y acerca; null sale del modo exploración. */
+  const focusNode = useCallback((n: Node | null) => {
+    focus.current = n;
+    setFocused(n);
+    if (!n) { camera.current = null; return; }
+    // Con vecindarios grandes conviene alejarse un poco, o no cabe.
+    const deg = adj.current.get(n.id)?.size ?? 0;
+    const k = Math.max(0.7, Math.min(1.9, 1.9 - deg * 0.045));
+    camera.current = { k, x: -n.x * k, y: -n.y * k };
+    alpha.current = Math.max(alpha.current, 0.05);   // repintar mientras viaja
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") focusNode(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusNode]);
 
   // ---------------------------------------------------------------- input
   const at = (ev: React.MouseEvent) => {
@@ -255,6 +307,21 @@ export default function GraphView() {
         </span>
       </div>
 
+      {focused && (
+        <div className="gfocus">
+          <div>
+            <strong>{focused.title}</strong>
+            <span className="dim">
+              {" "}· {adj.current.get(focused.id)?.size ?? 0} conexiones · {focused.type}
+            </span>
+          </div>
+          <div className="gfocusbtns">
+            <button onClick={() => tabs?.open(focused.id, focused.title, true)}>Abrir nota</button>
+            <button onClick={() => focusNode(null)}>Salir</button>
+          </div>
+        </div>
+      )}
+
       <canvas
         ref={canvas}
         className="graphcanvas"
@@ -292,7 +359,6 @@ export default function GraphView() {
           const n = pick(p);
           hover.current = n;
           setOverNode(Boolean(n));
-          setLabel(n ? n.title : null);
         }}
         onMouseUp={() => {
           if (drag.current.node?.pinned) setPinned(nodes.current.filter((n) => n.pinned).length);
@@ -300,21 +366,22 @@ export default function GraphView() {
         }}
         onMouseLeave={() => {
           drag.current.node = null; drag.current.panning = false; drag.current.moved = false;
-          hover.current = null; setDragging(false); setOverNode(false); setLabel(null);
+          hover.current = null; setDragging(false); setOverNode(false);
         }}
         onClick={(e) => {
           // A drag is not a click. Without this the node opened on release and
           // the canvas unmounted mid-drag.
           if (drag.current.moved) { drag.current.moved = false; return; }
           const n = pick(at(e));
-          if (n) tabs?.open(n.id, n.title, e.metaKey || e.ctrlKey);
+          // ⌘clic sigue abriendo la nota; el clic simple explora.
+          if (n && (e.metaKey || e.ctrlKey)) { tabs?.open(n.id, n.title, true); return; }
+          focusNode(n);                       // clic en vacío sale del modo
         }}
         onWheel={(e) => {
           const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
           view.current.k = Math.min(4, Math.max(0.2, view.current.k * f));
         }}
       />
-      {label && <div className="graphtip">{label}</div>}
     </div>
   );
 }

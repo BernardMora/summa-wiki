@@ -823,3 +823,22 @@ textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none;
   background: var(--panel-blue-head);
   outline: 1px solid var(--link); outline-offset: -1px;
 }
+
+/* Panel del nodo enfocado en el grafo. */
+/* Abajo a la izquierda: arriba está la barra de herramientas y el panel la
+   tapaba. Ese hueco quedó libre al quitar el tooltip, que duplicaba la
+   etiqueta que ahora dibuja el propio canvas. */
+.gfocus {
+  position: absolute; z-index: 5; left: 10px; bottom: 12px;
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  max-width: calc(100% - 20px);
+  padding: 7px 12px; border-radius: 4px;
+  background: var(--bg); border: 1px solid var(--link);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .25); font-size: 13px;
+}
+.gfocusbtns { display: flex; gap: 6px; margin-left: auto; }
+.gfocus button {
+  font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+}
+.gfocus button:first-child { border-color: var(--link); color: var(--link); font-weight: 600; }
