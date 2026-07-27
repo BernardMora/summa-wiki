@@ -211,27 +211,46 @@ export default function GraphView() {
       // Only the hovered node is labelled. Drawing every hub's title turned the
       // canvas into overlapping text; on hover it reads cleanly and the dimming
       // of everything else already shows the neighbourhood.
-      const label = (n: Node, strong: boolean) => {
+      type Rect = { x: number; y: number; w: number; h: number };
+      const hits = (a: Rect, b: Rect) =>
+        a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+      /**
+       * Dibuja la etiqueta evitando `avoid`. Con dos nodos cercanos —el
+       * enfocado y uno al que se le pasa por encima— las dos placas caían en el
+       * mismo sitio y el texto quedaba ilegible, así que se prueban cuatro
+       * posiciones alrededor del nodo antes de rendirse.
+       */
+      const label = (n: Node, strong: boolean, avoid?: Rect): Rect => {
         const r = 3 + Math.min(9, Math.sqrt(n.degree) * 2);
         ctx.font = `${strong ? 700 : 600} 12px -apple-system, system-ui, sans-serif`;
         const text = n.title;
         const tw = ctx.measureText(text).width;
-        const bx = n.x + r + 5, by = n.y - 8;
+        const w = tw + 8, h = 18;
+        const spots: Rect[] = [
+          { x: n.x + r + 1, y: n.y - 10, w, h },          // derecha
+          { x: n.x - r - 1 - w, y: n.y - 10, w, h },      // izquierda
+          { x: n.x - w / 2, y: n.y + r + 4, w, h },       // abajo
+          { x: n.x - w / 2, y: n.y - r - 4 - h, w, h },   // arriba
+        ];
+        const box = spots.find((s) => !avoid || !hits(s, avoid)) ?? spots[0];
+
         // Placa detrás del texto para que se lea sobre aristas y nodos.
         ctx.fillStyle = css.getPropertyValue("--bg") || "#fff";
-        ctx.globalAlpha = 0.9;
-        ctx.fillRect(bx - 4, by - 2, tw + 8, 18);
+        ctx.globalAlpha = 0.94;
+        ctx.fillRect(box.x, box.y, box.w, box.h);
         ctx.globalAlpha = 1;
         ctx.strokeStyle = strong ? "#3366cc" : (css.getPropertyValue("--line-soft") || "#ccc");
         ctx.lineWidth = (strong ? 1.5 : 1) / k;
-        ctx.strokeRect(bx - 4, by - 2, tw + 8, 18);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
         ctx.fillStyle = css.getPropertyValue("--fg") || "#222";
-        ctx.fillText(text, bx, by + 11);
+        ctx.fillText(text, box.x + 4, box.y + 13);
+        return box;
       };
-      // El enfocado se etiqueta siempre; el resto solo al pasar por encima,
-      // que es lo que mantiene legible un vecindario grande.
-      if (hi && hi !== fo) label(hi, false);
-      if (fo) label(fo, true);
+      // El enfocado se etiqueta siempre y se coloca primero, porque es el ancla
+      // de la exploración; el que se pasa por encima cede el sitio.
+      const anchorBox = fo ? label(fo, true) : undefined;
+      if (hi && hi !== fo) label(hi, false, anchorBox);
       ctx.restore();
     };
 
@@ -378,8 +397,24 @@ export default function GraphView() {
           focusNode(n);                       // clic en vacío sale del modo
         }}
         onWheel={(e) => {
-          const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-          view.current.k = Math.min(4, Math.max(0.2, view.current.k * f));
+          // Convención de macOS: el pellizco del trackpad llega como `wheel`
+          // con ctrlKey, y el desplazamiento de dos dedos como wheel normal.
+          // Antes todo hacía zoom, así que desplazarse acercaba sin querer.
+          camera.current = null;                 // cualquier gesto cancela el viaje
+          if (e.ctrlKey) {
+            const b = canvas.current!.getBoundingClientRect();
+            const mx = e.clientX - b.left - b.width / 2;
+            const my = e.clientY - b.top - b.height / 2;
+            const v = view.current;
+            const k = Math.min(4, Math.max(0.15, v.k * (e.deltaY < 0 ? 1.08 : 1 / 1.08)));
+            // Se acerca hacia el puntero, no hacia el centro.
+            v.x = mx - (mx - v.x) * (k / v.k);
+            v.y = my - (my - v.y) * (k / v.k);
+            v.k = k;
+          } else {
+            view.current.x -= e.deltaX;
+            view.current.y -= e.deltaY;
+          }
         }}
       />
     </div>
