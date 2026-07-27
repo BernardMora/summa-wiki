@@ -7,6 +7,54 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
 
 /**
+ * Envuelve o desenvuelve la selección con un marcador de énfasis.
+ *
+ * Si ya está envuelta se quita, para que ⌘B alterne en vez de acumular
+ * asteriscos. Sin selección inserta el par y deja el cursor en medio, que es
+ * lo que se espera al empezar a escribir en negritas.
+ */
+function toggleWrap(view: EditorView, mark: string) {
+  const { from, to } = view.state.selection.main;
+  const doc = view.state.doc;
+  const n = mark.length;
+
+  if (from === to) {
+    view.dispatch({
+      changes: { from, insert: mark + mark },
+      selection: { anchor: from + n },
+    });
+    return true;
+  }
+
+  const inner = doc.sliceString(from, to);
+  // Envuelta por dentro: **texto** seleccionado con los asteriscos incluidos.
+  if (inner.length >= n * 2 && inner.startsWith(mark) && inner.endsWith(mark)) {
+    const bare = inner.slice(n, -n);
+    view.dispatch({
+      changes: { from, to, insert: bare },
+      selection: { anchor: from, head: from + bare.length },
+    });
+    return true;
+  }
+  // Envuelta por fuera: los asteriscos quedaron justo afuera de la selección.
+  const before = doc.sliceString(Math.max(0, from - n), from);
+  const after = doc.sliceString(to, Math.min(doc.length, to + n));
+  if (before === mark && after === mark) {
+    view.dispatch({
+      changes: [{ from: to, to: to + n }, { from: from - n, to: from }],
+      selection: { anchor: from - n, head: to - n },
+    });
+    return true;
+  }
+
+  view.dispatch({
+    changes: [{ from, insert: mark }, { from: to, insert: mark }],
+    selection: { anchor: from + n, head: to + n },
+  });
+  return true;
+}
+
+/**
  * Envuelve la selección en marcadores de procedencia. Explícito, lo pide el usuario.
  *
  * Antes fallaba en silencio de dos maneras. Si la selección contenía algún
@@ -94,6 +142,11 @@ export default function Editor({
         extensions: [
           history(),
           drawSelection(),
+          // Antes que defaultKeymap: en macOS ⌘I ya está tomado por otras cosas.
+          keymap.of([
+            { key: "Mod-b", preventDefault: true, run: (v) => toggleWrap(v, "**") },
+            { key: "Mod-i", preventDefault: true, run: (v) => toggleWrap(v, "*") },
+          ]),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),   // GFM: task lists, tables, strikethrough
           livePreview,

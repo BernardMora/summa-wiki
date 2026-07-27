@@ -816,3 +816,10 @@ textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none;
   display: flex; gap: 12px; padding: 5px 10px; font-size: 10.5px; color: var(--muted);
   border-top: 1px solid var(--line-soft); background: var(--panel-grey);
 }
+
+/* Arrastrar archivos entre carpetas en el árbol. */
+.row[draggable="true"] { -webkit-user-drag: element; }
+.row.dir.dropinto {
+  background: var(--panel-blue-head);
+  outline: 1px solid var(--link); outline-offset: -1px;
+}
