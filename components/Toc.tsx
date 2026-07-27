@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 
 export interface Head { level: number; text: string; line: number; }
 
@@ -33,6 +33,22 @@ export function parseHeads(md: string): Head[] {
   return out;
 }
 
+/**
+ * Contenedor que realmente hace scroll.
+ *
+ * El TOC se escribió cuando la ventana era el scroller. Desde que cada panel
+ * tiene el suyo (`.panescroll`), `window.scrollBy` no movía nada y el evento
+ * `scroll` de la ventana no se disparaba: ni el clic navegaba ni se resaltaba
+ * el encabezado activo.
+ */
+function scrollerOf(el: HTMLElement | null): HTMLElement | null {
+  for (let n = el?.parentElement ?? null; n && n !== document.body; n = n.parentElement) {
+    const s = getComputedStyle(n);
+    if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 4) return n;
+  }
+  return null;
+}
+
 export default function Toc({
   heads, view,
 }: { heads: Head[]; view: EditorView | null }) {
@@ -48,20 +64,23 @@ export default function Toc({
   // Highlight whichever heading is nearest the top of the viewport.
   useEffect(() => {
     if (!view || heads.length === 0) return;
+    const sc = scrollerOf(view.dom);
+    const top = sc ? sc.getBoundingClientRect().top : 0;
     const onScroll = () => {
       let best: number | null = null;
       for (const h of heads) {
         try {
           const pos = view.state.doc.line(h.line).from;
           const c = view.coordsAtPos(pos);
-          if (c && c.top < 140) best = h.line;
+          if (c && c.top - top < 140) best = h.line;
         } catch { /* line vanished mid-edit */ }
       }
       setActive(best);
     };
     onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const target: HTMLElement | Window = sc ?? window;
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
   }, [view, heads]);
 
   if (heads.length === 0) return null;
@@ -70,11 +89,30 @@ export default function Toc({
 
   function go(h: Head) {
     if (!view) return;
-    try {
-      const pos = view.state.doc.line(h.line).from;
+    let pos: number;
+    try { pos = view.state.doc.line(h.line).from; } catch { return; }
+
+    // CodeMirror virtualiza: una línea fuera del viewport no está renderizada,
+    // `coordsAtPos` devuelve null, y las alturas de lo no medido son estimadas.
+    // Al acercarse, esas estimaciones se sustituyen por medidas reales y el
+    // destino se corre — por eso un solo salto se quedaba corto. Se corrige en
+    // varias pasadas hasta que el error es despreciable.
+    view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "start", yMargin: 40 }) });
+
+    const sc = scrollerOf(view.dom);
+    let tries = 0;
+    const settle = () => {
       const c = view.coordsAtPos(pos);
-      if (c) window.scrollBy({ top: c.top - 110, behavior: "smooth" });
-    } catch { /* ignore */ }
+      if (!c) { if (tries++ < 6) requestAnimationFrame(settle); return; }
+      const top = sc ? sc.getBoundingClientRect().top : 0;
+      const delta = c.top - top - (sc ? 24 : 110);
+      if (Math.abs(delta) < 3 || tries++ > 6) return;
+      // Salto instantáneo: con desplazamiento suave se mide a mitad de la
+      // animación y la corrección se acumula mal.
+      if (sc) sc.scrollTop += delta; else window.scrollBy(0, delta);
+      requestAnimationFrame(settle);
+    };
+    requestAnimationFrame(settle);
   }
 
   return (
