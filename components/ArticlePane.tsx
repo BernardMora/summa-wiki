@@ -7,6 +7,7 @@ import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
 import Toc, { parseHeads, type Head } from "./Toc.tsx";
 import Crumb from "./Crumb.tsx";
 import { useTabs } from "./Tabs.tsx";
+import LinkPicker, { type LinkQuery, type LinkTarget } from "./LinkPicker.tsx";
 
 export interface Ref { id: string; title: string; path: string; }
 export interface Meta {
@@ -59,6 +60,7 @@ export default function ArticlePane({
   const [view, setView] = useState<EditorView | null>(null);
   const [err, setErr] = useState("");
   const [docVersion, setDocVersion] = useState(0);
+  const [linkQ, setLinkQ] = useState<LinkQuery | null>(null);
 
   const viewRef = useRef<EditorView | null>(null);
   const savedRef = useRef(initial?.content ?? "");
@@ -141,6 +143,39 @@ export default function ArticlePane({
     return () => window.removeEventListener("keydown", onKey);
   }, [save]);
 
+  /**
+   * Construye el enlace para una nota elegida en el buscador de `[[`.
+   *
+   * Dentro del mismo bundle va una ruta relativa; cruzando bundles va el
+   * esquema `aios://`, que es lo que exige la spec §2 — una ruta relativa que
+   * se escapa del bundle no resuelve.
+   */
+  const linkTo = useCallback((t: LinkTarget) => {
+    const label = t.title.replace(/[[\]]/g, "");
+    if (!data || t.bundle !== data.meta.bundle) {
+      return `[${label}](aios://${t.bundle}/${encodeURI(t.path)})`;
+    }
+    const from = data.meta.pathRel.split("/").slice(0, -1);
+    const to = t.path.split("/");
+    let i = 0;
+    while (i < from.length && i < to.length - 1 && from[i] === to[i]) i++;
+    const rel = [...Array(from.length - i).fill(".."), ...to.slice(i)].join("/");
+    return `[${label}](${encodeURI(rel || to[to.length - 1])})`;
+  }, [data]);
+
+  const insertLink = useCallback((t: LinkTarget) => {
+    const v = viewRef.current;
+    if (!v || !linkQ) return;
+    const text = linkTo(t);
+    v.dispatch({
+      changes: { from: linkQ.from, to: linkQ.to, insert: text },
+      selection: { anchor: linkQ.from + text.length },
+    });
+    setLinkQ(null);
+    v.focus();
+    onChange();
+  }, [linkQ, linkTo]);
+
   const resolveHref = useCallback((href: string) => {
     const hit = data?.resolve[href];
     if (hit) return hit;
@@ -211,6 +246,7 @@ export default function ArticlePane({
                 value={data.content}
                 onChange={onChange}
                 resolve={resolveHref}
+                onLinkQuery={setLinkQ}
                 onNavigate={(url, text) => {
                   // ⌘clic abre en pestaña nueva. Antes hacía router.push, que
                   // remonta el workspace entero y cierra los paneles divididos.
@@ -284,6 +320,8 @@ export default function ArticlePane({
           </div>
         )}
       </div>
+
+      {linkQ && <LinkPicker q={linkQ} onPick={insertLink} onClose={() => setLinkQ(null)} />}
 
       {(
         <div className="panebar">

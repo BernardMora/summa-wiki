@@ -796,3 +796,23 @@ textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none;
   cursor: nwse-resize;
 }
 .cvhelp { padding: 6px 10px; font-size: 11.5px; border-top: 1px solid var(--line-soft); margin: 0; }
+
+/* ------------------------------------------- buscador de enlaces al escribir */
+.lpbox {
+  position: fixed; z-index: 260; width: min(380px, 92vw);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .3); overflow: hidden;
+}
+.lplist { list-style: none; margin: 0; padding: 3px 0; max-height: 240px; overflow-y: auto; }
+.lprow { padding: 5px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.lprow.on { background: var(--panel-blue-head); }
+.lptitle { font-size: 13px; font-weight: 600; }
+.lppath {
+  font-size: 11px; color: var(--muted); direction: rtl; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lpempty { padding: 10px; color: var(--muted); font-size: 12.5px; }
+.lpfoot {
+  display: flex; gap: 12px; padding: 5px 10px; font-size: 10.5px; color: var(--muted);
+  border-top: 1px solid var(--line-soft); background: var(--panel-grey);
+}

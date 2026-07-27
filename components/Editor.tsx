@@ -38,7 +38,7 @@ export function unmarkSelection(view: EditorView) {
 }
 
 export default function Editor({
-  value, onChange, resolve, onNavigate, onReady, onPasteImage,
+  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -47,9 +47,18 @@ export default function Editor({
   onReady?: (view: EditorView) => void;
   /** Uploads a pasted image and returns the href to link, or null on failure. */
   onPasteImage?: (file: File) => Promise<string | null>;
+  /**
+   * Se avisa mientras se escribe `[[algo`, para ofrecer un buscador de notas.
+   * `null` cuando el patrón deja de estar bajo el cursor.
+   */
+  onLinkQuery?: (q: { query: string; from: number; to: number; x: number; y: number } | null) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  // El efecto que construye CodeMirror corre una sola vez, así que el callback
+  // se lee por referencia para no quedar congelado en el del primer render.
+  const onLinkQueryRef = useRef(onLinkQuery);
+  onLinkQueryRef.current = onLinkQuery;
 
   useEffect(() => {
     if (!host.current || view.current) return;
@@ -101,7 +110,30 @@ export default function Editor({
               return false;
             },
           }),
-          EditorView.updateListener.of((u) => { if (u.docChanged) onChange(u.state.doc.toString()); }),
+          EditorView.updateListener.of((u) => {
+            if (u.docChanged) onChange(u.state.doc.toString());
+            if (!u.docChanged && !u.selectionSet) return;
+            // Disparador `[[`: se busca hacia atrás desde el cursor, dentro de
+            // la misma línea. Insertar la ruta completa a mano es justo lo que
+            // esto evita — el enlace resultante es markdown estándar, no un
+            // wikilink, porque es lo que exige la spec.
+            const cb = onLinkQueryRef.current;
+            if (!cb) return;
+            const sel = u.state.selection.main;
+            if (!sel.empty) return cb(null);
+            const line = u.state.doc.lineAt(sel.head);
+            const before = line.text.slice(0, sel.head - line.from);
+            const m = /\[\[([^\[\]]*)$/.exec(before);
+            if (!m) return cb(null);
+            const coords = u.view.coordsAtPos(sel.head);
+            cb({
+              query: m[1],
+              from: line.from + m.index,
+              to: sel.head,
+              x: coords?.left ?? 0,
+              y: coords?.bottom ?? 0,
+            });
+          }),
         ],
       }),
     });
