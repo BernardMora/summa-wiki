@@ -9,6 +9,7 @@ interface Menu { x: number; y: number; node: Node; }
 interface Cat { id: string; label: string; }
 
 const TYPES = ["knowledge", "project", "area", "moc", "journal", "source", "connection", "system"];
+const OPEN_KEY = "wiki.tree.open";
 
 /**
  * Filesystem view of the vault, Obsidian-sidebar style. Right-click gives
@@ -18,7 +19,30 @@ const TYPES = ["knowledge", "project", "area", "moc", "journal", "source", "conn
  */
 export default function FileTree() {
   const [root, setRoot] = useState<Node[]>([]);
-  const [open, setOpen] = useState<Set<string>>(new Set(["00-System", "01-Pillars", "02-Journal"]));
+  /**
+   * Carpetas abiertas, recordadas entre sesiones.
+   *
+   * El valor por defecto eran `00-System`, `01-Pillars` y `02-Journal`, que
+   * dejaron de existir con la reorganización de julio: el árbol abría con todo
+   * colapsado. Ahora se guarda lo que el usuario deje abierto y solo se usa un
+   * valor inicial la primera vez.
+   */
+  const [open, setOpen] = useState<Set<string>>(new Set(["00-Bernardo"]));
+  const [openLoaded, setOpenLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(OPEN_KEY);
+      if (raw) setOpen(new Set(JSON.parse(raw) as string[]));
+    } catch { /* preferencia corrupta: se ignora y se reescribe */ }
+    setOpenLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    // No escribir antes de leer, o el primer render borraría lo guardado.
+    if (!openLoaded) return;
+    try { localStorage.setItem(OPEN_KEY, JSON.stringify([...open])); } catch { /* sin cuota */ }
+  }, [open, openLoaded]);
   const [selDir, setSelDir] = useState("");
   const [menu, setMenu] = useState<Menu | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
