@@ -144,7 +144,7 @@ const PROV_RE = /<!--\s*(\/?)(ai|human)\s*-->/g;
 const TASK_RE = /^(\s*)([-*+]|\d+[.)])(\s+)\[([ xX])\]/;
 const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
 
-function build(view: EditorView): DecorationSet {
+function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet } {
   const b = new RangeSetBuilder<Decoration>();
   const sel = view.state.selection.main;
   const doc = view.state.doc;
@@ -154,7 +154,28 @@ function build(view: EditorView): DecorationSet {
   const activeTo = doc.lineAt(sel.to).to;
   const isActive = (pos: number) => pos >= activeFrom && pos <= activeTo;
 
-  interface Item { from: number; to: number; deco: Decoration }
+  /**
+   * Revelar la sintaxis del elemento bajo el cursor, no la de toda la línea.
+   *
+   * Con el criterio de línea, poner el caret en cualquier parte de una viñeta
+   * con enlaces mostraba de golpe los `**`, los corchetes y las rutas
+   * completas: la línea pasaba de ~20 a ~120 caracteres, reflowaba, y el caret
+   * terminaba visualmente en otro lugar. De ahí la sensación de que moverse a
+   * la izquierda mueve a la derecha, y de que la selección se comporta raro.
+   */
+  const revealsNode = (node: { from: number; to: number; node: { parent: { from: number; to: number } | null } }) => {
+    const p = node.node.parent;
+    const from = p ? p.from : node.from;
+    const to = p ? p.to : node.to;
+    return sel.to >= from && sel.from <= to;
+  };
+
+  // `atomic` marca los rangos que se ocultan (Decoration.replace). Se exponen
+  // aparte porque el cursor no debe poder entrar en ellos: al no ser atómicos,
+  // moverse por una línea con enlaces recorría carácter a carácter el texto
+  // invisible de "](../ruta/larga.md)" — el caret parecía no moverse y luego
+  // saltaba, y la selección abarcaba cosas que no se ven.
+  interface Item { from: number; to: number; deco: Decoration; atomic?: boolean }
   const items: Item[] = [];
 
   // Frontmatter: metadata, not prose. lezer-markdown does not parse it.
@@ -174,8 +195,8 @@ function build(view: EditorView): DecorationSet {
         const cls = STYLED[node.name];
         if (cls) items.push({ from: node.from, to: node.to, deco: Decoration.mark({ class: cls }) });
         if (node.name === "Table") return false;   // handled by tableField below
-        if (MARKS.has(node.name) && !isActive(node.from) && node.to > node.from) {
-          items.push({ from: node.from, to: node.to, deco: Decoration.replace({}) });
+        if (MARKS.has(node.name) && !revealsNode(node) && node.to > node.from) {
+          items.push({ from: node.from, to: node.to, deco: Decoration.replace({}), atomic: true });
         }
       },
     });
@@ -195,7 +216,7 @@ function build(view: EditorView): DecorationSet {
         // Indentation is preserved so nesting still shows.
         const bulletFrom = line.from + indent.length;
         const bulletTo = bulletFrom + bullet.length + gap.length;
-        items.push({ from: bulletFrom, to: bulletTo, deco: Decoration.replace({}) });
+        items.push({ from: bulletFrom, to: bulletTo, deco: Decoration.replace({}), atomic: true });
 
         const boxStart = bulletTo;                     // at "["
         items.push({
@@ -231,14 +252,19 @@ function build(view: EditorView): DecorationSet {
           deco: Decoration.replace({
             widget: new ProvWidget(pm[1] === "/" ? `⟨/${pm[2]}⟩` : `⟨${pm[2]}⟩`, pm[2]),
           }),
+          atomic: true,
         });
       }
     }
   }
 
   items.sort((a, b) => a.from - b.from || a.to - b.to);
-  for (const it of items) b.add(it.from, it.to, it.deco);
-  return b.finish();
+  const at = new RangeSetBuilder<Decoration>();
+  for (const it of items) {
+    b.add(it.from, it.to, it.deco);
+    if (it.atomic && it.to > it.from) at.add(it.from, it.to, it.deco);
+  }
+  return { deco: b.finish(), atomic: at.finish() };
 }
 
 /**
@@ -285,12 +311,21 @@ export const tableField = StateField.define<DecorationSet>({
 export const livePreview = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    constructor(view: EditorView) { this.decorations = build(view); }
+    atomic: DecorationSet;
+    constructor(view: EditorView) { const r = build(view); this.decorations = r.deco; this.atomic = r.atomic; }
     update(u: ViewUpdate) {
-      if (u.docChanged || u.selectionSet || u.viewportChanged) this.decorations = build(u.view);
+      if (u.docChanged || u.selectionSet || u.viewportChanged) {
+        const r = build(u.view);
+        this.decorations = r.deco; this.atomic = r.atomic;
+      }
     }
   },
-  { decorations: (v) => v.decorations },
+  {
+    decorations: (v) => v.decorations,
+    // Sin esto el cursor se mete dentro de la sintaxis oculta.
+    provide: (plugin) =>
+      EditorView.atomicRanges.of((view) => view.plugin(plugin)?.atomic ?? Decoration.none),
+  },
 );
 
 /**

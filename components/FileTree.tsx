@@ -140,6 +140,7 @@ export default function FileTree() {
   function openFile(n: Node, newTab: boolean) {
     const label = n.name.replace(/\.[^.]+$/, "");
     if (n.id) { tabs?.open(n.id, label, newTab); return; }
+    if (n.ext === "canvas") { tabs?.open(`canvas:${n.rel}`, label, newTab); return; }
     if (n.ext === "pdf") { tabs?.open(`pdf:${n.rel}`, label, newTab); return; }
     if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(n.ext ?? "")) {
       tabs?.open(`img:${n.rel}`, label, newTab); return;
@@ -217,7 +218,7 @@ export default function FileTree() {
       return (
         <div
           key={n.rel}
-          className={`row ${n.id ? "file" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` || activeId === `img:${n.rel}` ? " current" : ""}`}
+          className={`row ${n.id ? "file" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` || activeId === `img:${n.rel}` || activeId === `canvas:${n.rel}` ? " current" : ""}`}
           style={pad}
           title={n.rel}
           onContextMenu={onCtx}

@@ -5,7 +5,8 @@ import type { EditorView } from "@codemirror/view";
 import ArticlePane, { type Payload } from "./ArticlePane.tsx";
 import PdfViewer from "./PdfViewer.tsx";
 import GraphView from "./GraphView.tsx";
-import { publishActive, isPdfId, isImgId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
+import CanvasEditor from "./CanvasEditor.tsx";
+import { publishActive, isPdfId, isImgId, isCanvasId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 
 export interface Tab { id: string; title: string; }
@@ -13,7 +14,7 @@ export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
 
 // Definidos una sola vez en Tabs.tsx: la copia que vivía aquí no conocía el
 // grafo y habría producido /note/graph%3A al sincronizar la URL.
-export { isPdfId, isImgId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
+export { isPdfId, isImgId, isCanvasId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
 
 interface Ctx {
   open: (id: string, title: string, newTab?: boolean) => void;
@@ -346,6 +347,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                     <span className="otab-title">
                       {isPdfId(t.id) && <span className="otab-kind">PDF</span>}
                       {isImgId(t.id) && <span className="otab-kind">IMG</span>}
+                      {isCanvasId(t.id) && <span className="otab-kind">CANVAS</span>}
                       {t.title}
                     </span>
                     <button
@@ -375,6 +377,8 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       <GraphView />
                     </article>
                   </div>
+                ) : isCanvasId(p.activeId) ? (
+                  <CanvasEditor path={p.activeId.slice(7)} />
                 ) : isImgId(p.activeId) ? (
                   <div className="imgview">
                     <div className="imgbar">
