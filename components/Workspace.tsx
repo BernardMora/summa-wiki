@@ -29,10 +29,13 @@ export const useWorkspace = () => useContext(WsCtx);
 const KEY = "wiki.workspace";
 const newKey = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-type Zone = "left" | "right" | "center";
+/** "tabs" = sobre la barra de pestañas: reordenar en vez de dividir. */
+type Zone = "left" | "right" | "center" | "tabs";
 interface DragState {
   tab: Tab; fromPane: string; x: number; y: number;
   overPane: string | null; zone: Zone;
+  /** Posición de inserción dentro de la barra, solo cuando zone === "tabs". */
+  index: number | null;
 }
 
 /**
@@ -50,6 +53,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
   const [activePane, setActivePane] = useState("p0");
   const [ratio, setRatio] = useState(0.5);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const tabBars = useRef(new Map<string, HTMLElement>());
   const [barDrag, setBarDrag] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const paneEls = useRef(new Map<string, HTMLElement>());
@@ -124,6 +128,35 @@ export default function Workspace({ initial }: { initial: Payload }) {
       const from = ps.find((p) => p.key === d.fromPane);
       if (!from) return ps;
       const sameSolo = d.fromPane === d.overPane && from.tabs.length === 1;
+
+      // Reordenar / insertar en una posición concreta de la barra.
+      if (d.zone === "tabs" && d.index !== null) {
+        const target = ps.find((p) => p.key === d.overPane);
+        if (!target) return ps;
+        if (d.fromPane === d.overPane) {
+          const at = from.tabs.findIndex((t) => t.id === d.tab.id);
+          // El índice se calculó sobre la lista con la pestaña todavía dentro,
+          // así que al sacarla todo lo que venía después se corre uno.
+          const to = d.index > at ? d.index - 1 : d.index;
+          if (to === at) return ps;
+          const tabs = from.tabs.filter((t) => t.id !== d.tab.id);
+          tabs.splice(to, 0, d.tab);
+          return ps.map((p) => (p.key === d.fromPane ? { ...p, tabs, activeId: d.tab.id } : p));
+        }
+        return ps.map((p) => {
+          if (p.key === d.fromPane) {
+            const tabs = p.tabs.filter((t) => t.id !== d.tab.id);
+            return { ...p, tabs, activeId: p.activeId === d.tab.id ? (tabs.slice(-1)[0]?.id ?? null) : p.activeId };
+          }
+          if (p.key === d.overPane) {
+            const tabs = [...p.tabs];
+            tabs.splice(d.index!, 0, d.tab);
+            return { ...p, tabs, activeId: d.tab.id };
+          }
+          return p;
+        }).filter((p) => p.tabs.length > 0);
+      }
+
       if (d.zone === "center" && d.fromPane === d.overPane) return ps;
       if (sameSolo && d.zone !== "center") return ps;    // nothing to split off
 
@@ -192,18 +225,42 @@ export default function Workspace({ initial }: { initial: Payload }) {
     const move = (e: PointerEvent) => {
       let overPane: string | null = null;
       let zone: Zone = "center";
-      for (const [k, el] of paneEls.current) {
-        const r = el.getBoundingClientRect();
+      let index: number | null = null;
+
+      // La barra de pestañas se consulta primero: está dentro del panel, así que
+      // sin esta precedencia el arrastre siempre caería en dividir o mover.
+      for (const [k, bar] of tabBars.current) {
+        const r = bar.getBoundingClientRect();
         if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-          overPane = k;
-          const rel = (e.clientX - r.left) / r.width;
-          zone = rel < 0.28 ? "left" : rel > 0.72 ? "right" : "center";
+          overPane = k; zone = "tabs";
+          const tabs = [...bar.querySelectorAll<HTMLElement>(".otab")];
+          index = tabs.length;
+          for (let i = 0; i < tabs.length; i++) {
+            const tr = tabs[i].getBoundingClientRect();
+            if (e.clientX < tr.left + tr.width / 2) { index = i; break; }
+          }
+          break;
         }
       }
-      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY, overPane, zone } : d));
+      if (!overPane) {
+        for (const [k, el] of paneEls.current) {
+          const r = el.getBoundingClientRect();
+          if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+            overPane = k;
+            const rel = (e.clientX - r.left) / r.width;
+            zone = rel < 0.28 ? "left" : rel > 0.72 ? "right" : "center";
+          }
+        }
+      }
+      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY, overPane, zone, index } : d));
     };
     const up = () => {
-      setDrag((d) => { if (d) drop(d); return null; });
+      // drop() se llamaba dentro del updater de setDrag. React invoca los
+      // updaters dos veces en StrictMode, así que el efecto secundario corría
+      // duplicado: un solo arrastre creaba dos paneles y clonaba la pestaña.
+      // El efecto se resuscribe en cada movimiento, así que `drag` está al día.
+      drop(drag);
+      setDrag(null);
       document.body.classList.remove("dragging-tab");
     };
     window.addEventListener("pointermove", move);
@@ -225,7 +282,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
   }, [barDrag]);
 
   const overlayFor = (paneKey: string) => {
-    if (!drag || drag.overPane !== paneKey) return null;
+    if (!drag || drag.overPane !== paneKey || drag.zone === "tabs") return null;
     return <div className={`dropzone ${drag.zone}`} />;
   };
 
@@ -254,26 +311,37 @@ export default function Workspace({ initial }: { initial: Payload }) {
               ref={(el) => { if (el) paneEls.current.set(p.key, el); else paneEls.current.delete(p.key); }}
               onMouseDown={() => setActivePane(p.key)}
             >
-              <div className="panetabs">
-                {p.tabs.map((t) => (
+              <div
+                className="panetabs"
+                ref={(el) => { if (el) tabBars.current.set(p.key, el); else tabBars.current.delete(p.key); }}
+              >
+                {p.tabs.map((t, ti) => (
                   <div
                     key={t.id}
-                    className={`otab${t.id === p.activeId ? " on" : ""}${drag?.tab.id === t.id ? " ghosted" : ""}`}
+                    className={`otab${t.id === p.activeId ? " on" : ""}${drag?.tab.id === t.id ? " ghosted" : ""}`
+                      + (drag?.zone === "tabs" && drag.overPane === p.key && drag.index === ti ? " insbefore" : "")}
                     onPointerDown={(e) => {
                       if (e.button !== 0) return;
                       setActivePane(p.key);
                       setPanes((ps) => ps.map((q) => (q.key === p.key ? { ...q, activeId: t.id } : q)));
                       const startX = e.clientX, startY = e.clientY;
                       const el = e.currentTarget;
+                      // Sin capturar el puntero, un movimiento rápido lo saca de
+                      // la pestaña antes de cruzar el umbral de 5 px y el
+                      // arrastre nunca arranca.
+                      try { el.setPointerCapture(e.pointerId); } catch { /* no soportado */ }
                       const onMove = (ev: PointerEvent) => {
                         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 5) {
                           el.removeEventListener("pointermove", onMove as any);
                           document.body.classList.add("dragging-tab");
-                          setDrag({ tab: t, fromPane: p.key, x: ev.clientX, y: ev.clientY, overPane: null, zone: "center" });
+                          setDrag({ tab: t, fromPane: p.key, x: ev.clientX, y: ev.clientY, overPane: null, zone: "center", index: null });
                         }
                       };
                       el.addEventListener("pointermove", onMove as any);
-                      el.addEventListener("pointerup", () => el.removeEventListener("pointermove", onMove as any), { once: true });
+                      el.addEventListener("pointerup", () => {
+                        el.removeEventListener("pointermove", onMove as any);
+                        try { el.releasePointerCapture(e.pointerId); } catch { /* ya liberado */ }
+                      }, { once: true });
 
                     }}
                     title={t.id}
@@ -291,6 +359,9 @@ export default function Workspace({ initial }: { initial: Payload }) {
                     >×</button>
                   </div>
                 ))}
+                {drag?.zone === "tabs" && drag.overPane === p.key && drag.index === p.tabs.length && (
+                  <span className="insend" aria-hidden />
+                )}
               </div>
 
               <div className="panecontent">

@@ -722,3 +722,19 @@ kbd {
   font-size: 10.5px; color: var(--muted); background: var(--panel-grey);
   border: 1px solid var(--line-soft); border-radius: 8px; padding: 0 5px;
 }
+
+/* --------------------------------------------------- reordenar pestañas */
+/* Marca de inserción durante el arrastre. Se dibuja con un pseudo-elemento
+   para no alterar el layout de la barra: correr las pestañas al pasar por
+   encima hacía que el índice calculado saltara. */
+.otab.insbefore { position: relative; }
+.otab.insbefore::before {
+  content: ""; position: absolute; left: -1px; top: 4px; bottom: 4px;
+  width: 2px; background: var(--link); border-radius: 1px;
+}
+.insend {
+  width: 2px; align-self: stretch; margin: 4px 0;
+  background: var(--link); border-radius: 1px; flex: 0 0 auto;
+}
+body.dragging-tab .otab { cursor: grabbing; }
+.otab.ghosted { opacity: .4; }
