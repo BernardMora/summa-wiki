@@ -43,6 +43,7 @@ export default function PdfViewer({
   const docRef = useRef<any>(null);
   const [drawn, setDrawn] = useState(0);
   const [pages, setPages] = useState(0);
+  const pagesRef = useRef(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
   const [scale, setScale] = useState(1.25);
@@ -65,7 +66,7 @@ export default function PdfViewer({
   const render = useCallback(async () => {
     if (!host.current) return;
     const mine = ++gen.current;
-    setErr(""); setSlow(false); setPages(0);
+    setErr(""); setSlow(false); setPages(0); pagesRef.current = 0;
     host.current.innerHTML = "";
     const stall = setTimeout(() => { if (mine === gen.current) setSlow(true); }, 8000);
 
@@ -98,7 +99,7 @@ export default function PdfViewer({
       }).promise;
       if (mine !== gen.current) return;
       docRef.current = doc;
-      setPages(doc.numPages);
+      setPages(doc.numPages); pagesRef.current = doc.numPages;
 
       // One page decides the size for all, so every page renders the same width.
       const first = await doc.getPage(1);
@@ -188,6 +189,47 @@ export default function PdfViewer({
         span.style.fontSize = `${Math.abs(tx[3] || 10)}px`;
         layer.appendChild(span);
       });
+      // Capa de enlaces. Se construye a mano en vez de usar AnnotationLayer de
+      // pdf.js porque el módulo se carga con webpackIgnore desde /public y
+      // arrastrar su CSS por esa vía es más frágil que dibujar cuatro anclas.
+      try {
+        const anns = await pg.getAnnotations({ intent: "display" });
+        if (mine !== gen.current) return;
+        const links = document.createElement("div");
+        links.className = "pdflinks";
+        for (const a of anns as any[]) {
+          if (a.subtype !== "Link") continue;
+          const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(a.rect);
+          const el = document.createElement(a.url ? "a" : "button");
+          el.className = "pdflink";
+          el.style.left = `${Math.min(x1, x2)}px`;
+          el.style.top = `${Math.min(y1, y2)}px`;
+          el.style.width = `${Math.abs(x2 - x1)}px`;
+          el.style.height = `${Math.abs(y2 - y1)}px`;
+          if (a.url) {
+            const link = el as HTMLAnchorElement;
+            link.href = a.url;
+            link.target = "_blank";
+            // El PDF es contenido de terceros: nunca se le da acceso a opener.
+            link.rel = "noopener noreferrer";
+            link.title = a.url;
+          } else if (a.dest) {
+            // Destino interno: se salta a su página dentro del propio visor.
+            el.title = "Ir a la sección";
+            el.addEventListener("click", async (ev) => {
+              ev.preventDefault();
+              try {
+                const d = typeof a.dest === "string" ? await doc.getDestination(a.dest) : a.dest;
+                const idx = await doc.getPageIndex(d[0]);
+                goToPage(idx + 1);
+              } catch { /* destino ilegible */ }
+            });
+          } else continue;
+          links.appendChild(el);
+        }
+        if (links.childElementCount) wrap.appendChild(links);
+      } catch { /* PDF sin anotaciones legibles */ }
+
       wrap.dataset.state = "done";
       setDrawn((n) => n + 1);
     }
@@ -327,7 +369,11 @@ export default function PdfViewer({
   }, [pages, scale, path, drawNearby]);
 
   function goToPage(n: number) {
-    const target = Math.min(Math.max(1, n), pages || 1);
+    // Se lee por referencia: drawNearby es un useCallback con deps vacías, y su
+    // closure capturó el render inicial, donde `pages` todavía era 0 — los
+    // enlaces internos habrían saltado siempre a la página 1.
+    const total = pagesRef.current || pages || 1;
+    const target = Math.min(Math.max(1, n), total);
     wantPage.current = target;
     host.current?.querySelector(`.pdfpage[data-page="${target}"]`)
       ?.scrollIntoView({ block: "start", behavior: "smooth" });

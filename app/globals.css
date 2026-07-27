@@ -842,3 +842,16 @@ textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none;
   border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
 }
 .gfocus button:first-child { border-color: var(--link); color: var(--link); font-weight: 600; }
+
+/* Enlaces embebidos en un PDF: rectángulos transparentes sobre el canvas. */
+.pdflinks { position: absolute; inset: 0; }
+.pdflink {
+  position: absolute; display: block; padding: 0; margin: 0;
+  background: transparent; border: 0; border-radius: 2px; cursor: pointer;
+  /* Se insinúan al pasar por encima; marcarlos siempre taparía el documento. */
+  transition: background-color .12s, box-shadow .12s;
+}
+.pdflink:hover {
+  background: rgba(51, 102, 204, .18);
+  box-shadow: inset 0 0 0 1px var(--link);
+}
