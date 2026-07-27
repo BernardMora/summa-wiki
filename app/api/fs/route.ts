@@ -42,6 +42,20 @@ export async function POST(req: Request) {
 
   const isDir = fs.statSync(abs).isDirectory();
 
+  if (action === "mkdir") {
+    if (!isDir) return NextResponse.json({ error: "solo dentro de una carpeta" }, { status: 400 });
+    // Las carpetas conservan la forma del nombre, igual que en rename, pero se
+    // rechaza lo que rompería rutas: separadores, `..` y caracteres hostiles
+    // para URLs. Es la misma clase de problema que causó el bug NFD.
+    const base = (name ?? "").trim().replace(/[\/\\:*?"<>|]/g, "").replace(/^\.+/, "").trim();
+    if (!base) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
+    const dst = path.join(abs, base);
+    if (!safe(path.relative(VAULT, dst))) return NextResponse.json({ error: "ruta inválida" }, { status: 400 });
+    if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe" }, { status: 409 });
+    fs.mkdirSync(dst);
+    return NextResponse.json({ ok: true, rel: path.relative(VAULT, dst).split(path.sep).join("/") });
+  }
+
   if (action === "rename") {
     if (!name?.trim()) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
     // Files follow the slug rule from spec section 3; folders keep their name shape.

@@ -234,19 +234,17 @@ export default function ArticlePane({
               {m.agentWords > 0 && total > 0 && <span>{Math.round((100 * m.agentWords) / total)}% agente</span>}
             </p>
 
-            <div
-              style={{ display: tab === "article" ? "block" : "none" }}
-              onMouseUp={() => {
-                const v = viewRef.current;
-                setHasSel(Boolean(v && v.state.selection.main.from !== v.state.selection.main.to));
-              }}
-            >
+            {/* El estado de la selección lo reporta el editor, no un onMouseUp:
+                seleccionar con shift+flechas nunca disparaba ese evento y los
+                botones de procedencia se quedaban apagados. */}
+            <div style={{ display: tab === "article" ? "block" : "none" }}>
               <Editor
                 key={docVersion}
                 value={data.content}
                 onChange={onChange}
                 resolve={resolveHref}
                 onLinkQuery={setLinkQ}
+                onSelectionChange={setHasSel}
                 onNavigate={(url, text) => {
                   // ⌘clic abre en pestaña nueva. Antes hacía router.push, que
                   // remonta el workspace entero y cierra los paneles divididos.
