@@ -22,6 +22,7 @@ export default function FileTree() {
   const [selDir, setSelDir] = useState("");
   const [menu, setMenu] = useState<Menu | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
+  const [mkdirIn, setMkdirIn] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<Node | null>(null);
   const [draft, setDraft] = useState("");
   const [type, setType] = useState("knowledge");
@@ -100,6 +101,20 @@ export default function FileTree() {
     if (!r.ok) { setErr(d.error ?? "error"); return; }
     setCreatingIn(null); setDraft(""); await load();
     router.push(`/note/${encodeURIComponent(d.id)}`); router.refresh();
+  }
+
+  async function createFolder(parent: string) {
+    setErr("");
+    const r = await fetch("/api/fs", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mkdir", rel: parent, name: draft }),
+    });
+    const d = await r.json();
+    if (!r.ok) { setErr(d.error ?? "error"); return; }
+    setMkdirIn(null); setDraft("");
+    // Se abre la carpeta padre y la nueva, o se crea a ciegas.
+    setOpen((prev) => { const n = new Set(prev); n.add(parent); n.add(d.rel); return n; });
+    await load();
   }
 
   async function doRename(node: Node) {
@@ -191,6 +206,24 @@ export default function FileTree() {
               <span className="name">{n.name}</span>
             </div>
 
+            {mkdirIn === n.rel && (
+              <div className="newform" style={pad}>
+                <input
+                  autoFocus placeholder="Nombre de la carpeta" value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") createFolder(n.rel);
+                    if (e.key === "Escape") { setMkdirIn(null); setDraft(""); }
+                  }}
+                />
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => createFolder(n.rel)}>Crear</button>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => { setMkdirIn(null); setDraft(""); }}>Cancelar</button>
+                </div>
+                {err && <div className="err">{err}</div>}
+              </div>
+            )}
+
             {creatingIn === n.rel && (
               <div className="newform" style={{ marginLeft: 4 + depth * 11 }}>
                 <input
@@ -269,6 +302,12 @@ export default function FileTree() {
               setOpen((p) => new Set(p).add(menu.node.rel));
               setDraft(""); setErr(""); setMenu(null);
             }}>Nueva nota aquí</button>
+          )}
+          {menu.node.dir && (
+            <button onClick={() => {
+              setMkdirIn(menu.node.rel); setCreatingIn(null); setDraft(""); setMenu(null);
+              setOpen((p) => { const n = new Set(p); n.add(menu.node.rel); return n; });
+            }}>Nueva carpeta aquí</button>
           )}
           {!menu.node.dir && (menu.node.id || /\.pdf$/i.test(menu.node.name)) && (
             <button onClick={() => {

@@ -6,15 +6,36 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
 
-/** Wrap the current selection in provenance markers. Explicit, user-driven. */
+/**
+ * Envuelve la selección en marcadores de procedencia. Explícito, lo pide el usuario.
+ *
+ * Antes fallaba en silencio de dos maneras. Si la selección contenía algún
+ * marcador previo devolvía `false` sin decir nada, que es lo que pasaba al
+ * seleccionar mucho texto: te tragabas un bloque ya marcado y el botón parecía
+ * muerto. Y al abarcar varias líneas insertaba los marcadores en línea, lo que
+ * los metía dentro de un encabezado y rompía el markdown.
+ */
 export function markSelection(view: EditorView, kind: "human" | "ai") {
-  const { from, to } = view.state.selection.main;
+  let { from, to } = view.state.selection.main;
   if (from === to) return false;
-  const text = view.state.sliceDoc(from, to);
-  if (/<!--\s*\/?(ai|human)\s*-->/.test(text)) return false;   // already marked
+
+  const doc = view.state.doc;
+  const a = doc.lineAt(from), b = doc.lineAt(to);
+  const multi = a.number !== b.number;
+  // Abarcando varias líneas se expande a líneas completas: si no, el marcador
+  // quedaría a media línea de un encabezado o de una viñeta.
+  if (multi) { from = a.from; to = b.to; }
+
+  // Re-marcar reemplaza: se quitan los marcadores que hubiera dentro en vez de
+  // rechazar la operación.
+  const text = doc.sliceString(from, to).replace(/[ \t]*<!--\s*\/?(ai|human)\s*-->[ \t]*\n?/g, "");
+  const insert = multi
+    ? `<!-- ${kind} -->\n${text}\n<!-- /${kind} -->`
+    : `<!-- ${kind} -->${text}<!-- /${kind} -->`;
+
   view.dispatch({
-    changes: { from, to, insert: `<!-- ${kind} -->${text}<!-- /${kind} -->` },
-    selection: { anchor: from, head: from + text.length + kind.length * 2 + 22 },
+    changes: { from, to, insert },
+    selection: { anchor: from, head: from + insert.length },
   });
   return true;
 }
@@ -38,7 +59,7 @@ export function unmarkSelection(view: EditorView) {
 }
 
 export default function Editor({
-  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery,
+  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery, onSelectionChange,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -52,6 +73,8 @@ export default function Editor({
    * `null` cuando el patrón deja de estar bajo el cursor.
    */
   onLinkQuery?: (q: { query: string; from: number; to: number; x: number; y: number } | null) => void;
+  /** Se avisa en cada cambio de selección, venga del ratón o del teclado. */
+  onSelectionChange?: (hasSelection: boolean) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -59,6 +82,8 @@ export default function Editor({
   // se lee por referencia para no quedar congelado en el del primer render.
   const onLinkQueryRef = useRef(onLinkQuery);
   onLinkQueryRef.current = onLinkQuery;
+  const onSelRef = useRef(onSelectionChange);
+  onSelRef.current = onSelectionChange;
 
   useEffect(() => {
     if (!host.current || view.current) return;
@@ -112,6 +137,10 @@ export default function Editor({
           }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChange(u.state.doc.toString());
+            if (u.selectionSet || u.docChanged) {
+              const s = u.state.selection.main;
+              onSelRef.current?.(s.from !== s.to);
+            }
             if (!u.docChanged && !u.selectionSet) return;
             // Disparador `[[`: se busca hacia atrás desde el cursor, dentro de
             // la misma línea. Insertar la ruta completa a mano es justo lo que
