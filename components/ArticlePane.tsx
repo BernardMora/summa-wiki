@@ -24,6 +24,14 @@ type Tab = "article" | "data" | "links";
 const AUTOSAVE_MS = 900;
 
 /**
+ * Guardados en vuelo, por nota. Al cambiar de pestaña el panel se desmonta y
+ * vacía su autosave, pero ese PUT es asíncrono: si se vuelve enseguida, el
+ * GET podría leer el archivo antes de que aterrice. Esperar aquí cierra la
+ * carrera sin bloquear el desmontaje.
+ */
+const inFlight = new Map<string, Promise<unknown>>();
+
+/**
  * One article, complete: its own tabs, editor, autosave, provenance controls
  * and contents rail. Used for the main pane and for a note opened in a split,
  * so a side pane is a real article rather than a cut-down preview.
@@ -50,6 +58,7 @@ export default function ArticlePane({
   const [heads, setHeads] = useState<Head[]>(() => (initial ? parseHeads(initial.content) : []));
   const [view, setView] = useState<EditorView | null>(null);
   const [err, setErr] = useState("");
+  const [docVersion, setDocVersion] = useState(0);
 
   const viewRef = useRef<EditorView | null>(null);
   const savedRef = useRef(initial?.content ?? "");
@@ -60,16 +69,28 @@ export default function ArticlePane({
 
   const noteId = data?.id ?? id ?? "";
 
+  /**
+   * Siempre se relee al montar, incluso con `initial`. Ese payload es el
+   * snapshot del render en servidor del momento en que se cargó la página: al
+   * volver a una pestaña editada mostraba el contenido anterior. Sirve para
+   * pintar de inmediato, no como fuente de verdad.
+   */
   useEffect(() => {
-    if (initial || !id) return;
+    const nid = id ?? initial?.id;
+    if (!nid) return;
     let dead = false;
     (async () => {
-      const r = await fetch(`/api/note-full?id=${encodeURIComponent(id)}`);
-      if (!r.ok) { setErr("no se pudo abrir la nota"); return; }
+      await inFlight.get(nid)?.catch(() => {});
+      const r = await fetch(`/api/note-full?id=${encodeURIComponent(nid)}`, { cache: "no-store" });
+      if (!r.ok) { if (!initial) setErr("no se pudo abrir la nota"); return; }
       const d: Payload = await r.json();
       if (dead) return;
+      const changed = d.content !== savedRef.current;
       setData(d); savedRef.current = d.content; mtimeRef.current = d.mtimeMs;
       setHeads(parseHeads(d.content));
+      // CodeMirror construye su documento una sola vez, así que refrescar el
+      // estado no basta: hay que remontar el editor cuando el texto cambió.
+      if (changed) setDocVersion((v) => v + 1);
     })();
     return () => { dead = true; };
   }, [id, initial]);
@@ -80,10 +101,12 @@ export default function ArticlePane({
     const body = viewRef.current?.state.doc.toString();
     if (body === undefined || (body === savedRef.current && !force)) return;
     setStatus("guardando…");
-    const r = await fetch("/api/note", {
+    const req = fetch("/api/note", {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: noteId, content: body, mtimeMs: force ? undefined : mtimeRef.current }),
     });
+    inFlight.set(noteId, req);
+    const r = await req.finally(() => { if (inFlight.get(noteId) === req) inFlight.delete(noteId); });
     if (r.status === 409) { setConflict((await r.json()).currentContent); setStatus(""); return; }
     if (!r.ok) { setStatus("error al guardar"); return; }
     const d = await r.json();
@@ -184,6 +207,7 @@ export default function ArticlePane({
               }}
             >
               <Editor
+                key={docVersion}
                 value={data.content}
                 onChange={onChange}
                 resolve={resolveHref}
