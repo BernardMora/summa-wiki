@@ -23,6 +23,9 @@ export default function FileTree() {
   const [menu, setMenu] = useState<Menu | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [mkdirIn, setMkdirIn] = useState<string | null>(null);
+  const [dragRel, setDragRel] = useState<string | null>(null);
+  const [overDir, setOverDir] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
   const [renaming, setRenaming] = useState<Node | null>(null);
   const [draft, setDraft] = useState("");
   const [type, setType] = useState("knowledge");
@@ -117,6 +120,24 @@ export default function FileTree() {
     await load();
   }
 
+  /** Mueve `rel` dentro de la carpeta `dest` y repunta los enlaces del vault. */
+  async function moveTo(rel: string, dest: string) {
+    setErr("");
+    if (rel === dest || dest.startsWith(rel + "/")) return;
+    if (rel.split("/").slice(0, -1).join("/") === dest) return;   // ya está ahí
+    setMoving(true);
+    const r = await fetch("/api/fs", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "move", rel, name: dest }),
+    });
+    const d = await r.json();
+    setMoving(false);
+    if (!r.ok) { setErr(d.error ?? "no se pudo mover"); return; }
+    setOpen((p) => { const n = new Set(p); n.add(dest); return n; });
+    await load();
+    router.refresh();
+  }
+
   async function doRename(node: Node) {
     setErr("");
     const r = await fetch("/api/fs", {
@@ -196,8 +217,23 @@ export default function FileTree() {
         return (
           <div key={n.rel}>
             <div
-              className={`row dir${selDir === n.rel ? " sel" : ""}`}
+              className={`row dir${selDir === n.rel ? " sel" : ""}${overDir === n.rel ? " dropinto" : ""}`}
               style={pad}
+              draggable
+              onDragStart={(e) => { e.stopPropagation(); setDragRel(n.rel); e.dataTransfer.effectAllowed = "move"; }}
+              onDragEnd={() => { setDragRel(null); setOverDir(null); }}
+              onDragOver={(e) => {
+                if (!dragRel || dragRel === n.rel || n.rel.startsWith(dragRel + "/")) return;
+                e.preventDefault(); e.dataTransfer.dropEffect = "move";
+                if (overDir !== n.rel) setOverDir(n.rel);
+              }}
+              onDragLeave={() => setOverDir((d) => (d === n.rel ? null : d))}
+              onDrop={(e) => {
+                e.preventDefault(); e.stopPropagation();
+                const src = dragRel ?? e.dataTransfer.getData("text/plain");
+                setOverDir(null); setDragRel(null);
+                if (src) moveTo(src, n.rel);
+              }}
               onClick={() => { toggle(n.rel); setSelDir(n.rel); }}
               onContextMenu={onCtx}
               title={n.rel}
@@ -256,6 +292,9 @@ export default function FileTree() {
           className={`row ${n.id ? "file" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` || activeId === `img:${n.rel}` || activeId === `canvas:${n.rel}` ? " current" : ""}`}
           style={pad}
           title={n.rel}
+          draggable
+          onDragStart={(e) => { setDragRel(n.rel); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", n.rel); }}
+          onDragEnd={() => { setDragRel(null); setOverDir(null); }}
           onContextMenu={onCtx}
           onClick={(e) => openFile(n, e.metaKey || e.ctrlKey)}
           onDoubleClick={(e) => { e.preventDefault(); openFile(n, true); }}
@@ -271,7 +310,9 @@ export default function FileTree() {
 
   return (
     <div ref={boxRef}>
-      <div className="treehint">Clic derecho para crear, renombrar o borrar</div>
+      <div className="treehint">
+        {moving ? "Moviendo y repuntando enlaces…" : "Clic derecho para crear, renombrar o borrar · arrastra para mover"}
+      </div>
 
       {creatingIn === "" && (
         <div className="newform">

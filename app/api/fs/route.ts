@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { VAULT, invalidate } from "@/lib/server.ts";
 import { bundleOf } from "@/src/config.ts";
+import { relink } from "@/lib/relink.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,46 @@ export async function POST(req: Request) {
     if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe" }, { status: 409 });
     fs.mkdirSync(dst);
     return NextResponse.json({ ok: true, rel: path.relative(VAULT, dst).split(path.sep).join("/") });
+  }
+
+  if (action === "move") {
+    const destAbs = safe(name ?? "");                    // `name` lleva la carpeta destino
+    if (!destAbs || !fs.existsSync(destAbs) || !fs.statSync(destAbs).isDirectory())
+      return NextResponse.json({ error: "destino inválido" }, { status: 400 });
+    const dst = path.join(destAbs, path.basename(abs));
+    if (dst === abs) return NextResponse.json({ ok: true, unchanged: true });
+    // Mover una carpeta dentro de sí misma la borraría del árbol.
+    if (isDir && (destAbs === abs || destAbs.startsWith(abs + path.sep)))
+      return NextResponse.json({ error: "no se puede mover una carpeta dentro de sí misma" }, { status: 400 });
+    if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe algo con ese nombre ahí" }, { status: 409 });
+
+    // El mapa de movimientos se arma ANTES de mover: hay que saber a qué
+    // apuntaba cada ruta vieja para poder recalcular las relativas.
+    const relOf = (p: string) => path.relative(VAULT, p).split(path.sep).join("/");
+    const moves = new Map<string, string>();
+    if (isDir) {
+      const stack = [abs];
+      while (stack.length) {
+        const d = stack.pop()!;
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const child = path.join(d, e.name);
+          if (e.isDirectory()) stack.push(child);
+          else moves.set(relOf(child), relOf(path.join(dst, path.relative(abs, child))));
+        }
+      }
+    } else {
+      moves.set(relOf(abs), relOf(dst));
+    }
+
+    fs.renameSync(abs, dst);
+    // Sin esto el vault queda con enlaces rotos en silencio, que es justo lo
+    // que más caro ha costado arreglar a mano.
+    const r = relink(moves);
+    invalidate();
+    return NextResponse.json({
+      ok: true, rel: relOf(dst), id: idOf(dst),
+      relinked: r,
+    });
   }
 
   if (action === "rename") {
