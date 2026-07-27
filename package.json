@@ -9,11 +9,12 @@
   },
   "scripts": {
     "dev": "next dev -p 4321",
-    "build": "next build",
-    "start": "next start -p 4321",
+    "build": "NEXT_BUILD_DIR=.next-build next build",
+    "start": "NEXT_BUILD_DIR=.next-build next start -p 4321",
     "wiki": "node --experimental-strip-types --no-warnings src/cli.ts",
     "index": "node --experimental-strip-types --no-warnings src/cli.ts index",
-    "health": "node --experimental-strip-types --no-warnings src/cli.ts health"
+    "health": "node --experimental-strip-types --no-warnings src/cli.ts health",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.0",

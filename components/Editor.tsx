@@ -43,7 +43,7 @@ export default function Editor({
   value: string;
   onChange: (v: string) => void;
   resolve: (href: string) => string | null;
-  onNavigate: (url: string) => void;
+  onNavigate: (url: string, text: string) => void;
   onReady?: (view: EditorView) => void;
   /** Uploads a pasted image and returns the href to link, or null on failure. */
   onPasteImage?: (file: File) => Promise<string | null>;
