@@ -147,6 +147,28 @@ function onTerminalConnection(ws: WebSocket, req: import("node:http").IncomingMe
       } catch { /* mensaje de resize corrupto: se ignora, no tira la sesión */ }
       return;
     }
+    // U+E001 = Shift+Space. Qué byte toca mandar depende de quién esté al
+    // frente del pty, y eso solo se sabe aquí:
+    //
+    // - Claude Code: ESC+CR (Meta+Enter) mete un salto de línea en la caja
+    //   de entrada sin enviar el mensaje. Comprobado contra el binario.
+    //
+    // - Cualquier otra cosa — el prompt de zsh, sobre todo: un espacio y ya.
+    //   Es lo que hace la terminal de VS Code, y es lo correcto: Shift+Space
+    //   no es una tecla aparte, un espacio con mayúscula sigue siendo un
+    //   espacio. Antes se mandaba el salto siempre, y en el prompt eso
+    //   partía el comando en dos renglones — o peor, con LF, lo ejecutaba
+    //   (`^J` es `accept-line` en zsh, igual que `^M`).
+    //
+    // `term.process` es el proceso en primer plano del pty, no el hijo que
+    // se lanzó: dice "zsh" en el prompt y "claude.exe" mientras corre
+    // Claude Code, y vuelve a "zsh" al salir.
+    if (s.charCodeAt(0) === 0xE001) {
+      let fg = "";
+      try { fg = session.term.process; } catch { /* sin proceso legible: se trata como shell */ }
+      session.term.write(/claude/i.test(fg) ? "\x1b\r" : " ");
+      return;
+    }
     session.term.write(s);
   });
 

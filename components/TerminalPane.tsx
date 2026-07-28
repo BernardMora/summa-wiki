@@ -94,26 +94,19 @@ export default function TerminalPane({ id }: { id: string }) {
       // quedaba el navegador (navegar atrás/adelante) o el textarea oculto
       // (mover el cursor dentro de él, invisible en la pantalla del
       // terminal) en vez de llegar a la shell. Se envían los mismos
-      // controles que usa Terminal.app con zsh/readline. Shift+Space no es
-      // una tecla de por sí — un espacio con mayúscula sigue siendo un
-      // espacio — así que se manda la secuencia que significa "salto de
-      // línea sin enviar": ESC+CR, o sea Meta+Enter (Option+Enter en el
-      // teclado de macOS).
+      // controles que usa Terminal.app con zsh/readline.
       //
-      // Antes se mandaba LF (\n, el byte de Ctrl+J). En Claude Code
-      // funciona — comprobado contra el binario, LF y ESC+CR meten el
-      // mismo salto — pero en el prompt de zsh `^J` está bindeado a
-      // `accept-line` igual que `^M`: Shift+Space EJECUTABA el comando en
-      // vez de partirlo en dos renglones. ESC+CR sirve en los dos: en zsh
-      // `^[^M` es `self-insert-unmeta`, que inserta el salto en el buffer
-      // sin aceptarlo.
+      // Shift+Space no manda un byte fijo, sino la marca U+E001, porque el
+      // byte correcto depende de qué proceso esté al frente y eso solo lo
+      // sabe el servidor (ver server.ts). Resumen: dentro de Claude Code
+      // es un salto de línea; en el prompt de la shell, un espacio normal.
       term.attachCustomKeyEventHandler((e) => {
         if (e.type !== "keydown") return true;
         const send = (bytes: string) => { e.preventDefault(); if (ws.readyState === ws.OPEN) ws.send(bytes); return false; };
         if (e.metaKey && e.key === "ArrowLeft") return send("\x01");   // Ctrl-A: inicio de línea
         if (e.metaKey && e.key === "ArrowRight") return send("\x05");  // Ctrl-E: fin de línea
         if (e.metaKey && e.key === "Backspace") return send("\x15");   // Ctrl-U: borrar la línea
-        if (e.shiftKey && e.key === " ") return send("\x1b\r");        // ESC+CR: nueva línea sin enviar
+        if (e.shiftKey && e.key === " ") return send("");        // el servidor decide el byte
         return true;
       });
 
