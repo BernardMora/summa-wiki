@@ -8,7 +8,7 @@ import GraphView from "./GraphView.tsx";
 import CanvasEditor from "./CanvasEditor.tsx";
 import RawFilePane from "./RawFilePane.tsx";
 import TerminalPane from "./TerminalPane.tsx";
-import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isTermId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
+import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isTermId, isFileId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 
 export interface Tab { id: string; title: string; }
@@ -213,11 +213,12 @@ export default function Workspace({ initial }: { initial: Payload }) {
   const focused = panes.find((p) => p.key === activePane)?.activeId ?? null;
   useEffect(() => { publishActive(focused); }, [focused]);
 
-  // Keep the address bar on the focused NOTE. File tabs deliberately do not
-  // rewrite it: /pdf is a standalone route, and pointing the URL there would
-  // reload into a single PDF instead of this workspace.
+  // Keep the address bar on the focused NOTE. File tabs (pdf/img/canvas/raw)
+  // and the terminal deliberately do not rewrite it: each of those has its
+  // own standalone route, and reloading into it would land outside the
+  // workspace — no other tab, no restored layout, nothing to come back to.
   useEffect(() => {
-    if (focused && !isPdfId(focused) && !isImgId(focused)) {
+    if (focused && !isFileId(focused) && !isTermId(focused)) {
       window.history.replaceState(null, "", hrefFor(focused));
     }
   }, [focused]);
