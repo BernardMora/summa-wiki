@@ -106,7 +106,10 @@ export default function TerminalPane({ id }: { id: string }) {
         if (e.metaKey && e.key === "ArrowLeft") return send("\x01");   // Ctrl-A: inicio de línea
         if (e.metaKey && e.key === "ArrowRight") return send("\x05");  // Ctrl-E: fin de línea
         if (e.metaKey && e.key === "Backspace") return send("\x15");   // Ctrl-U: borrar la línea
-        if (e.shiftKey && e.key === " ") return send("");        // el servidor decide el byte
+        // `code` además de `key`: el primero es la tecla física, y no depende
+        // de la distribución del teclado ni de cómo el navegador decida
+        // reportar un espacio con mayúscula.
+        if (e.shiftKey && (e.key === " " || e.code === "Space")) return send("");
         return true;
       });
 

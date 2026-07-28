@@ -41,6 +41,9 @@ import { sessions, appendBuffer, type Session } from "./lib/termSessions.ts";
  */
 
 const dev = process.env.NODE_ENV !== "production";
+// TERM_DEBUG=1 traza el camino de Shift+Space (y nada más de lo que se teclea)
+// para diagnosticar en un navegador al que no se puede asomar uno.
+const DEBUG = process.env.TERM_DEBUG === "1";
 const port = Number(process.env.PORT ?? 4321);
 const termPort = port + 1;
 const app = next({ dev });
@@ -166,9 +169,14 @@ function onTerminalConnection(ws: WebSocket, req: import("node:http").IncomingMe
     if (s.charCodeAt(0) === 0xE001) {
       let fg = "";
       try { fg = session.term.process; } catch { /* sin proceso legible: se trata como shell */ }
-      session.term.write(/claude/i.test(fg) ? "\x1b\r" : " ");
+      const bytes = /claude/i.test(fg) ? "\x1b\r" : " ";
+      if (DEBUG) console.log(`[term] Shift+Space -> proceso al frente: ${JSON.stringify(fg)}; escribo ${JSON.stringify(bytes)}`);
+      session.term.write(bytes);
       return;
     }
+    // Un espacio pelón cuando se esperaba la marca significa que el handler
+    // del navegador no disparó — el byte llegó como espacio normal.
+    if (DEBUG && s === " ") console.log("[term] llegó un espacio simple (el handler del navegador no disparó)");
     session.term.write(s);
   });
 
