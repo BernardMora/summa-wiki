@@ -62,6 +62,7 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
 
   const drag = useRef<Drag | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const editingRef = useRef<HTMLTextAreaElement | null>(null);
   const mtime = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirty = useRef(false);
@@ -126,6 +127,24 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
   // ------------------------------------------------------------- operaciones
   const patchNode = (id: string, p: Partial<CNode>) =>
     commit(nodes.map((n) => (n.id === id ? { ...n, ...p } : n)), edges);
+
+  /**
+   * Cierra la edición guardando lo escrito, en vez de dejárselo al blur del
+   * textarea. Al hacer clic en el lienzo vacío para salir, ese pointerdown
+   * también dispara `setEditing(null)` — y ese React state update se aplica
+   * antes de que el navegador complete el cambio de foco que dispara blur, así
+   * que el textarea se desmontaba sin que su valor llegara a guardarse: el
+   * nodo volvía a su texto anterior. Leer el DOM del textarea aquí, de forma
+   * síncrona, evita la carrera por completo.
+   */
+  const stopEditing = () => {
+    const id = editing;
+    if (!id) return;
+    const ta = editingRef.current;
+    editingRef.current = null;
+    if (ta) patchNode(id, { text: ta.value });
+    setEditing(null);
+  };
 
   const addNode = (x: number, y: number) => {
     const n: CNode = { id: uid(), type: "text", text: "Nuevo nodo", x: Math.round(x), y: Math.round(y), width: 250, height: 120 };
@@ -232,7 +251,15 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
   const link = drag.current?.kind === "link" ? drag.current : null;
 
   return (
-    <div className="cvwrap">
+    <div
+      className="cvwrap"
+      onPointerDownCapture={(e) => {
+        // Cualquier clic fuera del textarea abierto cierra la edición y la
+        // guarda primero — así el drag/pan/selección que ese mismo clic vaya
+        // a iniciar ya actúa sobre el texto correcto.
+        if (editing && !editingRef.current?.contains(e.target as Node)) stopEditing();
+      }}
+    >
       <div className="cvbar">
         <button onClick={() => { const b = wrap.current!.getBoundingClientRect();
           addNode((b.width / 2 - view.x) / view.k - 125, (b.height / 2 - view.y) / view.k - 60); }}>
@@ -344,11 +371,12 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
                 {editing === n.id ? (
                   <textarea
                     autoFocus
+                    ref={(el) => { editingRef.current = el; }}
                     className="cvtext"
                     defaultValue={n.text ?? ""}
                     onPointerDown={(e) => e.stopPropagation()}
-                    onBlur={(e) => { setEditing(null); patchNode(n.id, { text: e.target.value }); }}
-                    onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLTextAreaElement).blur(); }}
+                    onBlur={stopEditing}
+                    onKeyDown={(e) => { if (e.key === "Escape") stopEditing(); }}
                   />
                 ) : (
                   <div className="cvtext read">{n.text}</div>
@@ -386,12 +414,6 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
           })}
         </div>
       </div>
-
-      <p className="cvhelp dim">
-        doble clic en vacío crea un nodo · doble clic en un nodo edita su texto ·
-        arrastra desde un punto del borde para conectar · Supr elimina lo seleccionado ·
-        rueda para zoom
-      </p>
     </div>
   );
 }

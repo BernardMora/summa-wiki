@@ -12,9 +12,11 @@ export default async function CanvasPage({
   if (!p) return <article><h1>Canvas</h1><p className="dim">Falta el parámetro p.</p></article>;
   const name = p.split("/").pop() ?? p;
   return (
-    <article>
-      <h1 style={{ fontSize: 22 }}>{name}</h1>
-      <div style={{ marginBottom: 10 }}><Crumb vaultPath={p} /></div>
+    <article className="canvaspage">
+      <header className="canvaspage-head">
+        <h1 style={{ fontSize: 22 }}>{name}</h1>
+        <Crumb vaultPath={p} />
+      </header>
       <CanvasEditor path={p} />
     </article>
   );
