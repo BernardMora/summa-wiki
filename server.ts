@@ -47,6 +47,43 @@ const app = next({ dev });
 const handle = app.getRequestHandler();
 
 /**
+ * La terminal debe ser una shell nueva de verdad, no heredar el entorno del
+ * árbol de procesos que lanzó el servidor. Tres cosas se filtran:
+ *
+ * - `CLAUDE_CODE_*` (p. ej. si `npm run dev` se arrancó desde dentro de una
+ *   sesión de Claude Code): `CLAUDE_CODE_CHILD_SESSION` hace que cualquier
+ *   `claude` corrido dentro de la terminal integrada se cree como sesión
+ *   hija y desactive el guardado de transcripciones.
+ *
+ * - `EDITOR` / `VISUAL`, pero solo si nos lanzó npm. **npm inyecta
+ *   `EDITOR=vi`** en los scripts que corre (es el default de su config
+ *   `editor`), y zsh usa esa variable para decidir su keymap: si contiene
+ *   "vi" arranca en `viins` en vez de `emacs`. En `viins`, `^A` está
+ *   bindeado a `self-insert` — así que Cmd+izquierda insertaba un `^A`
+ *   literal en la línea en vez de mover el cursor. Cmd+Delete sí
+ *   funcionaba, y eso despistaba: `^U` lo maneja el driver del kernel
+ *   (`kill = ^U` en stty), no zle, así que era inmune al keymap.
+ *   Comprobado con un A/B: `node server.ts` no define EDITOR, `npm run dev`
+ *   la define como `vi`. Si el usuario quiere un editor concreto, su
+ *   `.zshrc` lo exporta — que es justo lo que hace una shell de login.
+ *
+ * - `npm_*`: higiene; una shell interactiva no debería creerse dentro de un
+ *   script de npm.
+ */
+function shellEnv(): Record<string, string> {
+  const porNpm = Boolean(process.env.npm_execpath || process.env.npm_lifecycle_event);
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue;
+    if (k.startsWith("CLAUDE_CODE_")) continue;
+    if (k.toLowerCase().startsWith("npm_")) continue;
+    if (porNpm && (k === "EDITOR" || k === "VISUAL")) continue;
+    env[k] = v;
+  }
+  return env;
+}
+
+/**
  * La pty se guarda en `sessions` por id (uno por pestaña) y sobrevive a la
  * conexión: cambiar de pestaña, mover el panel o incluso recargar la página
  * solo cierra el WebSocket, nunca la shell. Cerrar la pestaña con la × sí la
@@ -63,11 +100,13 @@ function onTerminalConnection(ws: WebSocket, req: import("node:http").IncomingMe
     const shell = process.env.SHELL ?? "/bin/zsh";
     let term: ReturnType<typeof pty.spawn>;
     try {
-      term = pty.spawn(shell, ["-l"], {
+      // Login e interactiva, como la que da Terminal.app. -i es explícito
+      // en vez de confiar en que zsh deduzca la interactividad del pty.
+      term = pty.spawn(shell, ["-il"], {
         name: "xterm-256color",
         cols: 80, rows: 24,
         cwd: VAULT,
-        env: process.env as Record<string, string>,
+        env: shellEnv(),
       });
     } catch (e) {
       // El binario prebuilt de node-pty (spawn-helper) a veces se instala sin
@@ -95,9 +134,13 @@ function onTerminalConnection(ws: WebSocket, req: import("node:http").IncomingMe
 
   ws.on("message", (raw) => {
     const s = raw.toString();
-    // Un solo byte de control distingue un resize de una pulsación: ningún
-    // tecleo real empieza por \x01, así que no hay ambigüedad que resolver.
-    if (s.charCodeAt(0) === 1) {
+    // U+E000 (zona de uso privado de Unicode) distingue un resize de una
+    // pulsación real. \x01 parecía seguro — ningún tecleo normal lo produce
+    // — hasta que Cmd+flecha empezó a mandar Ctrl-A de verdad: cada Ctrl-A
+    // se leía como un resize corrupto y se descartaba en silencio antes de
+    // llegar a la shell. U+E000 no lo produce ningún teclado ni ninguna
+    // combinación de control.
+    if (s.charCodeAt(0) === 0xE000) {
       try {
         const { cols, rows } = JSON.parse(s.slice(1));
         if (cols > 0 && rows > 0) session.term.resize(cols, rows);

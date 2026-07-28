@@ -80,12 +80,34 @@ export default function TerminalPane({ id }: { id: string }) {
 
       const sendResize = () => {
         fit.fit();
-        if (ws.readyState === ws.OPEN) ws.send("\x01" + JSON.stringify({ cols: term.cols, rows: term.rows }));
+        // U+E000: ver el comentario en server.ts — \x01 colisionaba con
+        // Ctrl-A, un tecleo real (Cmd+flecha lo manda para ir al inicio de
+        // línea).
+        if (ws.readyState === ws.OPEN) ws.send("" + JSON.stringify({ cols: term.cols, rows: term.rows }));
       };
       ws.onopen = sendResize;
       ws.onmessage = (e) => term.write(e.data as string);
       ws.onclose = () => term.write("\r\n\x1b[2m— sesión terminada —\x1b[0m\r\n");
       term.onData((s) => { if (ws.readyState === ws.OPEN) ws.send(s); });
+
+      // xterm no tiene mapeo propio para estos: Cmd+flecha/Delete se los
+      // quedaba el navegador (navegar atrás/adelante) o el textarea oculto
+      // (mover el cursor dentro de él, invisible en la pantalla del
+      // terminal) en vez de llegar a la shell. Se envían los mismos
+      // controles que usa Terminal.app con zsh/readline. Shift+Space no es
+      // una tecla de por sí — un espacio con mayúscula sigue siendo un
+      // espacio — así que se manda el mismo byte (LF) que Ctrl+J: es la
+      // señal que Claude Code interpreta como "nueva línea sin enviar",
+      // sin importar qué combinación la disparó.
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type !== "keydown") return true;
+        const send = (bytes: string) => { e.preventDefault(); if (ws.readyState === ws.OPEN) ws.send(bytes); return false; };
+        if (e.metaKey && e.key === "ArrowLeft") return send("\x01");   // Ctrl-A: inicio de línea
+        if (e.metaKey && e.key === "ArrowRight") return send("\x05");  // Ctrl-E: fin de línea
+        if (e.metaKey && e.key === "Backspace") return send("\x15");   // Ctrl-U: borrar la línea
+        if (e.shiftKey && e.key === " ") return send("\n");            // LF: nueva línea sin enviar
+        return true;
+      });
 
       const ro = new ResizeObserver(sendResize);
       // Repinta cuando cambia el tema (toggle explícito o preferencia del
@@ -101,8 +123,16 @@ export default function TerminalPane({ id }: { id: string }) {
     }
 
     // El host cambia en cada montaje real (tab distinto en el DOM) aunque el
-    // id sea el mismo; reengancha el lienzo de xterm ahí.
-    if (!host.contains(entry.term.element ?? null)) entry.term.open(host);
+    // id sea el mismo — p. ej. al arrastrar la pestaña a otro panel para la
+    // vista dividida. Reparenta el nodo del terminal en vez de reabrirlo:
+    // xterm.open() exige que el contenedor ya tenga dimensiones reales en
+    // ese instante, y el panel recién creado por el split puede no haber
+    // asentado su layout todavía — se veía como una terminal que ya no
+    // pintaba texto tras moverla, aunque los datos le siguieran llegando.
+    // Mover el DOM ya renderizado no reinicializa nada.
+    if (!host.contains(entry.term.element ?? null) && entry.term.element) {
+      host.appendChild(entry.term.element);
+    }
     entry.fit.fit();
     entry.term.focus();
     entry.ro.observe(host);
