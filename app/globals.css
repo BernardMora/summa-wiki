@@ -747,26 +747,31 @@ kbd {
 body.dragging-tab .otab { cursor: grabbing; }
 .otab.ghosted { opacity: .4; }
 
-/* -------------------------------------------------- página propia de canvas */
+/* --------------------------------------------- páginas propias de pestaña */
 /*
- * /canvas?p=... es adonde recarga una pestaña de canvas: fuera del workspace
- * de pestañas, dentro del <article> normal de .content. Sin este bloque, la
- * nota "está sola" — sin pestañas — y el lienzo se queda con el min-height
- * de .cvstage (420px) en vez de llenar la página, porque .content solo da
- * min-height, no una altura definida contra la que height:100% pueda
- * resolver. Cancela el padding de .content como ya hace .tabstrip, y fija una
- * altura real de viewport para que .cvwrap (flex:1) sí tenga contra qué crecer.
+ * /canvas?p=... y /terminal son adonde recarga una pestaña de canvas o de
+ * terminal: fuera del workspace de pestañas, dentro del <article> normal de
+ * .content. Sin este bloque, la nota "está sola" — sin pestañas — y el
+ * contenido se queda con su min-height propio en vez de llenar la página,
+ * porque .content solo da min-height, no una altura definida contra la que
+ * height:100%/flex:1 pueda resolver. Cancela el padding de .content como ya
+ * hace .tabstrip, y fija una altura real de viewport para que el hijo
+ * flex:1 (.cvwrap o .termhost) sí tenga contra qué crecer.
  */
-.canvaspage {
+.canvaspage, .termpage {
   display: flex; flex-direction: column; min-height: 0;
   margin: -20px -30px 0; padding: 18px 30px 14px;
   height: calc(100vh - 62px); box-sizing: border-box;
 }
-.canvaspage-head { flex: 0 0 auto; margin-bottom: 10px; }
-.canvaspage .cvwrap { flex: 1; }
+.canvaspage-head, .termpage-head { flex: 0 0 auto; margin-bottom: 10px; }
+.canvaspage .cvwrap, .termpage .termhost { flex: 1; }
 @media (max-width: 850px) {
-  .canvaspage { margin: -18px -16px 0; padding: 16px 16px 14px; }
+  .canvaspage, .termpage { margin: -18px -16px 0; padding: 16px 16px 14px; }
 }
+
+/* ------------------------------------------------------------- terminal */
+.termhost { flex: 1; min-height: 0; padding: 6px 0 0 8px; }
+.termhost .xterm-viewport { overflow-y: auto; }
 
 /* ------------------------------------------------------- editor de canvas */
 .cvwrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }

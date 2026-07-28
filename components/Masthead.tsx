@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "./ThemeToggle.tsx";
+import { openInWorkspace, newTermId } from "./Tabs.tsx";
 
 interface Hit { id: string; title: string; path: string; type: string; bundle: string; }
 
@@ -63,6 +64,13 @@ export default function Masthead() {
         )}
       </div>
 
+      <button
+        className="themebtn"
+        title="Abrir una terminal en una pestaña nueva"
+        onClick={() => openInWorkspace(newTermId(), "Terminal", true)}
+      >
+        ⌗ Terminal
+      </button>
       <ThemeToggle />
     </header>
   );

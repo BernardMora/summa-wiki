@@ -7,7 +7,8 @@ import PdfViewer from "./PdfViewer.tsx";
 import GraphView from "./GraphView.tsx";
 import CanvasEditor from "./CanvasEditor.tsx";
 import RawFilePane from "./RawFilePane.tsx";
-import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
+import TerminalPane from "./TerminalPane.tsx";
+import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isTermId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 
 export interface Tab { id: string; title: string; }
@@ -15,7 +16,7 @@ export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
 
 // Definidos una sola vez en Tabs.tsx: la copia que vivía aquí no conocía el
 // grafo y habría producido /note/graph%3A al sincronizar la URL.
-export { isPdfId, isImgId, isCanvasId, isRawId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
+export { isPdfId, isImgId, isCanvasId, isRawId, isTermId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
 
 interface Ctx {
   open: (id: string, title: string, newTab?: boolean) => void;
@@ -109,6 +110,9 @@ export default function Workspace({ initial }: { initial: Payload }) {
   }, [activePane]);
 
   const closeTab = useCallback((paneKey: string, id: string) => {
+    // La pty sobrevive a cambiar de pestaña o recargar (server.ts) — cerrarla
+    // de verdad es la única acción que debe matarla.
+    if (isTermId(id)) fetch(`/api/terminal?id=${encodeURIComponent(id.slice(5))}`, { method: "DELETE" });
     setPanes((ps) => {
       const next = ps.map((p) => {
         if (p.key !== paneKey) return p;
@@ -349,6 +353,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                       {isPdfId(t.id) && <span className="otab-kind">PDF</span>}
                       {isImgId(t.id) && <span className="otab-kind">IMG</span>}
                       {isCanvasId(t.id) && <span className="otab-kind">CANVAS</span>}
+                      {isTermId(t.id) && <span className="otab-kind">TERM</span>}
                       {t.title}
                     </span>
                     <button
@@ -382,6 +387,10 @@ export default function Workspace({ initial }: { initial: Payload }) {
                   <RawFilePane rel={p.activeId.slice(4)} />
                 ) : isCanvasId(p.activeId) ? (
                   <CanvasEditor path={p.activeId.slice(7)} />
+                ) : isTermId(p.activeId) ? (
+                  // Keyed por id: cada pestaña es su propia conexión/pty: no
+                  // deben compartir instancia al reordenar u ocultar paneles.
+                  <TerminalPane key={p.activeId} id={p.activeId.slice(5)} />
                 ) : isImgId(p.activeId) ? (
                   <div className="imgview">
                     <div className="imgbar">
