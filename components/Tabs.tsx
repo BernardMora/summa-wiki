@@ -18,13 +18,21 @@ export const isCanvasId = (id: string) => id.startsWith("canvas:");
 export const isRawId = (id: string) => id.startsWith("raw:");
 export const isPdfId = (id: string) => id.startsWith("pdf:");
 export const isImgId = (id: string) => id.startsWith("img:");
+/** Shell real dentro de la app; el sufijo solo distingue pestañas entre sí. */
+export const isTermId = (id: string) => id.startsWith("term:");
 export const isFileId = (id: string) => isPdfId(id) || isImgId(id) || isCanvasId(id) || isRawId(id);
 export const hrefFor = (id: string) =>
   isGraphId(id) ? "/graph"
   : isCanvasId(id) ? `/canvas?p=${encodeURIComponent(id.slice(7))}`
+  : isTermId(id) ? `/terminal?id=${encodeURIComponent(id.slice(5))}`
   : isRawId(id) ? `/api/asset?p=${encodeURIComponent(id.slice(4))}`
   : isFileId(id) ? `/pdf?p=${encodeURIComponent(id.slice(4))}`
   : `/note/${encodeURIComponent(id)}`;
+
+let termSeq = 0;
+/** Id único por pestaña; el servidor no le da ningún significado, cada
+ *  conexión abre su propia pty. */
+export const newTermId = () => `term:${Date.now().toString(36)}${(termSeq++).toString(36)}`;
 
 let activeId: string | null = null;
 const listeners = new Set<() => void>();

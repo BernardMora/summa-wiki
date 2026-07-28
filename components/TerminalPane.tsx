@@ -1,0 +1,123 @@
+"use client";
+import { useEffect, useRef } from "react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
+
+/**
+ * Shell real dentro de la app — para no saltar de pestaña a correr Claude
+ * Code (u otro comando) mientras se trabaja en una nota.
+ *
+ * La pty vive en el servidor (server.ts) bajo `id`, no en esta conexión:
+ * cambiar de pestaña, mover el panel o recargar la página solo cierra el
+ * WebSocket, no la shell — al volver, se reengancha a la misma sesión y
+ * redibuja lo último que había en pantalla. Cerrar la pestaña con la × sí la
+ * mata (ver Workspace.tsx → closeTab).
+ *
+ * Se conecta al puerto principal + 1, no al mismo puerto que sirve las
+ * páginas — ver el comentario grande en server.ts sobre por qué la terminal
+ * necesita su propio `http.Server`.
+ */
+
+function currentTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name: string) => cs.getPropertyValue(name).trim() || undefined;
+  return { background: v("--bg"), foreground: v("--fg"), cursor: v("--fg"), selectionBackground: v("--sel") };
+}
+
+interface Entry {
+  term: Terminal;
+  fit: FitAddon;
+  ws: WebSocket;
+  ro: ResizeObserver;
+  mo: MutationObserver;
+  mq: MediaQueryList;
+  repaint: () => void;
+  teardown: ReturnType<typeof setTimeout> | null;
+}
+
+/**
+ * Un WebSocket + Terminal por id, fuera de React — para sobrevivir al doble
+ * montaje de efectos que hace StrictMode en desarrollo (monta → limpia →
+ * monta, contra el mismo host, en microsegundos).
+ *
+ * Sin esto, cada apertura de una pestaña abría dos conexiones reales de
+ * WebSocket casi simultáneas al mismo id. En vez de perseguir esa carrera a
+ * nivel de red, se evita crear la segunda conexión: la limpieza real se
+ * difiere, y si el mismo id vuelve a montarse antes de que corra, se cancela
+ * y se reutiliza tal cual. Un cambio de pestaña genuino, segundos después, sí
+ * llega a limpiar y a abrir una conexión nueva — solo la ventana de
+ * milisegundos de StrictMode queda absorbida.
+ */
+const registry = new Map<string, Entry>();
+
+export default function TerminalPane({ id }: { id: string }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    let entry = registry.get(id);
+    if (entry && entry.teardown !== null) {
+      clearTimeout(entry.teardown);
+      entry.teardown = null;
+    } else if (!entry) {
+      const term = new Terminal({
+        fontFamily: "ui-monospace, Menlo, monospace",
+        fontSize: 13,
+        cursorBlink: true,
+        theme: currentTheme(),
+      });
+      const fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(host);
+      fit.fit();
+
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const termPort = Number(location.port || (location.protocol === "https:" ? 443 : 80)) + 1;
+      const ws = new WebSocket(`${proto}//${location.hostname}:${termPort}/api/terminal?id=${encodeURIComponent(id)}`);
+
+      const sendResize = () => {
+        fit.fit();
+        if (ws.readyState === ws.OPEN) ws.send("\x01" + JSON.stringify({ cols: term.cols, rows: term.rows }));
+      };
+      ws.onopen = sendResize;
+      ws.onmessage = (e) => term.write(e.data as string);
+      ws.onclose = () => term.write("\r\n\x1b[2m— sesión terminada —\x1b[0m\r\n");
+      term.onData((s) => { if (ws.readyState === ws.OPEN) ws.send(s); });
+
+      const ro = new ResizeObserver(sendResize);
+      // Repinta cuando cambia el tema (toggle explícito o preferencia del
+      // sistema en modo "auto"): xterm no lee variables CSS por sí solo.
+      const repaint = () => { term.options.theme = currentTheme(); };
+      const mo = new MutationObserver(repaint);
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      mq.addEventListener("change", repaint);
+
+      entry = { term, fit, ws, ro, mo, mq, repaint, teardown: null };
+      registry.set(id, entry);
+    }
+
+    // El host cambia en cada montaje real (tab distinto en el DOM) aunque el
+    // id sea el mismo; reengancha el lienzo de xterm ahí.
+    if (!host.contains(entry.term.element ?? null)) entry.term.open(host);
+    entry.fit.fit();
+    entry.term.focus();
+    entry.ro.observe(host);
+
+    return () => {
+      entry!.ro.unobserve(host);
+      entry!.teardown = setTimeout(() => {
+        registry.delete(id);
+        entry!.mo.disconnect();
+        entry!.mq.removeEventListener("change", entry!.repaint);
+        entry!.ws.close();
+        entry!.term.dispose();
+      }, 300);
+    };
+  }, [id]);
+
+  return <div ref={hostRef} className="termhost" />;
+}
