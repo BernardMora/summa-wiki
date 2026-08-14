@@ -2,13 +2,19 @@ import type { Architecture } from "../architecture.ts";
 import { ARCHITECTURE_VERSION } from "../architecture.ts";
 
 /**
- * La arquitectura de ESTE vault: identidad, organizada por preguntas.
+ * Identidad — organizada por preguntas sobre quien escribe, no por temas.
  *
  * Va como constante de TypeScript y no como JSON leído del disco a propósito.
  * Es el valor por defecto, y un valor por defecto que depende de leer un
  * archivo puede faltar: `import.meta.url` no sobrevive intacto al empaquetado
  * de Next si el archivo no quedó rastreado, y el fallo aparecería al empaquetar
  * el `.app` —justo donde no hay dónde depurarlo— y no al desarrollar.
+ *
+ * Es un paquete genérico, no el vault de una persona en particular: nace
+ * `00-Identidad/`, no `00-<Nombre>/`, y su `rationale` lleva el placeholder
+ * `{{name}}` — `scaffold.ts` lo sustituye por el nombre que la persona
+ * escribió al crear su vault (campo «Cómo se llama»). La estructura es la
+ * misma para cualquiera; quién es, lo dice el contenido, no el paquete.
  *
  * Los paquetes que el usuario podrá ELEGIR (PARA, plano) son otra cosa y son
  * trabajo de la Fase 13: ahí sí son archivos, porque hay que enumerarlos.
@@ -22,32 +28,29 @@ export const IDENTIDAD: Architecture = {
   description: "organizado por preguntas sobre quien lo escribe, no por temas.",
   rationale:
     "El vault se organiza por **preguntas**, no por categorías temáticas. " +
-    "Las categorías se pudren; las preguntas no: ¿qué sabe Bernardo? seguirá " +
+    "Las categorías se pudren; las preguntas no: ¿qué sabe {{name}}? seguirá " +
     "siendo la pregunta correcta en diez años. Las categorías de arriba son " +
     "una segunda entrada — un índice por tema encima de la misma estructura, " +
     "no un reemplazo.",
   primaryBundle: "personal",
 
-  bundles: [
-    { id: "personal", root: "", shared: false },
-    { id: "veridia", root: "01-Hacer/01-veridia", shared: true },
-  ],
+  bundles: [{ id: "personal", root: "", shared: false }],
 
-  centre: "00-Bernardo/quien-es-bernardo.md",
+  centre: "00-Identidad/quien-es.md",
 
   hubs: [
     {
       id: "vivido",
       label: "¿Qué ha vivido?",
-      hub: "00-Bernardo/que-ha-vivido.md",
+      hub: "00-Identidad/que-ha-vivido.md",
       blurb: "Infancia, formación, trabajo, y las personas que lo acompañaron.",
-      lives: "00-Bernardo/biografia/",
-      paths: ["00-Bernardo/biografia/"],
+      lives: "00-Identidad/biografia/",
+      paths: ["00-Identidad/biografia/"],
     },
     {
       id: "sabe",
       label: "¿Qué sabe?",
-      hub: "00-Bernardo/que-sabe.md",
+      hub: "00-Identidad/que-sabe.md",
       blurb: "El árbol de conocimiento: lo estudiado, lo leído, lo que quedó.",
       lives: "02-Saber/",
       paths: ["02-Saber/"],
@@ -55,7 +58,7 @@ export const IDENTIDAD: Architecture = {
     {
       id: "hace",
       label: "¿Qué hace?",
-      hub: "00-Bernardo/que-hace.md",
+      hub: "00-Identidad/que-hace.md",
       blurb: "En qué se le va el día y qué hábitos lo sostienen.",
       lives: "01-Hacer/",
       paths: ["01-Hacer/"],
@@ -63,13 +66,13 @@ export const IDENTIDAD: Architecture = {
     {
       id: "piensa",
       label: "¿Cómo piensa?",
-      hub: "00-Bernardo/marco-de-pensamiento.md",
+      hub: "00-Identidad/marco-de-pensamiento.md",
       blurb: "Filosofía dominante, fundamentos éticos, contexto e ideas clave.",
       lives: "artículos de posición, repartidos",
       paths: [
-        "00-Bernardo/marco-de-pensamiento.md",
-        "00-Bernardo/metodo-de-reflexion-y-limpieza-mental.md",
-        "00-Bernardo/articulos-de-sintesis.md",
+        "00-Identidad/marco-de-pensamiento.md",
+        "00-Identidad/metodo-de-reflexion-y-limpieza-mental.md",
+        "00-Identidad/articulos-de-sintesis.md",
         "02-Saber/filosofia/",
         "02-Saber/tecnologia/",
       ],
@@ -77,19 +80,19 @@ export const IDENTIDAD: Architecture = {
     {
       id: "porque",
       label: "¿Por qué hace lo que hace?",
-      hub: "00-Bernardo/por-que-hace-lo-que-hace.md",
+      hub: "00-Identidad/por-que-hace-lo-que-hace.md",
       blurb: "Motivaciones declaradas y gustos revelados — y la distancia entre unas y otros.",
-      lives: "00-Bernardo/ + el log de decisiones",
+      lives: "00-Identidad/ + el log de decisiones",
       paths: [
-        "00-Bernardo/obsesion.md",
-        "00-Bernardo/por-que-hace-lo-que-hace.md",
+        "00-Identidad/obsesion.md",
+        "00-Identidad/por-que-hace-lo-que-hace.md",
         "03-Journal/decisions.md",
       ],
     },
   ],
 
   folders: [
-    { path: "00-Bernardo/", purpose: "quién es — los hubs, la biografía y las personas" },
+    { path: "00-Identidad/", purpose: "quién es — los hubs, la biografía y las personas" },
     { path: "01-Hacer/", purpose: "qué hace — Veridia, contenido, finanzas, salud" },
     { path: "02-Saber/", purpose: "qué sabe — el árbol de conocimiento" },
     { path: "03-Journal/", purpose: "el histórico — **nunca se reescribe**" },
@@ -106,7 +109,7 @@ export const IDENTIDAD: Architecture = {
     neverCategorised: ["03-Journal/Daily/"],
   },
 
-  defaultOpen: ["00-Bernardo"],
+  defaultOpen: ["00-Identidad"],
 
   inbox: "00-Inbox/",
 
@@ -114,7 +117,7 @@ export const IDENTIDAD: Architecture = {
     { when: "material de estudio: apuntes de clase, resúmenes de libros, artículos sobre un tema del mundo", to: "02-Saber/" },
     { when: "trabajo operativo: clientes, proyectos, finanzas, contenido, salud — lo que se hace, no lo que se sabe", to: "01-Hacer/" },
     { when: "escritura personal fechada: diario, reflexiones, notas de un día concreto. NUNCA se reescribe, solo se normaliza el frontmatter", to: "03-Journal/Notes/" },
-    { when: "un artículo sobre la propia persona: su biografía, sus motivos, cómo piensa", to: "00-Bernardo/" },
+    { when: "un artículo sobre la propia persona: su biografía, sus motivos, cómo piensa", to: "00-Identidad/" },
     { when: "un PDF, docx o presentación: se copia tal cual y se le escribe una nota compañera al lado con type: source y resource:", to: "02-Saber/" },
     { when: "cualquier cosa cuya categoría no esté clara tras leerla", to: "00-Inbox/" },
   ],
@@ -206,7 +209,7 @@ export const IDENTIDAD: Architecture = {
     {
       id: "personas", label: "Personas",
       blurb: "Quién aparece en esta historia, y en qué papel.",
-      paths: ["00-Bernardo/personas/"], types: ["person"], tags: ["persona"], notes: [],
+      paths: ["00-Identidad/personas/"], types: ["person"], tags: ["persona"], notes: [],
     },
     {
       id: "politica", label: "Política",
@@ -234,11 +237,9 @@ export const IDENTIDAD: Architecture = {
       paths: ["02-Saber/tecnologia/"], tags: ["tecnologia", "software", "stack"], notes: [],
     },
     {
-      id: "veridia", label: "Veridia",
-      blurb: "La consultoría: clientes, metodología, pipeline y entrega.",
-      // El bundle entero, no solo `pillar: consulting`: los documentos de
-      // entrega que viven en Drive rara vez llevan pillar en el frontmatter.
-      pillar: "consulting", bundle: "veridia", notes: [],
+      id: "consultoria", label: "Consultoría",
+      blurb: "Trabajo con clientes: metodología, pipeline y entrega.",
+      pillar: "consulting", notes: [],
     },
   ],
 };
