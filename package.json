@@ -20,6 +20,7 @@
     "health": "node --experimental-strip-types --no-warnings src/cli.ts health",
     "typecheck": "tsc --noEmit",
     "icons": "electron scripts/make-icon.mjs",
+    "ico": "electron scripts/make-ico.mjs",
     "brand": "node scripts/dev-brand.mjs",
     "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true",
     "package:win": "npm run build && electron-builder --win && npm run smoke:win",
