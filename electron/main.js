@@ -261,6 +261,7 @@ async function createWindow() {
     x: s.x, y: s.y,
     minWidth: 900,
     minHeight: 560,
+    icon: windowIcon(),
     // Sin barra de título: el masthead ocupa el borde superior. La sangría
     // para los semáforos y la región arrastrable las pone globals.css bajo
     // [data-desktop] — ver preload.cjs.
@@ -466,6 +467,31 @@ function applyDockIcon() {
     const img = nativeImage.createFromPath(candidate);
     if (!img.isEmpty()) { app.dock?.setIcon(img); break; }
   }
+}
+
+/**
+ * Icono de la VENTANA, que en Windows y Linux es otra cosa que el del Dock.
+ *
+ * Fuera de macOS no hay `app.dock`, así que applyDockIcon() se iba de vacío y
+ * la ventana se quedaba con el átomo de Electron. En la app instalada da igual
+ * —Windows saca el icono de la ventana del propio .exe, que ya lo lleva
+ * incrustado desde build/icon.ico— pero en `npm run desktop` no hay .exe del
+ * que sacarlo y hay que dárselo explícitamente.
+ *
+ * Mismo orden de preferencia que el Dock: primero el icono que el usuario haya
+ * configurado en su vault, después el de la app. Devuelve `undefined` si no
+ * hay ninguno, que es justo lo que BrowserWindow espera para "usa el de serie".
+ */
+function windowIcon() {
+  if (process.platform === "darwin") return undefined;
+  // El .ico primero: trae los seis tamaños y Windows elige el que toca en cada
+  // sitio. Un PNG suelto obliga al sistema a escalar desde uno solo.
+  for (const candidate of [brand.icon, path.join(ROOT, "build", "icon.ico"), path.join(ROOT, "build", "icon.png")]) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+    const img = nativeImage.createFromPath(candidate);
+    if (!img.isEmpty()) return img;
+  }
+  return undefined;
 }
 
 app.whenReady().then(() => {
