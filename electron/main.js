@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveVault, rememberVault, readSettings, inspectVault } from "../src/appdata.mjs";
+import { serverEnv, SERVER_ARGV } from "./server-env.mjs";
 
 /**
  * Cascarón de escritorio — Fase 1.
@@ -128,15 +129,17 @@ let server = null;
 let quitting = false;
 
 function startServer() {
-  const node = process.env.WIKI_NODE || "node";
+  const isPackaged = app.isPackaged;
+  const node = process.env.WIKI_NODE || (isPackaged ? process.execPath : "node");
 
-  // Electron marca su propio entorno; el hijo debe verse como un `node`
-  // cualquiera. Lo demás (npm_*, CLAUDE_CODE_*) lo limpia server.ts por su
-  // cuenta antes de abrir cada shell — ver shellEnv() allá.
-  const env = { ...process.env, PORT: String(PORT), UV_THREADPOOL_SIZE: "64" };
-  for (const k of Object.keys(env)) if (k.startsWith("ELECTRON_")) delete env[k];
+  // El entorno se arma en server-env.mjs, no aquí: la prueba de humo del
+  // paquete importa esa misma función para arrancar el servidor igual que lo
+  // arranca la app instalada. Si estas variables se escribieran a mano en los
+  // dos sitios, la prueba estaría comprobando su propia copia — que es
+  // exactamente como se coló el modo desarrollo dentro del .exe.
+  const env = serverEnv({ isPackaged, port: PORT });
 
-  server = spawn(node, ["--experimental-strip-types", "--no-warnings", "server.ts"], {
+  server = spawn(node, SERVER_ARGV, {
     cwd: ROOT,
     env,
     // Grupo de procesos propio: al salir se mata el grupo entero, no solo al
@@ -146,8 +149,13 @@ function startServer() {
     stdio: ["ignore", "pipe", "pipe"],
   });
 
+  let lastStderr = "";
   server.stdout.on("data", (b) => process.stdout.write(`[server] ${b}`));
-  server.stderr.on("data", (b) => process.stderr.write(`[server] ${b}`));
+  server.stderr.on("data", (b) => {
+    process.stderr.write(`[server] ${b}`);
+    lastStderr += b.toString();
+    if (lastStderr.length > 2000) lastStderr = lastStderr.slice(-2000);
+  });
   server.on("error", (e) => {
     dialog.showErrorBox(
       "No se pudo arrancar el servidor",
@@ -165,8 +173,7 @@ function startServer() {
     if (quitting || signal) return;
     dialog.showErrorBox(
       "El servidor se detuvo",
-      `\`server.ts\` terminó con código ${code}. Revisa la consola de donde ` +
-      `lanzaste la app: el detalle sale con el prefijo [server].`,
+      `\`server.ts\` terminó con código ${code}.\n\nLog de error:\n${lastStderr}`,
     );
   });
 }

@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.js",
   "description": "Local reader/editor for the AIOS knowledge base",
   "//productName": "La MARCA, no el contenido. Acaba en CFBundleName, el rótulo de la barra de menús de macOS, que no se puede cambiar en caliente. Cómo se llama TU wiki es otra cosa y vive en 04-Sistema/wiki-config.json: por eso la app puede llamarse 'Summa Wiki' y tu instancia 'Wiki de Ana' sin pelearse.",
   "productName": "Summa Wiki",
@@ -20,7 +21,9 @@
     "typecheck": "tsc --noEmit",
     "icons": "electron scripts/make-icon.mjs",
     "brand": "node scripts/dev-brand.mjs",
-    "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true"
+    "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true",
+    "package:win": "npm run build && electron-builder --win && npm run smoke:win",
+    "smoke:win": "node scripts/smoke-package.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.0",
@@ -47,9 +50,37 @@
     "@types/ws": "^8.18.1",
     "cross-env": "^10.1.0",
     "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.7.0"
   },
   "engines": {
     "node": ">=22.6"
+  },
+  "build": {
+    "asar": false,
+    "appId": "com.veridia.summawiki",
+    "productName": "Summa Wiki",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      ".next-build/**/*",
+      "electron/**/*",
+      "src/**/*",
+      "lib/**/*",
+      "public/**/*",
+      "server.ts",
+      "next.config.mjs",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
