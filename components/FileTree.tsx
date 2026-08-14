@@ -31,7 +31,7 @@ export default function FileTree() {
    * dejaron de existir con la reorganización de julio: el árbol abría con todo
    * colapsado. Ahora se guarda lo que el usuario deje abierto y solo se usa un
    * valor inicial la primera vez — y ese valor lo pone la arquitectura, no el
-   * código, porque `00-Bernardo` no existe en el vault de nadie más.
+   * código, porque `00-Identidad` es el paquete de una persona, no el de todas.
    */
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [openLoaded, setOpenLoaded] = useState(false);

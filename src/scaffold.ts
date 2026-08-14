@@ -86,7 +86,13 @@ contesten esta pregunta — en línea y dentro del texto, no como lista al pie.
 `;
 }
 
-/** El artículo central, cuando la arquitectura tiene uno. */
+/**
+ * El artículo central, cuando la arquitectura tiene uno.
+ *
+ * `arch.rationale` puede llevar el placeholder `{{name}}` — lo usa `identidad`
+ * para que su prosa («¿qué sabe {{name}}?») hable de quien de verdad creó el
+ * vault, y no de una persona fija escrita en el paquete.
+ */
 function centreArticle(arch: Architecture, name: string): string {
   const links = arch.hubs
     .map((h) => `- [${h.label}](${linkPath(path.relative(path.dirname(arch.centre), h.hub) || h.hub)}) — ${plain(h.blurb)}`)
@@ -100,7 +106,7 @@ function centreArticle(arch: Architecture, name: string): string {
   }) + `
 # ${name}
 
-${plain(arch.rationale)}
+${plain(arch.rationale).replaceAll("{{name}}", name)}
 
 ## Las preguntas
 
@@ -118,7 +124,7 @@ ${links || "_Esta arquitectura no declara preguntas._"}
 function rootAgentsFile(arch: Architecture, name: string): string {
   const folders = arch.folders
     .map((f) => {
-      // TODOS los hubs de la carpeta, no el primero: `00-Bernardo/` tiene
+      // TODOS los hubs de la carpeta, no el primero: `00-Identidad/` tiene
       // cinco, y anunciar uno solo deja al agente creyendo que los otros cuatro
       // son notas cualesquiera.
       const hubs = arch.hubs.filter((h) => h.hub.startsWith(f.path));

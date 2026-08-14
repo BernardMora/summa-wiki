@@ -6,7 +6,7 @@ import SideNavClient from "./SideNavClient.tsx";
 
 export default function SideNav() {
   // El título del hub central sale de la nota, no de una constante: el vault
-  // de otra persona no tiene por qué llamarlo "¿Quién es Bernardo?".
+  // de otra persona no tiene por qué llamarlo "¿Quién es Ana?".
   const centre = getIndex().notes.find((n) => n.id === CENTRE);
   const cfg = readConfig();
   return (
