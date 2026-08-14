@@ -46,9 +46,20 @@ interface DragState {
  * left or right quarter of a pane splits; dropping in the middle moves the tab
  * into that pane.
  */
-export default function Workspace({ initial }: { initial: Payload }) {
+export default function Workspace({ initial, seed }: {
+  /**
+   * La nota que trae la URL. `null` en /workspace, que monta el mismo
+   * workspace sin nota — es adonde va todo lo que no es una nota (terminal,
+   * grafo, PDF…) cuando se abre desde una página sin panes montados.
+   */
+  initial: Payload | null;
+  /** Pestaña a abrir al montar, de `?open=`. Se aplica una sola vez. */
+  seed?: { id: string; title: string } | null;
+}) {
   const [panes, setPanes] = useState<Pane[]>([
-    { key: "p0", tabs: [{ id: initial.id, title: initial.meta.title }], activeId: initial.id },
+    initial
+      ? { key: "p0", tabs: [{ id: initial.id, title: initial.meta.title }], activeId: initial.id }
+      : { key: "p0", tabs: [], activeId: null },
   ]);
   const [activePane, setActivePane] = useState("p0");
   const [ratio, setRatio] = useState(0.5);
@@ -72,16 +83,23 @@ export default function Workspace({ initial }: { initial: Payload }) {
       if (raw) {
         const s = JSON.parse(raw);
         if (Array.isArray(s.panes) && s.panes.length) {
-          // Make sure the note in the URL is present and focused.
-          const has = s.panes.some((p: Pane) => p.tabs.some((t) => t.id === initial.id));
-          if (!has) {
-            s.panes[0].tabs.push({ id: initial.id, title: initial.meta.title });
+          // Make sure the note in the URL is present and focused. Sin nota en
+          // la URL (/workspace) se restaura el layout tal cual: no hay nada
+          // que forzar al frente, y la pestaña que se pidió por `?open=` la
+          // añade el efecto de más abajo.
+          if (initial) {
+            const has = s.panes.some((p: Pane) => p.tabs.some((t) => t.id === initial.id));
+            if (!has) {
+              s.panes[0].tabs.push({ id: initial.id, title: initial.meta.title });
+            }
+            s.panes = s.panes.map((p: Pane) =>
+              p.tabs.some((t) => t.id === initial.id) ? { ...p, activeId: initial.id } : p,
+            );
           }
-          s.panes = s.panes.map((p: Pane) =>
-            p.tabs.some((t) => t.id === initial.id) ? { ...p, activeId: initial.id } : p,
-          );
           setPanes(s.panes);
-          setActivePane(s.panes.find((p: Pane) => p.activeId === initial.id)?.key ?? s.panes[0].key);
+          setActivePane(
+            (initial && s.panes.find((p: Pane) => p.activeId === initial.id)?.key) ?? s.panes[0].key,
+          );
           if (typeof s.ratio === "number") setRatio(s.ratio);
         }
       }
@@ -108,6 +126,17 @@ export default function Workspace({ initial }: { initial: Payload }) {
     // reset the pane layout and closed the split. The URL is maintained by the
     // effect above instead.
   }, [activePane]);
+
+  /**
+   * La pestaña que pidió `?open=`, una sola vez y DESPUÉS de hidratar: antes
+   * de hidratar, la restauración desde localStorage la pisaría.
+   */
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!hydrated || !seed || seeded.current) return;
+    seeded.current = true;
+    open(seed.id, seed.title, true);
+  }, [hydrated, seed, open]);
 
   const closeTab = useCallback((paneKey: string, id: string) => {
     // La pty sobrevive a cambiar de pestaña o recargar (server.ts) — cerrarla
@@ -412,7 +441,7 @@ export default function Workspace({ initial }: { initial: Payload }) {
                     // Only offered when another pane holds a note to receive it.
                     onQuote={hasNotePane ? insertQuote : undefined}
                   />
-                ) : p.activeId === initial.id ? (
+                ) : initial && p.activeId === initial.id ? (
                   <ArticlePane key={p.activeId} initial={initial} showToc={panes.length === 1}
                     onEditorReady={(v) => {
                       noteEditors.current.set(p.key, v);

@@ -51,6 +51,24 @@ interface Entry {
  */
 const registry = new Map<string, Entry>();
 
+/**
+ * Comandos que deben ejecutarse al abrir una terminal, por id de pestaña.
+ *
+ * Un buzón fuera de React, como el `registry` de arriba y por el mismo motivo:
+ * quien programa el comando (la ingesta) y quien abre la pestaña (el workspace)
+ * no comparten árbol de componentes, y pasarlo por props obligaría a enhebrar
+ * el dato por cinco niveles que no lo usan.
+ */
+const pendingCmd = new Map<string, string>();
+
+const pendingCwd = new Map<string, string>();
+
+/** Programa un comando —y opcionalmente un directorio— para la próxima terminal con ese id. */
+export function runInNewTerminal(id: string, cmd: string, cwd?: string) {
+  pendingCmd.set(id, cmd);
+  if (cwd) pendingCwd.set(id, cwd);
+}
+
 export default function TerminalPane({ id }: { id: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +94,15 @@ export default function TerminalPane({ id }: { id: string }) {
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const termPort = Number(location.port || (location.protocol === "https:" ? 443 : 80)) + 1;
-      const ws = new WebSocket(`${proto}//${location.hostname}:${termPort}/api/terminal?id=${encodeURIComponent(id)}`);
+      const cmd = pendingCmd.get(id) ?? "";
+      const cwd = pendingCwd.get(id) ?? "";
+      // De un solo uso: reengancharse a la pestaña no debe relanzar el comando.
+      pendingCmd.delete(id);
+      pendingCwd.delete(id);
+      const q = new URLSearchParams({ id });
+      if (cmd) q.set("cmd", cmd);
+      if (cwd) q.set("cwd", cwd);
+      const ws = new WebSocket(`${proto}//${location.hostname}:${termPort}/api/terminal?${q}`);
 
       const sendResize = () => {
         fit.fit();

@@ -3,7 +3,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { buildIndex } from "./indexer.ts";
 import { search, neighbourhood, health, candidates } from "./search.ts";
-import { INDEX_PATH, VAULT, vaultExists } from "./config.ts";
+import { INDEX_PATH, VAULT, VAULT_SOURCE, vaultExists, ARCH } from "./config.ts";
+import { underAny } from "./match.ts";
+import { settingsPath } from "./appdata.mjs";
+
+/**
+ * De dónde salió el vault. Se imprime porque "el CLI y la app no ven lo mismo"
+ * es el fallo más difícil de diagnosticar de todos los que puede tener esto:
+ * ambos resuelven igual, pero un `WIKI_VAULT` exportado en una shell y
+ * olvidado los separa sin ninguna señal.
+ */
+const SOURCE_LABEL: Record<typeof VAULT_SOURCE, string> = {
+  env: "de WIKI_VAULT",
+  settings: `elegido en la app (${settingsPath()})`,
+  legacy: "~/Documents/aios, la ruta histórica — elige uno en la app para fijarlo",
+  none: "sin vault configurado",
+};
 import type { WikiIndex, Note } from "./types.ts";
 
 const args = process.argv.slice(2);
@@ -164,7 +179,7 @@ switch (cmd) {
      * relative to the vault instead, derived from the bundle roots rather than
      * hardcoded, so the tree matches what is actually on disk.
      */
-    const vaultRoot = idx.bundles.find((b) => b.id === "personal")?.root ?? "";
+    const vaultRoot = idx.bundles.find((b) => b.id === ARCH.primaryBundle)?.root ?? "";
     const shared = new Set(idx.bundles.filter((b) => b.shared).map((b) => b.id));
     const vaultPath = (n: Note) =>
       (n.abs && vaultRoot && n.abs.startsWith(vaultRoot + "/")
@@ -174,7 +189,10 @@ switch (cmd) {
 
     const notes = idx.notes.filter((n) => {
       const p = vaultPath(n);
-      return !p.startsWith("05-Projects/") &&
+      // Solo `paths`, no `contains`: el árbol muestra la forma del disco, y
+      // las plantillas son archivos que están ahí de verdad. Lo que se salta
+      // son los codebases, que no son notas.
+      return !underAny(p, ARCH.articles.notArticles.paths) &&
         (!root || p === root || p.startsWith(root + "/"));
     });
     if (!notes.length) {
@@ -187,7 +205,7 @@ switch (cmd) {
     const tree = mk();
 
     for (const n of notes) {
-      const parts = vaultPath(n).split("/");
+      const parts = vaultPath(n).split(/[\\/]/);
       const dirs = parts.slice(0, -1);
       let cur = tree;
       cur.notes++; cur.words += n.words; cur.bundles.add(n.bundle);
@@ -217,7 +235,7 @@ switch (cmd) {
 
     // Descend to the requested folder so its ancestors are not re-printed.
     let start = tree;
-    for (const seg of root ? root.split("/") : []) {
+    for (const seg of root ? root.split(/[\\/]/) : []) {
       const next = start.kids.get(seg);
       if (!next) break;
       start = next;
@@ -230,7 +248,7 @@ switch (cmd) {
   }
 
   default:
-    console.log(`Berni's Wiki CLI — index and query the knowledge base.
+    console.log(`Summa Wiki CLI — index and query the knowledge base.
 
   wiki index [--pretty]              rebuild index.json
   wiki search <query> [filters]      ranked search
@@ -243,5 +261,6 @@ switch (cmd) {
   wiki tree [path] [--depth N]       folder overview with note counts (--titles)
   wiki stats                         index statistics
 
-Vault: ${VAULT}   (override with WIKI_VAULT)`);
+Vault: ${VAULT}
+       ${SOURCE_LABEL[VAULT_SOURCE]}`);
 }

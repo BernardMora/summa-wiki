@@ -1,4 +1,4 @@
-// Shared types for the Berni's Wiki index.
+// Shared types for the Summa Wiki index.
 // The index is the single artifact consumed by BOTH the app and the CLI/agent.
 
 export type NoteType =

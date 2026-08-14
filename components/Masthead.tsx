@@ -2,12 +2,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ThemeToggle from "./ThemeToggle.tsx";
+import Settings from "./Settings.tsx";
 import { openInWorkspace, newTermId } from "./Tabs.tsx";
 
 interface Hit { id: string; title: string; path: string; type: string; bundle: string; }
 
-export default function Masthead() {
+export default function Masthead({ name, tagline }: { name: string; tagline: string }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [open, setOpen] = useState(false);
@@ -35,8 +35,8 @@ export default function Masthead() {
   return (
     <header className="masthead">
       <Link href="/" className="wordmark">
-        <span className="name">Berni&apos;s Wiki</span>
-        <span className="tag">La enciclopedia personal</span>
+        <span className="name">{name}</span>
+        {tagline && <span className="tag">{tagline}</span>}
       </Link>
 
       <div className="searchwrap" ref={box}>
@@ -71,7 +71,7 @@ export default function Masthead() {
       >
         ⌗ Terminal
       </button>
-      <ThemeToggle />
+      <Settings name={name} tagline={tagline} />
     </header>
   );
 }

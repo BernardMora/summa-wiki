@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Wiki">
+  <rect width="32" height="32" rx="7" fill="#2f5fbf"/>
+  <path d="M7.6 17.8 16 6.2 24.4 17.8" fill="none" stroke="#fff" stroke-width="3.1"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8">
+    <line x1="9.6" y1="23" x2="22.4" y2="23"/>
+    <line x1="12.4" y1="27" x2="19.6" y2="27"/>
+  </g>
+</svg>

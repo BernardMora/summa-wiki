@@ -4,6 +4,10 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
+import { FileIcon, FolderIcon } from "./FileIcon.tsx";
+
+/** Sangría por nivel, en px. Es también la separación entre guías. */
+const STEP = 11;
 
 interface Node { name: string; rel: string; dir: boolean; id?: string; ext?: string; children?: Node[]; }
 interface Menu { x: number; y: number; node: Node; }
@@ -26,15 +30,22 @@ export default function FileTree() {
    * El valor por defecto eran `00-System`, `01-Pillars` y `02-Journal`, que
    * dejaron de existir con la reorganización de julio: el árbol abría con todo
    * colapsado. Ahora se guarda lo que el usuario deje abierto y solo se usa un
-   * valor inicial la primera vez.
+   * valor inicial la primera vez — y ese valor lo pone la arquitectura, no el
+   * código, porque `00-Bernardo` no existe en el vault de nadie más.
    */
-  const [open, setOpen] = useState<Set<string>>(new Set(["00-Bernardo"]));
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const [openLoaded, setOpenLoaded] = useState(false);
+  /**
+   * ¿Había preferencia guardada? Distinto de "está vacía": quien colapsa todo
+   * a propósito guarda `[]`, y sin esta marca el default de la arquitectura se
+   * le volvería a abrir en cada recarga, deshaciéndole el trabajo.
+   */
+  const stored = useRef(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(OPEN_KEY);
-      if (raw) setOpen(new Set(JSON.parse(raw) as string[]));
+      if (raw) { stored.current = true; setOpen(new Set(JSON.parse(raw) as string[])); }
     } catch { /* preferencia corrupta: se ignora y se reescribe */ }
     setOpenLoaded(true);
   }, []);
@@ -45,6 +56,8 @@ export default function FileTree() {
     try { localStorage.setItem(OPEN_KEY, JSON.stringify([...open])); } catch { /* sin cuota */ }
   }, [open, openLoaded]);
   const [selDir, setSelDir] = useState("");
+  /** Carpetas que contienen la nota abierta: su guía va resaltada, como en VS Code. */
+  const [activeTrail, setActiveTrail] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<Menu | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [mkdirIn, setMkdirIn] = useState<string | null>(null);
@@ -52,11 +65,13 @@ export default function FileTree() {
   const [overDir, setOverDir] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [renaming, setRenaming] = useState<Node | null>(null);
+  const [deleting, setDeleting] = useState<{ node: Node; notEmptyCount?: number } | null>(null);
   const [draft, setDraft] = useState("");
   const [type, setType] = useState("knowledge");
   const [err, setErr] = useState("");
   const [cats, setCats] = useState<Cat[]>([]);
   const [pinOpen, setPinOpen] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const [vault, setVault] = useState("");
   const [links, setLinks] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState<string | null>(null);
@@ -64,12 +79,15 @@ export default function FileTree() {
   const tabs = useTabs();
   const boxRef = useRef<HTMLDivElement>(null);
 
-  async function load() {
-    const r = await fetch("/api/tree");
+  async function load(hidden = showHidden) {
+    const r = await fetch(`/api/tree${hidden ? "?hidden=1" : ""}`);
     const d = await r.json();
     setRoot(d.root ?? []);
     setVault(d.vault ?? "");
     setLinks(d.links ?? {});
+    // Solo en el primer arranque de verdad: si hubo preferencia guardada,
+    // manda ella, aunque esté vacía.
+    if (!stored.current) setOpen(new Set(d.defaultOpen ?? []));
   }
 
   /**
@@ -123,7 +141,7 @@ export default function FileTree() {
     }
     return null;
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(showHidden); }, [showHidden]);
   useEffect(() => {
     fetch("/api/categories").then((r) => r.json()).then((d) => setCats(d.categories ?? []));
   }, []);
@@ -152,7 +170,38 @@ export default function FileTree() {
     if (!activeId || root.length === 0) return;
     const trail = ancestorsOf(root, activeId);
     if (trail?.length) setOpen((p) => { const n = new Set(p); trail.forEach((t) => n.add(t)); return n; });
+    setActiveTrail(new Set(trail ?? []));
   }, [activeId, root]);
+
+  /**
+   * Refresco automático: el servidor vigila el vault y avisa por SSE.
+   *
+   * Hasta ahora el árbol solo se releía tras una acción propia (crear, mover,
+   * borrar), así que un archivo creado desde Obsidian, desde la terminal
+   * integrada o por un agente no aparecía hasta recargar la página — con la
+   * app de escritorio abierta todo el día, eso significa un árbol
+   * permanentemente desfasado.
+   *
+   * `load` se lee por referencia dentro del handler para que el EventSource se
+   * abra una sola vez en la vida del componente: incluirlo en las dependencias
+   * reconectaría en cada render.
+   */
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const es = new EventSource("/api/watch");
+    es.addEventListener("change", () => {
+      // El servidor ya agrupa a 250 ms; este segundo margen absorbe la ráfaga
+      // de un `git checkout` o de un guardado masivo sin encadenar fetches.
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => loadRef.current(), 200);
+    });
+    // Sin onerror el navegador reconecta solo, que es lo que se quiere; solo
+    // se silencia el ruido en consola cuando el servidor se reinicia.
+    es.onerror = () => { /* EventSource reintenta por su cuenta */ };
+    return () => { if (timer) clearTimeout(timer); es.close(); };
+  }, []);
 
   useEffect(() => {
     const close = () => { setMenu(null); setPinOpen(false); };
@@ -221,31 +270,35 @@ export default function FileTree() {
   }
 
   async function doDelete(node: Node, confirmed = false) {
+    setErr("");
     const r = await fetch("/api/fs", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", rel: node.rel, confirm: confirmed }),
     });
     const d = await r.json();
     if (r.status === 409 && d.error === "not-empty") {
-      if (window.confirm(`«${node.name}» contiene ${d.count} elemento(s). ¿Borrar todo?`)) {
-        return doDelete(node, true);
-      }
+      setDeleting({ node, notEmptyCount: d.count });
       return;
     }
-    if (!r.ok) { alert(d.error ?? "error al borrar"); return; }
+    if (!r.ok) { setErr(d.error ?? "error al borrar"); return; }
+    setDeleting(null);
     await load(); router.refresh();
   }
 
   function askDelete(node: Node) {
-    const what = node.dir ? "la carpeta" : "la nota";
-    if (window.confirm(`¿Borrar ${what} «${node.name}»? Esto no se puede deshacer desde la app.`)) {
-      doDelete(node);
-    }
+    setDeleting({ node });
   }
 
   /** Notes and PDFs both open as tabs; other assets stream from the API. */
   function openFile(n: Node, newTab: boolean) {
-    const label = n.name.replace(/\.[^.]+$/, "");
+    /*
+     * Solo las notas pierden la extensión en la pestaña: ahí el nombre hace de
+     * título. Todo lo demás la conserva, como en VS Code — y como en la fila
+     * del árbol. El `|| n.name` es la red de seguridad para los ocultos:
+     * quitarle `.md` a un archivo llamado `.md` dejaría la pestaña sin
+     * etiqueta.
+     */
+    const label = n.id ? (n.name.replace(/\.md$/i, "") || n.name) : n.name;
     if (n.id) { tabs?.open(n.id, label, newTab); return; }
     if (n.ext === "canvas") { tabs?.open(`canvas:${n.rel}`, label, newTab); return; }
     if (n.ext === "pdf") { tabs?.open(`pdf:${n.rel}`, label, newTab); return; }
@@ -258,9 +311,29 @@ export default function FileTree() {
     tabs?.open(`raw:${n.rel}`, label, newTab);
   }
 
-  function render(nodes: Node[], depth = 0): React.ReactNode {
+  /**
+   * `trail` son las carpetas ancestro de estos nodos, de la raíz hacia abajo.
+   * Se usa para dibujar una guía por nivel: cada fila pinta una línea vertical
+   * en la columna de cada ancestro, y como las filas van pegadas sin hueco,
+   * esas líneas se leen como un único trazo continuo que abarca exactamente el
+   * contenido de la carpeta — que es como lo hace VS Code.
+   *
+   * Se dibujan dentro de la fila y no como `border-left` de un contenedor
+   * anidado porque la fila tiene que seguir ocupando todo el ancho de la barra
+   * lateral: el resaltado al pasar el ratón llega hasta el borde, y un
+   * contenedor con margen izquierdo lo recortaría.
+   */
+  function render(nodes: Node[], depth = 0, trail: string[] = []): React.ReactNode {
     return nodes.map((n) => {
-      const pad = { paddingLeft: 4 + depth * 11 };
+      const pad = { paddingLeft: 4 + depth * STEP };
+      const guides = trail.map((anc, i) => (
+        <span
+          key={anc}
+          className={`guide${activeTrail.has(anc) ? " on" : ""}`}
+          style={{ left: 4 + i * STEP + 5 }}
+          aria-hidden
+        />
+      ));
       const onCtx = (e: React.MouseEvent) => {
         e.preventDefault(); e.stopPropagation();
         setMenu({ x: e.clientX, y: e.clientY, node: n });
@@ -294,13 +367,25 @@ export default function FileTree() {
               onDragStart={(e) => { e.stopPropagation(); setDragRel(n.rel); e.dataTransfer.effectAllowed = "move"; }}
               onDragEnd={() => { setDragRel(null); setOverDir(null); }}
               onDragOver={(e) => {
-                if (!dragRel || dragRel === n.rel || n.rel.startsWith(dragRel + "/")) return;
-                e.preventDefault(); e.dataTransfer.dropEffect = "move";
+                if (dragRel && (dragRel === n.rel || n.rel.startsWith(dragRel + "/"))) return;
+                e.preventDefault(); e.dataTransfer.dropEffect = dragRel ? "move" : "copy";
                 if (overDir !== n.rel) setOverDir(n.rel);
               }}
               onDragLeave={() => setOverDir((d) => (d === n.rel ? null : d))}
-              onDrop={(e) => {
+              onDrop={async (e) => {
                 e.preventDefault(); e.stopPropagation();
+                const files = e.dataTransfer.files;
+                if (files && files.length > 0) {
+                  setOverDir(null); setDragRel(null);
+                  for (let i = 0; i < files.length; i++) {
+                    const fd = new FormData();
+                    fd.append("rel", n.rel);
+                    fd.append("file", files[i]);
+                    await fetch("/api/fs/upload", { method: "POST", body: fd });
+                  }
+                  await load();
+                  return;
+                }
                 const src = dragRel ?? e.dataTransfer.getData("text/plain");
                 setOverDir(null); setDragRel(null);
                 if (src) moveTo(src, n.rel);
@@ -309,7 +394,9 @@ export default function FileTree() {
               onContextMenu={onCtx}
               title={n.rel}
             >
+              {guides}
               <span className="caret">{isOpen ? "▾" : "▸"}</span>
+              <FolderIcon open={isOpen} />
               <span className="name">{n.name}</span>
             </div>
 
@@ -352,7 +439,7 @@ export default function FileTree() {
               </div>
             )}
 
-            {isOpen && n.children && render(n.children, depth + 1)}
+            {isOpen && n.children && render(n.children, depth + 1, [...trail, n.rel])}
           </div>
         );
       }
@@ -371,9 +458,20 @@ export default function FileTree() {
           onDoubleClick={(e) => { e.preventDefault(); openFile(n, true); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openFile(n, true); } }}
         >
+          {guides}
           <span className="caret" />
-          <span className="name">{n.ext === "md" ? n.name.replace(/\.md$/i, "") : n.name.replace(/\.[^.]+$/, "")}</span>
-          {n.ext && n.ext !== "md" && <span className="extbadge">{n.ext}</span>}
+          <FileIcon name={n.name} />
+          {/*
+            El nombre completo, con extensión, como en VS Code.
+
+            Antes se recortaba con `replace(/\.[^.]+$/, "")`, y sobre un
+            archivo oculto ese regex se come el nombre ENTERO: `.DS_Store` es
+            un punto seguido de algo sin más puntos, así que la fila salía en
+            blanco con solo la etiqueta de tipo al lado. La etiqueta también
+            sobra ahora: el icono ya dice de qué tipo es, y repetir "ts" junto
+            a `indexer.ts` solo gasta el ancho de una barra lateral estrecha.
+          */}
+          <span className="name">{n.name}</span>
         </div>
       );
     });
@@ -381,8 +479,12 @@ export default function FileTree() {
 
   return (
     <div ref={boxRef}>
-      <div className="treehint">
-        {moving ? "Moviendo y repuntando enlaces…" : "Clic derecho para crear, renombrar o borrar · arrastra para mover"}
+      <div className="treehint" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <span style={{ flex: 1 }}>{moving ? "Moviendo y repuntando enlaces…" : "Clic derecho para crear, renombrar o borrar · arrastra para mover"}</span>
+        <label style={{ display: "flex", gap: 4, alignItems: "center", cursor: "pointer", opacity: showHidden ? 1 : 0.6, whiteSpace: "nowrap" }}>
+          <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} style={{ margin: 0 }} />
+          <span>Ocultos</span>
+        </label>
       </div>
 
       {creatingIn === "" && (
@@ -488,7 +590,14 @@ export default function FileTree() {
           })()}
           <button onClick={() => {
             setRenaming(menu.node);
-            setDraft(menu.node.dir ? menu.node.name : menu.node.name.replace(/\.md$/, ""));
+            // Las notas se renombran por su título (el `.md` lo pone el
+            // servidor); cualquier otro archivo se edita con su nombre
+            // completo, extensión incluida.
+            setDraft(
+              menu.node.dir || !/\.md$/i.test(menu.node.name)
+                ? menu.node.name
+                : menu.node.name.replace(/\.md$/i, ""),
+            );
             setErr(""); setMenu(null);
           }}>Renombrar</button>
           <button className="danger" onClick={() => { const n = menu.node; setMenu(null); askDelete(n); }}>
@@ -496,6 +605,27 @@ export default function FileTree() {
           </button>
         </div>,
         document.body,
+      )}
+
+      {deleting && createPortal(
+        <div className="qsback" onMouseDown={() => { setDeleting(null); setErr(""); }}>
+          <div className="qsbox" style={{ padding: "16px 24px", maxWidth: "480px" }} onMouseDown={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Confirmar eliminación</h2>
+            <p style={{ margin: 0, marginBottom: 24, lineHeight: 1.5, color: "var(--fg-dim)" }}>
+              {deleting.notEmptyCount !== undefined ? (
+                <>La carpeta <strong>{deleting.node.name}</strong> contiene {deleting.notEmptyCount} elemento(s). ¿Estás seguro de que quieres borrarla junto con todo su contenido?</>
+              ) : (
+                <>¿Estás seguro de que quieres borrar {deleting.node.dir ? "la carpeta" : "la nota"} <strong>{deleting.node.name}</strong>? Esta acción no se puede deshacer.</>
+              )}
+            </p>
+            {err && <div className="err" style={{ marginBottom: 16 }}>{err}</div>}
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button onClick={() => { setDeleting(null); setErr(""); }}>Cancelar</button>
+              <button className="danger" onClick={() => doDelete(deleting.node, deleting.notEmptyCount !== undefined)}>Borrar</button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

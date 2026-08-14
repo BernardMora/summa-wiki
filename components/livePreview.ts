@@ -110,6 +110,39 @@ class TableWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
+/**
+ * Formato de imagen tipo Wikipedia, escrito con markdown estándar.
+ *
+ * El pie de foto es el *title* de toda la vida — `![alt](ruta "El pie")` — y no
+ * una sintaxis propia: así la nota se sigue viendo bien en Obsidian, en GitHub
+ * y en cualquier renderizador, que es lo que exige la spec (§2). Una imagen con
+ * pie se dibuja como miniatura flotada a la derecha, que es el comportamiento
+ * por defecto de Wikipedia; una imagen sin pie se queda como estaba, en bloque
+ * a ancho completo, para no cambiar lo ya escrito.
+ *
+ * Al principio del pie caben directivas entre corchetes para los casos que la
+ * regla por defecto no cubre.
+ */
+const DIRECTIVE_RE = /^\s*\[(izq|left|ancho|wide|w=\d{2,4})\]\s*/i;
+
+interface Thumb { caption: string; side: "right" | "left" | "none"; width?: number }
+
+export function parseCaption(title: string | undefined): Thumb | null {
+  if (title === undefined) return null;
+  let rest = title;
+  let side: Thumb["side"] = "right";
+  let width: number | undefined;
+  // Varias directivas seguidas: `[izq][w=220] Pie`.
+  for (let m = DIRECTIVE_RE.exec(rest); m; m = DIRECTIVE_RE.exec(rest)) {
+    const d = m[1].toLowerCase();
+    if (d === "izq" || d === "left") side = "left";
+    else if (d === "ancho" || d === "wide") side = "none";
+    else width = Number(d.slice(2));
+    rest = rest.slice(m[0].length);
+  }
+  return { caption: rest.trim(), side, width };
+}
+
 class ImageWidget extends WidgetType {
   constructor(
     private readonly src: string,
@@ -117,6 +150,8 @@ class ImageWidget extends WidgetType {
     /** Range of the href inside the markdown, so a click can select it. */
     private readonly hrefFrom: number,
     private readonly hrefTo: number,
+    /** null = imagen sin pie, que se dibuja como siempre. */
+    private readonly thumb: Thumb | null,
   ) { super(); }
 
   toDOM(view: EditorView) {
@@ -125,24 +160,42 @@ class ImageWidget extends WidgetType {
     img.alt = this.alt;
     img.className = "cm-img";
     img.title = "Clic para seleccionar la ruta";
-    img.addEventListener("mousedown", (e) => {
+    const select = (e: Event) => {
       e.preventDefault();
       // Selecting the path puts the cursor on that line, which reveals the
       // raw markdown — so the path ends up selected and editable.
       view.dispatch({ selection: { anchor: this.hrefFrom, head: this.hrefTo }, scrollIntoView: true });
       view.focus();
-    });
-    return img;
+    };
+    img.addEventListener("mousedown", select);
+    if (!this.thumb) return img;
+
+    const fig = document.createElement("figure");
+    fig.className = `cm-thumb cm-thumb-${this.thumb.side}`;
+    if (this.thumb.width) fig.style.width = `${this.thumb.width}px`;
+    fig.appendChild(img);
+    if (this.thumb.caption) {
+      const cap = document.createElement("figcaption");
+      cap.className = "cm-thumbcap";
+      cap.textContent = this.thumb.caption;
+      // El pie también selecciona la ruta: es parte de la misma imagen, y
+      // hacerlo inerte obligaría a apuntar justo a la foto para editarla.
+      cap.addEventListener("mousedown", select);
+      fig.appendChild(cap);
+    }
+    return fig;
   }
   eq(o: ImageWidget) {
-    return o.src === this.src && o.hrefFrom === this.hrefFrom && o.hrefTo === this.hrefTo;
+    return o.src === this.src && o.hrefFrom === this.hrefFrom && o.hrefTo === this.hrefTo
+      && JSON.stringify(o.thumb) === JSON.stringify(this.thumb);
   }
   ignoreEvent() { return false; }
 }
 
 const PROV_RE = /<!--\s*(\/?)(ai|human)\s*-->/g;
 const TASK_RE = /^(\s*)([-*+]|\d+[.)])(\s+)\[([ xX])\]/;
-const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+// El tercer grupo es el `title` de markdown, que aquí hace de pie de foto.
+const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g;
 
 function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet } {
   const b = new RangeSetBuilder<Decoration>();
@@ -238,7 +291,9 @@ function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet }
         const hrefFrom = s + im[0].lastIndexOf("(" + im[2]) + 1;
         items.push({
           from: s, to: e,
-          deco: Decoration.replace({ widget: new ImageWidget(url, im[1], hrefFrom, hrefFrom + im[2].length) }),
+          deco: Decoration.replace({
+            widget: new ImageWidget(url, im[1], hrefFrom, hrefFrom + im[2].length, parseCaption(im[3])),
+          }),
         });
       }
 
@@ -380,6 +435,27 @@ export const livePreviewTheme = EditorView.theme({
   // Mismo motivo que .cm-tablewrap: el margen de un widget no entra en la altura
   // que mide CodeMirror.
   ".cm-img": { maxWidth: "100%", height: "auto", display: "block", padding: "6px 0", borderRadius: "3px" },
+  /*
+   * Miniatura tipo Wikipedia. El marco lo pone la <figure>, no la <img>, para
+   * que el pie quede dentro del recuadro y a la misma anchura que la foto.
+   *
+   * Aquí sí hace falta margen —una imagen flotada pegada al texto es
+   * ilegible—, y va en la figure, que está fuera del flujo: la advertencia de
+   * arriba aplica a los widgets que CodeMirror mide para el mapa de alturas,
+   * y un elemento flotado no aporta altura a la línea de todos modos.
+   */
+  ".cm-thumb": {
+    boxSizing: "border-box", width: "300px", maxWidth: "46%",
+    border: "1px solid var(--line-soft)", background: "var(--panel-grey)",
+    padding: "4px", borderRadius: "2px", fontSize: "12.5px", lineHeight: "1.45",
+  },
+  ".cm-thumb .cm-img": { padding: "0", width: "100%", borderRadius: "0" },
+  ".cm-thumbcap": { color: "var(--muted)", padding: "5px 3px 2px" },
+  ".cm-thumb-right": { float: "right", margin: "4px 0 8px 16px", clear: "right" },
+  ".cm-thumb-left": { float: "left", margin: "4px 16px 8px 0", clear: "left" },
+  // `[ancho]`: sin flotar, centrada y a todo lo ancho — para diagramas y
+  // capturas donde envolver el texto alrededor no aporta nada.
+  ".cm-thumb-none": { float: "none", width: "100%", maxWidth: "100%", margin: "0 auto" },
   // Padding, nunca margin. CodeMirror mide el widget con getBoundingClientRect,
   // que excluye los márgenes propios del nodo — pero el DOM sí los aplica al
   // colocar lo que viene después. Cada tabla dejaba al mapa de alturas 16px

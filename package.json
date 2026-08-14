@@ -1,26 +1,32 @@
 {
-  "name": "bernis-wiki",
+  "name": "summa-wiki",
   "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Local reader/editor for the AIOS knowledge base",
+  "//productName": "La MARCA, no el contenido. Acaba en CFBundleName, el rótulo de la barra de menús de macOS, que no se puede cambiar en caliente. Cómo se llama TU wiki es otra cosa y vive en 04-Sistema/wiki-config.json: por eso la app puede llamarse 'Summa Wiki' y tu instancia 'Wiki de Ana' sin pelearse.",
+  "productName": "Summa Wiki",
   "bin": {
     "wiki": "./bin/wiki"
   },
   "scripts": {
-    "dev": "UV_THREADPOOL_SIZE=64 node --experimental-strip-types --no-warnings server.ts",
-    "build": "NEXT_BUILD_DIR=.next-build next build",
-    "start": "NEXT_BUILD_DIR=.next-build next start -p 4321",
+    "dev": "cross-env UV_THREADPOOL_SIZE=64 node --experimental-strip-types --no-warnings server.ts",
+    "desktop": "electron electron/main.js",
+    "build": "cross-env NEXT_BUILD_DIR=.next-build next build",
+    "start": "cross-env NEXT_BUILD_DIR=.next-build next start -p 4321",
     "wiki": "node --experimental-strip-types --no-warnings src/cli.ts",
     "index": "node --experimental-strip-types --no-warnings src/cli.ts index",
     "health": "node --experimental-strip-types --no-warnings src/cli.ts health",
     "typecheck": "tsc --noEmit",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
+    "icons": "electron scripts/make-icon.mjs",
+    "brand": "node scripts/dev-brand.mjs",
+    "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.0",
     "@codemirror/lang-markdown": "^6.3.0",
     "@codemirror/language": "^6.10.0",
+    "@codemirror/language-data": "^6.5.2",
     "@codemirror/state": "^6.5.0",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.36.0",
@@ -39,6 +45,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/ws": "^8.18.1",
+    "cross-env": "^10.1.0",
+    "electron": "^43.3.0",
     "typescript": "^5.7.0"
   },
   "engines": {

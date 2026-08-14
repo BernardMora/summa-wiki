@@ -2,10 +2,13 @@ import path from "node:path";
 import ArticleClient from "@/components/ArticleClient.tsx";
 import { getIndex, readNote, VAULT } from "@/lib/server.ts";
 import { parseFrontmatter } from "@/src/indexer.ts";
+import { categoriesOf } from "@/lib/nav.ts";
+import { isCore } from "@/lib/identity.ts";
 
 export const dynamic = "force-dynamic";
 
-const LINK_RE = /!?\[[^\]]*\]\(([^)\s]+)\)/g;
+// El `title` opcional es parte del formato: es el pie de foto (ver livePreview).
+const LINK_RE = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
 export default async function NotePage({ params }: { params: Promise<{ id: string[] }> }) {
   const { id: parts } = await params;
@@ -66,6 +69,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
         pillar: note.pillar ?? "", status: note.status ?? "", resource: note.resource ?? "",
         tags: note.tags, words: note.words,
         humanWords: note.provenance.humanWords, agentWords: note.provenance.agentWords,
+        core: isCore(id), categories: categoriesOf(id),
       },
       backlinks,
       outbound,

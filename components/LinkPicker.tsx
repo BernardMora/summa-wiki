@@ -1,4 +1,5 @@
 "use client";
+import { isArticlePath } from "@/src/match.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fuzzy, markHits } from "@/lib/fuzzy.ts";
 
@@ -19,6 +20,7 @@ export default function LinkPicker({
   onClose: () => void;
 }) {
   const [items, setItems] = useState<LinkTarget[]>([]);
+  const [primary, setPrimary] = useState("");
   const [sel, setSel] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -28,8 +30,9 @@ export default function LinkPicker({
       .then((r) => r.json())
       .then((d) => {
         if (dead) return;
+        setPrimary(d.primaryBundle ?? "");
         setItems((d.notes ?? [])
-          .filter((n: LinkTarget) => n.type !== "system" && !n.path.startsWith("05-Projects/"))
+          .filter((n: LinkTarget) => n.type !== "system" && isArticlePath(n.path, d.notArticles))
           .map((n: LinkTarget) => ({ id: n.id, title: n.title, path: n.path, bundle: n.bundle, type: n.type })));
       })
       .catch(() => {});
@@ -95,7 +98,10 @@ export default function LinkPicker({
               {markHits(r.it.title, r.hits).map((s, k) =>
                 s.on ? <b key={k} className="qshit">{s.t}</b> : <span key={k}>{s.t}</span>)}
             </span>
-            <span className="lppath">{r.it.bundle === "veridia" ? "veridia · " : ""}{r.it.path}</span>
+            {/* El bundle primario no se etiqueta: es el caso normal y ponerle nombre
+                a cada fila solo añade ruido. Cualquier otro sí, porque cruzar de
+                bundle es la información que importa al enlazar. */}
+            <span className="lppath">{r.it.bundle !== primary ? `${r.it.bundle} · ` : ""}{r.it.path}</span>
           </li>
         ))}
       </ul>

@@ -1,4 +1,5 @@
 "use client";
+import { isArticlePath } from "@/src/match.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fuzzy } from "@/lib/fuzzy.ts";
 
@@ -37,7 +38,7 @@ export default function QuickSwitcher({
       .then((r) => r.json())
       .then((d) => setItems(
         (d.notes ?? [])
-          .filter((n: Item) => !n.path.includes("05-Projects/"))
+          .filter((n: Item) => isArticlePath(n.path, d.notArticles))
           .map((n: Item) => ({ ...n, path: n.path.replace(/^[a-z]+:/, "") })),
       ))
       .catch(() => {});
