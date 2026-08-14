@@ -22,7 +22,8 @@
     "icons": "electron scripts/make-icon.mjs",
     "brand": "node scripts/dev-brand.mjs",
     "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true",
-    "package:win": "npm run build && electron-builder --win"
+    "package:win": "npm run build && electron-builder --win && npm run smoke:win",
+    "smoke:win": "node scripts/smoke-package.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.0",
@@ -56,6 +57,7 @@
     "node": ">=22.6"
   },
   "build": {
+    "asar": false,
     "appId": "com.veridia.summawiki",
     "productName": "Summa Wiki",
     "directories": {
@@ -65,7 +67,10 @@
       ".next-build/**/*",
       "electron/**/*",
       "src/**/*",
+      "lib/**/*",
+      "public/**/*",
       "server.ts",
+      "next.config.mjs",
       "package.json",
       "node_modules/**/*"
     ],
