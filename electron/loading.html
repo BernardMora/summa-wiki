@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Wiki</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fff; --fg: #202122; --muted: #54595d; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #101418; --fg: #e8eaed; --muted: #9aa0a6; } }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    display: grid; place-content: center; gap: 10px; text-align: center;
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-app-region: drag;
+  }
+  .name {
+    font-family: "Linux Libertine", Georgia, serif; font-size: 30px;
+    font-variant: small-caps; letter-spacing: .02em;
+  }
+  .msg { color: var(--muted); }
+  .msg::after { content: "Compilando…"; }
+  body[data-state="error"] .msg::after {
+    content: "El servidor no respondió. Revisa la consola.";
+  }
+  .bar { width: 180px; height: 2px; margin: 4px auto 0; background: color-mix(in srgb, var(--fg) 12%, transparent); overflow: hidden; }
+  .bar::after {
+    content: ""; display: block; width: 40%; height: 100%; background: var(--fg);
+    animation: slide 1.1s ease-in-out infinite;
+  }
+  body[data-state="error"] .bar { display: none; }
+  @keyframes slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(250%) } }
+</style>
+<div class="name" id="name">Wiki</div>
+<div class="msg"></div>
+<div class="bar"></div>
+<script>
+  // El nombre lo pasa electron/main.js por query string: aquí todavía no hay
+  // servidor al que preguntarle. textContent y no innerHTML — es texto que
+  // escribió el usuario en su wiki-config.json.
+  var n = new URLSearchParams(location.search).get("name");
+  if (n) { document.getElementById("name").textContent = n; document.title = n; }
+</script>

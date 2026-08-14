@@ -71,7 +71,11 @@ export function analyzeProvenance(raw: string, declared: string): Provenance {
 
 // ---------------------------------------------------------------- links
 
-const LINK_RE = /(!?)\[([^\]]*)\]\(([^)\s]+)\)/g;
+// El `title` opcional —`[texto](ruta "título")`— es markdown estándar, y el
+// lector lo usa como pie de foto. Sin contemplarlo aquí, una imagen con pie
+// desaparecía de `assets` y un enlace con título desaparecía del grafo entero:
+// ni backlinks ni comprobación de enlaces rotos.
+const LINK_RE = /(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const HEADING_RE = /^#{1,6}\s+(.+?)\s*$/gm;
 const ASSET_EXT = /\.(png|jpe?g|gif|webp|svg|mp4|mov|pdf|docx|pptx|xlsx|msapp|zip)$/i;
 
@@ -108,12 +112,13 @@ function walk(root: string, out: string[] = []): string[] {
 // ---------------------------------------------------------------- build
 
 export function buildIndex(): WikiIndex {
-  const personal = bundles.find((b) => b.id === "personal")!;
-  const veridia = bundles.find((b) => b.id === "veridia")!;
-
+  // Se recorren TODOS los bundles declarados, no dos por nombre. Antes eran
+  // `find(...)!` sobre "personal" y "veridia": con un bundle menos —el vault de
+  // alguien que no tiene Veridia— la aserción reventaba el índice entero. `walk`
+  // ya devuelve vacío para una raíz que no existe, así que un bundle ausente
+  // simplemente no aporta archivos.
   const files = new Set<string>();
-  for (const f of walk(personal.root)) files.add(f);
-  for (const f of walk(veridia.root)) files.add(f);
+  for (const b of bundles) for (const f of walk(b.root)) files.add(f);
 
   const notes: Note[] = [];
   const byAbs = new Map<string, Note>();

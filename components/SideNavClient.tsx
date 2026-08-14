@@ -8,15 +8,19 @@ import { REVEAL_EVENT } from "./Crumb.tsx";
 import { GRAPH_ID } from "./Tabs.tsx";
 
 interface NavItem { id: string; title: string; pinned?: boolean; }
-interface NavGroup { id: string; label: string; items: NavItem[]; total: number; hidden?: boolean; }
+interface NavGroup { id: string; label: string; blurb?: string; items: NavItem[]; total: number; hidden?: boolean; }
 interface Menu { x: number; y: number; group: NavGroup; }
 
 interface QLink { id: string; title: string; count: number; }
 
-export default function SideNavClient({ groups, centre, questions }: {
+export default function SideNavClient({ groups, centre, questions, name, tagline, hasIcon }: {
   groups: NavGroup[];
   centre: { id: string; title: string } | null;
   questions: QLink[];
+  name: string;
+  tagline: string;
+  /** Hay imagen configurada en el vault; si no, se cae a la inicial. */
+  hasIcon: boolean;
 }) {
   const [view, setView] = useState<"cat" | "files">("cat");
   const [editing, setEditing] = useState<string | null>(null);
@@ -64,7 +68,10 @@ export default function SideNavClient({ groups, centre, questions }: {
     tabs?.open(item.id, item.title, e.metaKey || e.ctrlKey);
   }
 
-  const visible = groups.filter((g) => !g.hidden);
+  // Categories arrive already sorted alphabetically. Empty ones are dropped
+  // here and only here: the portada shows them so an unfilled shelf reads as an
+  // invitation, but in a 20-item rail they are dead weight.
+  const visible = groups.filter((g) => !g.hidden && g.total > 0);
   const hidden = groups.filter((g) => g.hidden);
 
   const renderGroup = (g: NavGroup) => (
@@ -106,7 +113,7 @@ export default function SideNavClient({ groups, centre, questions }: {
         ))}
         {g.total > g.items.length && (
           <li className="dim">
-            <Link href={`/categories#${encodeURIComponent(g.label)}`}>+{g.total - g.items.length} más</Link>
+            <Link href={`/#cat-${g.id}`}>+{g.total - g.items.length} más</Link>
           </li>
         )}
       </ul>
@@ -115,9 +122,18 @@ export default function SideNavClient({ groups, centre, questions }: {
 
   return (
     <nav className="side">
-      <div className="logo">B</div>
-      <div className="sidename">Berni&apos;s Wiki</div>
-      <div className="sidetag">La enciclopedia personal</div>
+      {/* Con foto se muestra la foto; sin ella, la inicial del nombre — que es
+          lo que hacía la "B" fija, solo que ahora sigue a quien configure la
+          wiki. `[...name][0]` y no `name[0]`: con un emoji o un carácter fuera
+          del plano básico, indexar por unidad UTF-16 parte el carácter en dos
+          y pinta un rombo. */}
+      <div className={`logo${hasIcon ? " haspic" : ""}`}>
+        {hasIcon
+          ? <img src="/api/icon" alt="" />
+          : ([...name][0] ?? "W").toUpperCase()}
+      </div>
+      <div className="sidename">{name}</div>
+      {tagline && <div className="sidetag">{tagline}</div>}
 
       <div className="viewtoggle">
         <button className={view === "cat" ? "on" : ""} onClick={() => setView("cat")}>Categorías</button>
@@ -129,7 +145,7 @@ export default function SideNavClient({ groups, centre, questions }: {
           links below. */}
       {centre && (
         <>
-          <h4>El wiki</h4>
+          <h4 className="corehead4">Núcleo</h4>
           <ul className="navid">
             <li className="navcentre">
               <a href={`/note/${encodeURIComponent(centre.id)}`}
@@ -158,7 +174,7 @@ export default function SideNavClient({ groups, centre, questions }: {
           {/* El grafo es una pestaña más: ⌘clic lo abre en una nueva. */}
           <a href="/graph" onClick={(e) => openNote(e, { id: GRAPH_ID, title: "Grafo" })}>Grafo</a>
         </li>
-        <li><Link href="/categories">Todas las categorías</Link></li>
+        <li><Link href="/#categorias">Todas las categorías</Link></li>
         <li><Link href="/health">Salud del wiki</Link></li>
       </ul>
 

@@ -15,6 +15,10 @@ export interface Meta {
   created: string; updated: string; author: string; pillar: string;
   status: string; resource: string; tags: string[]; words: number;
   humanWords: number; agentWords: number; vaultPath: string;
+  /** One of the six identity articles. */
+  core?: boolean;
+  /** Every category this note falls into — a note may be in several. */
+  categories?: { id: string; label: string }[];
 }
 export interface Payload {
   id: string; content: string; mtimeMs: number; meta: Meta;
@@ -224,8 +228,8 @@ export default function ArticlePane({
 
         <div className="artrow">
           <article>
-            <h1 style={secondary ? { fontSize: 22 } : undefined}>{m.title}</h1>
             <p className="infoline">
+              {m.core && <span className="corebadge" style={{ marginLeft: 0, marginRight: 8 }} title="Uno de los seis artículos del núcleo">Núcleo</span>}
               <span>{m.type}</span><span>{m.bundle}</span>
               {m.pillar && <span>{m.pillar}</span>}
               <span>creada {m.created || "—"}</span>
@@ -233,6 +237,14 @@ export default function ArticlePane({
               <span>{m.words} palabras</span>
               {m.agentWords > 0 && total > 0 && <span>{Math.round((100 * m.agentWords) / total)}% agente</span>}
             </p>
+            {(m.categories?.length ?? 0) > 0 && (
+              <p className="catline">
+                <span className="catlinelabel">Categorías</span>
+                {m.categories!.map((c) => (
+                  <Link key={c.id} href={`/#cat-${c.id}`}>{c.label}</Link>
+                ))}
+              </p>
+            )}
 
             {/* El estado de la selección lo reporta el editor, no un onMouseUp:
                 seleccionar con shift+flechas nunca disparaba ese evento y los

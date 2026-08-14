@@ -106,6 +106,51 @@ export function unmarkSelection(view: EditorView) {
   return false;
 }
 
+/**
+ * Número de serie del marcador. Al soltar varias imágenes de golpe hay varias
+ * subidas en vuelo a la vez, y con un texto fijo todas buscarían el mismo
+ * marcador — la primera en terminar se comería el sitio de las demás.
+ */
+let uploadSeq = 0;
+
+/**
+ * Deja un marcador donde va la imagen y lo sustituye por el enlace real cuando
+ * termina la subida. Así una subida lenta no congela el editor ni pierde el
+ * punto donde se soltó: mientras tanto se puede seguir escribiendo.
+ *
+ * Devuelve el marcador para que quien inserta varias sepa cuánto avanzar.
+ */
+function placeImage(
+  view: EditorView,
+  file: File,
+  from: number,
+  to: number,
+  upload: (f: File) => Promise<string | null>,
+  onChange: (v: string) => void,
+): string {
+  const token = `![subiendo ${++uploadSeq}…]()`;
+  view.dispatch({ changes: { from, to, insert: token } });
+  upload(file).then((href) => {
+    const doc = view.state.doc.toString();
+    const i = doc.indexOf(token);
+    // El marcador puede haber desaparecido: deshacer, o recargar la nota
+    // mientras subía. Sin esta salida se escribiría el enlace en otro sitio.
+    if (i < 0) return;
+    const alt = href ? href.split("/").pop()!.replace(/\.[^.]+$/, "") : "";
+    view.dispatch({
+      changes: {
+        from: i, to: i + token.length,
+        insert: href ? `![${alt}](${encodeURI(href)})` : "",
+      },
+    });
+    onChange(view.state.doc.toString());
+  });
+  return token;
+}
+
+const imagesIn = (dt: DataTransfer | null) =>
+  [...(dt?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+
 export default function Editor({
   value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery, onSelectionChange,
 }: {
@@ -132,6 +177,10 @@ export default function Editor({
   onLinkQueryRef.current = onLinkQuery;
   const onSelRef = useRef(onSelectionChange);
   onSelRef.current = onSelectionChange;
+  // Misma razón: `onPasteImage` se declara en línea en ArticlePane y encierra
+  // el id de la nota, así que congelarlo subiría al archivo equivocado.
+  const onImageRef = useRef(onPasteImage);
+  onImageRef.current = onPasteImage;
 
   useEffect(() => {
     if (!host.current || view.current) return;
@@ -156,33 +205,20 @@ export default function Editor({
           linkResolver.of(resolve),
           navigate.of(onNavigate),
           EditorView.lineWrapping,
-          // Paste an image straight into the note, Obsidian-style.
+          // Pegar una imagen dentro de la nota, Obsidian-style. Arrastrarla
+          // desde el Finder se engancha más abajo, sobre un área mayor.
           EditorView.domEventHandlers({
             paste(event, view) {
               const items = event.clipboardData?.items;
-              if (!items || !onPasteImage) return false;
+              const upload = onImageRef.current;
+              if (!items || !upload) return false;
               for (const it of items) {
                 if (it.kind !== "file" || !it.type.startsWith("image/")) continue;
                 const file = it.getAsFile();
                 if (!file) continue;
                 event.preventDefault();
                 const at = view.state.selection.main;
-                // Placeholder first, so a slow upload does not look frozen.
-                const token = `![subiendo…]()`;
-                view.dispatch({ changes: { from: at.from, to: at.to, insert: token } });
-                onPasteImage(file).then((href) => {
-                  const doc = view.state.doc.toString();
-                  const i = doc.indexOf(token);
-                  if (i < 0) return;
-                  const alt = href ? href.split("/").pop()!.replace(/\.[^.]+$/, "") : "";
-                  view.dispatch({
-                    changes: {
-                      from: i, to: i + token.length,
-                      insert: href ? `![${alt}](${encodeURI(href)})` : "",
-                    },
-                  });
-                  onChange(view.state.doc.toString());
-                });
+                placeImage(view, file, at.from, at.to, upload, onChange);
                 return true;
               }
               return false;
@@ -221,7 +257,83 @@ export default function Editor({
     });
     view.current = v;
     onReady?.(v);
-    return () => { v.destroy(); view.current = null; };
+
+    /*
+     * Arrastrar desde el Finder se escucha sobre el panel entero, no sobre el
+     * editor.
+     *
+     * `.cm-editor` lleva `height: auto`, así que su caja mide exactamente lo
+     * que ocupa el texto — y CodeMirror engancha los `domEventHandlers` en
+     * `contentDOM`, más pequeño todavía. El <article> tampoco basta: termina
+     * donde termina el texto. En una nota corta eso deja la mayor parte de lo
+     * que se ve del panel fuera de la zona que escucha, que es justo donde uno
+     * suelta la imagen — se soltaba "dentro de la nota" y no pasaba nada.
+     *
+     * `.panescroll` es el área visible del panel, y hay una por panel, así que
+     * en vista dividida cada nota sigue recibiendo lo suyo.
+     */
+    const zone: HTMLElement =
+      host.current.closest(".panescroll") ?? host.current.closest("article") ?? v.dom;
+    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes("Files") ?? false;
+
+    // dragenter y dragover, los dos cancelados: Chrome se conforma con
+    // dragover, pero la especificación pide ambos y sin dragenter Safari no
+    // llega a tratar el elemento como destino válido.
+    const onEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      zone.classList.add("dropping");
+    };
+    const onOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    // dragleave salta también al pasar de un hijo a otro; solo cuenta el que
+    // sale de verdad del área.
+    const onLeave = (e: DragEvent) => {
+      if (!zone.contains(e.relatedTarget as Node | null)) zone.classList.remove("dropping");
+    };
+    const onDrop = (e: DragEvent) => {
+      zone.classList.remove("dropping");
+      if (!hasFiles(e)) return;   // arrastre de texto: eso ya lo hace CodeMirror
+      // Se corta el default aunque no haya ninguna imagen: soltar un .pdf o un
+      // .zip navegaría fuera de la app, llevándose lo que no se haya guardado.
+      e.preventDefault();
+      const files = imagesIn(e.dataTransfer);
+      const upload = onImageRef.current;
+      if (!files.length || !upload) return;
+
+      // Donde se soltó, no donde estaba el cursor. El `false` devuelve la
+      // posición más cercana en vez de null, que es lo que permite soltar en
+      // el espacio en blanco de debajo del texto.
+      let at = v.posAtCoords({ x: e.clientX, y: e.clientY }, false);
+      for (const [i, file] of files.entries()) {
+        // Cada imagen en su propio párrafo; pegadas, markdown las deja en la
+        // misma línea.
+        if (i > 0) {
+          v.dispatch({ changes: { from: at, insert: "\n\n" } });
+          at += 2;
+        }
+        at += placeImage(v, file, at, at, upload, onChange).length;
+      }
+      v.focus();
+    };
+
+    zone.addEventListener("dragenter", onEnter);
+    zone.addEventListener("dragover", onOver);
+    zone.addEventListener("dragleave", onLeave);
+    zone.addEventListener("drop", onDrop);
+
+    return () => {
+      zone.removeEventListener("dragenter", onEnter);
+      zone.removeEventListener("dragover", onOver);
+      zone.removeEventListener("dragleave", onLeave);
+      zone.removeEventListener("drop", onDrop);
+      zone.classList.remove("dropping");
+      v.destroy();
+      view.current = null;
+    };
   }, []);
 
   return <div ref={host} />;

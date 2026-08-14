@@ -99,9 +99,39 @@ export async function POST(req: Request) {
 
   if (action === "rename") {
     if (!name?.trim()) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
-    // Files follow the slug rule from spec section 3; folders keep their name shape.
-    const base = isDir ? name.trim() : `${slugify(name.replace(/\.md$/i, ""))}.md`;
-    if (!isDir && base === ".md") return NextResponse.json({ error: "nombre sin caracteres usables" }, { status: 400 });
+
+    /*
+     * La regla de slug de la spec (sección 3) es para NOTAS. Aplicarla a todo
+     * archivo convertía cualquier otra cosa en markdown: renombrar
+     * `indexer.ts` producía `indexer-ts.md` — un archivo de código destruido
+     * en silencio, sin manera de deshacerlo. Antes casi no se notaba porque no
+     * se podía abrir nada que no fuera nota; con el editor de cualquier
+     * archivo, el clic derecho de renombrar quedó a un paso de ahí.
+     *
+     * Ahora solo los `.md` pasan por el slug. El resto conserva la forma de su
+     * nombre, como las carpetas, y recupera su extensión si el usuario escribe
+     * el nombre sin ella.
+     */
+    const orig = path.basename(abs);
+    const isNote = /\.md$/i.test(orig);
+    let base: string;
+
+    if (isDir) {
+      base = name.trim();
+    } else if (isNote) {
+      base = `${slugify(name.replace(/\.md$/i, ""))}.md`;
+      if (base === ".md") return NextResponse.json({ error: "nombre sin caracteres usables" }, { status: 400 });
+    } else {
+      // Se quitan separadores y caracteres hostiles para rutas, pero NO el
+      // punto inicial: `.DS_Store` y `.gitignore` son nombres legítimos.
+      const clean = name.trim().replace(/[\/\\:*?"<>|]/g, "").trim();
+      if (!clean || clean === "." || clean === "..") {
+        return NextResponse.json({ error: "nombre inválido" }, { status: 400 });
+      }
+      // extname(".DS_Store") es "" — Node no trata el punto inicial como
+      // extensión, que es justo lo que hace falta aquí.
+      base = path.extname(clean) ? clean : clean + path.extname(orig);
+    }
     const dst = path.join(path.dirname(abs), base);
     if (dst === abs) return NextResponse.json({ ok: true, rel, id: isDir ? undefined : idOf(abs) });
     if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe" }, { status: 409 });

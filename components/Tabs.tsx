@@ -1,5 +1,5 @@
 "use client";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 /**
  * Tiny store shared between the workspace (which owns panes and tabs) and the
@@ -52,11 +52,30 @@ export function useActiveId(): string | null {
   return useSyncExternalStore(subscribe, () => activeId, () => null);
 }
 
-/** Open a note/file in the workspace. Falls back to navigation if unmounted. */
+/** Todo lo que no es una nota: tiene ruta propia, pero no vive bien fuera del workspace. */
+const isSpecialId = (id: string) =>
+  isGraphId(id) || isCanvasId(id) || isRawId(id) || isPdfId(id) || isImgId(id) || isTermId(id);
+
+/**
+ * Abre una nota o un archivo en el workspace.
+ *
+ * Cuando el workspace no está montado — la portada, /search, /categories — hay
+ * que navegar. Antes se iba a la ruta suelta del contenido (`hrefFor`), y para
+ * una terminal eso significaba `/terminal?id=…`: una página con la terminal
+ * sola, sin barra de pestañas, sin el resto de lo que estaba abierto y sin
+ * manera de volver. El propio Workspace ya lo dice al explicar por qué nunca
+ * escribe esas rutas en la barra de direcciones.
+ *
+ * Ahora se navega a /workspace pidiéndole que abra la pestaña. Las notas
+ * siguen yendo a /note/<id>, que ya monta el workspace y da una URL legible.
+ */
 export function openInWorkspace(id: string, title: string, newTab = false) {
   const fn = (globalThis as any).__wikiOpen;
   if (fn) { fn(id, title, newTab); return; }
-  if (typeof window !== "undefined") window.location.href = hrefFor(id);
+  if (typeof window === "undefined") return;
+  window.location.href = isSpecialId(id)
+    ? `/workspace?open=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}`
+    : hrefFor(id);
 }
 
 /** Shape the sidebar and tree expect. */
@@ -66,6 +85,20 @@ export function useTabs() {
 
 /** Panes carry their own tab bars now; the global strip is gone. */
 export function TabBar() { return null; }
+
+/**
+ * Publica `openInWorkspace` en `window`.
+ *
+ * `__wikiOpen` solo existe donde el Workspace está montado; esta versión está
+ * en todas las páginas, porque el provider vive en el layout. La necesita el
+ * menú nativo de Electron, que no puede importar módulos de la app y llamaba a
+ * `__wikiOpen` a secas — con lo que "Nueva terminal" no hacía nada en la
+ * portada, en silencio.
+ */
 export default function TabsProvider({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    (window as any).__wikiOpenTab = openInWorkspace;
+    return () => { delete (window as any).__wikiOpenTab; };
+  }, []);
   return <>{children}</>;
 }

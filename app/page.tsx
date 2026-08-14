@@ -1,96 +1,242 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getIndex } from "@/lib/server.ts";
 import { identityBranches, CENTRE } from "@/lib/identity.ts";
+import { navGroups } from "@/lib/nav.ts";
+import { readConfig, HAS_VAULT, VAULT, VAULT_SOURCE, vaultExists, ARCH } from "@/src/config.ts";
+import { splitBold } from "@/src/architecture.ts";
+import VaultPicker from "@/components/VaultPicker";
 
 export const dynamic = "force-dynamic";
 
 const href = (id: string) => `/note/${encodeURIComponent(id)}`;
 
+/** Pinta el `**...**` que admiten los textos de la arquitectura. */
+const bold = (text: string) =>
+  splitBold(text).map((c, i) => (c.bold ? <strong key={i}>{c.text}</strong> : c.text));
+
+/**
+ * Los tres estados en los que no hay portada que pintar.
+ *
+ * Es el sitio de la Fase 13 (el asistente que crea un vault y elige
+ * arquitectura). Por ahora hace lo mínimo honesto: decir qué falta y dejar
+ * elegir la carpeta.
+ *
+ * El tercer estado —configurado, en disco, y sin una sola nota— se descubrió
+ * probando contra una carpeta vacía: la portada se pintaba entera, con los
+ * seis hubs y las 23 categorías, y cero artículos en todas. Eso no se lee como
+ * "vault vacío", se lee como app rota, y quien lo ve no tiene forma de saber
+ * que solo le falta meter notas o apuntar a otra carpeta.
+ */
+function NoVault({ state }: { state: "missing" | "empty" }) {
+  const TITLE = {
+    missing: "No se encuentra el vault",
+    empty: "Este vault está vacío",
+  } as const;
+
+  return (
+    <div className="welcome">
+      <h1>{TITLE[state]}</h1>
+
+      {state === "missing" && (
+        <p>
+          La app apunta a <code>{VAULT}</code>, pero esa carpeta no está en disco.
+          Si vive en un disco externo o en una carpeta sincronizada, conéctala;
+          si se movió, elígela de nuevo.
+        </p>
+      )}
+
+      {state === "empty" && (
+        <>
+          <p>
+            <code>{VAULT}</code> existe, pero no tiene ninguna nota que indexar.
+          </p>
+          {/* La salida natural desde aquí es montarle una estructura, no elegir
+              otra carpeta. Es adonde llega quien apuntó la app a una carpeta
+              vacía esperando que se la organizara. */}
+          <p><a href="/setup?new=1">Darle una estructura →</a></p>
+        </>
+      )}
+
+      {VAULT_SOURCE === "env" && (
+        <p className="counts">
+          La ruta viene de la variable <code>WIKI_VAULT</code>, que manda sobre
+          lo que se elija aquí.
+        </p>
+      )}
+
+      <VaultPicker current={HAS_VAULT ? VAULT : null} />
+    </div>
+  );
+}
+
 export default function MainPage() {
+  // Sin vault configurado no hay portada que degradar: se va al asistente,
+  // que es una pantalla propia y no una portada vacía con un botón.
+  if (!HAS_VAULT) redirect("/setup");
+  if (!vaultExists()) return <NoVault state="missing" />;
+
   const idx = getIndex();
+  if (idx.stats.notes === 0) return <NoVault state="empty" />;
+
   const s = idx.stats;
+  const cfg = readConfig();
   const branches = identityBranches();
   const centre = idx.notes.find((n) => n.id === CENTRE);
+  // Qué artículos del núcleo existen de verdad. Una arquitectura declara los
+  // que DEBERÍA haber; el índice dice cuáles hay.
+  const ids = new Set(idx.notes.map((n) => n.id));
+  const hubExists = new Set(branches.map((b) => b.hub).filter((h) => ids.has(h)));
+  const coreCount = hubExists.size + (centre ? 1 : 0);
 
-  // Templates carry placeholder frontmatter ("updated: YYYY-MM-DD"), which
-  // sorts above every real date. They are scaffolding, not articles.
-  const isReal = (n: { path: string; slug: string; updated: string; type: string }) =>
-    n.slug !== "_index" &&
-    n.type !== "system" &&
-    !n.path.includes("/Templates/") &&
-    /^\d{4}-\d{2}-\d{2}$/.test(n.updated);
-
-  const recent = [...idx.notes]
-    .filter(isReal)
-    .sort((a, b) => b.updated.localeCompare(a.updated))
-    .slice(0, 7);
+  const all = navGroups(10_000);
+  const groups = all.filter((g) => !g.hidden);
+  const hidden = all.filter((g) => g.hidden);
+  const filed = new Set(
+    all.flatMap((g) => (g.id === "__uncategorised" ? [] : g.items.map((i) => i.id))),
+  ).size;
 
   return (
     <>
       <div className="welcome">
-        <h1>Bienvenido a Berni&apos;s Wiki</h1>
-        <p>la base de conocimiento personal del AIOS, organizada por preguntas.</p>
+        <h1>Bienvenido a {cfg.name}</h1>
+        {/* La descripción de la arquitectura, no la bajada del vault: esa ya
+            se pinta en el masthead y repetirla dos pulgadas más abajo no dice
+            nada nuevo. Antes era una frase fija sobre el AIOS, que no describe
+            el wiki de nadie más. */}
+        <p>{ARCH.description}</p>
         <p className="counts">
           {s.notes} artículos · {s.words.toLocaleString()} palabras ·{" "}
           {s.internalLinks} enlaces internos · {s.brokenLinks} rotos
         </p>
       </div>
 
-      {centre && (
-        <section className="centrecard">
-          <div>
-            <h2><Link href={href(centre.id)}>¿Quién es Bernardo?</Link></h2>
-            <p>
-              Todo retroalimenta a este nodo, y este nodo alimenta de vuelta a cada uno
-              de los otros. Es la entrada del wiki.
-            </p>
+      {/* Núcleo. Va arriba y va en otro color porque no es una categoría más:
+          son los artículos contra los que se lee todo lo demás.
+
+          Se omite entero si NINGUNO de sus artículos existe: una arquitectura
+          recién puesta sobre un vault que todavía no la cumple pintaba las
+          tarjetas igual, enlazando a notas inexistentes. Prometía una
+          estructura que no está. */}
+      {coreCount > 0 && (
+      <section className="core">
+        <div className="corehead">
+          <h2>Núcleo</h2>
+          <p>
+            {ARCH.hubs.length + 1} artículos. No son un tema — son el marco
+            desde el que se leen todos los temas.
+          </p>
+        </div>
+
+        {centre && (
+          <div className="centrecard">
+            <div>
+              <h2><Link href={href(centre.id)}>{centre.title}</Link></h2>
+              <p>
+                Todo retroalimenta a este nodo, y este nodo alimenta de vuelta a cada uno
+                de los otros. Es la entrada del wiki.
+              </p>
+            </div>
+            <Link className="centrego" href={href(centre.id)}>Entrar →</Link>
           </div>
-          <Link className="centrego" href={href(centre.id)}>Entrar →</Link>
-        </section>
+        )}
+
+        <div className="qgrid">
+          {branches.filter((b) => hubExists.has(b.hub)).map((b) => (
+            <div className="qcard" key={b.hub}>
+              <h3><Link href={href(b.hub)}>{b.label}</Link></h3>
+              <p className="qblurb">{b.blurb}</p>
+              <p className="qmeta">
+                {b.count > 0
+                  ? <>{b.count} {b.count === 1 ? "artículo" : "artículos"} · {b.words.toLocaleString()} palabras</>
+                  : <em>sin artículos propios todavía</em>}
+                {b.lives && <> · <code>{b.lives}</code></>}
+              </p>
+              {b.sample.length > 0 && (
+                <ul className="qlist">
+                  {b.sample.map((n) => (
+                    <li key={n.id}><Link href={href(n.id)}>{n.title}</Link></li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
       )}
+
+      {/* Índice por categoría. Vive aquí, en la portada, y no en una página
+          aparte: es lo que se viene a buscar. */}
+      <section className="catindex" id="categorias">
+        <div className="catindexhead">
+          <h2>Categorías</h2>
+          <p>
+            {groups.filter((g) => g.id !== "__uncategorised").length} categorías ·{" "}
+            {filed} artículos clasificados. Un artículo puede estar en varias a la
+            vez, y se archiva solo: la categoría es una regla (ruta, etiqueta o
+            pilar), no una lista que alguien mantiene a mano. Las notas diarias
+            quedan fuera a propósito.
+          </p>
+        </div>
+
+        <nav className="catjump">
+          {groups.map((g) => (
+            <a key={g.id} href={`#cat-${g.id}`}>{g.label} <span className="catcount">{g.total}</span></a>
+          ))}
+        </nav>
+
+        {groups.map((g) => (
+          <section className="catblock" key={g.id} id={`cat-${g.id}`}>
+            <h3>{g.label} <span className="catcount">{g.total}</span></h3>
+            {g.blurb && <p className="catblurb">{g.blurb}</p>}
+            {g.items.length > 0 ? (
+              <ul className="catlist">
+                {g.items.map((i) => (
+                  <li key={i.id}>
+                    {i.pinned && <span className="pinmark" title="Fijada a mano">▪</span>}
+                    <Link href={href(i.id)}>{i.title}</Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="dim" style={{ fontSize: 13, margin: 0 }}>
+                Vacía todavía — la regla existe, falta escribir.
+              </p>
+            )}
+          </section>
+        ))}
+
+        {hidden.length > 0 && (
+          <details className="cathiddenbox">
+            <summary>Ocultas ({hidden.length})</summary>
+            {hidden.map((g) => (
+              <section className="catblock" key={g.id} id={`cat-${g.id}`}>
+                <h3>{g.label} <span className="catcount">{g.total}</span></h3>
+                <ul className="catlist">
+                  {g.items.map((i) => (
+                    <li key={i.id}><Link href={href(i.id)}>{i.title}</Link></li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </details>
+        )}
+      </section>
 
       <div className="cols">
         <div>
-          <section className="panel blue">
-            <h2>Las preguntas</h2>
-            <div className="qgrid">
-              {branches.map((b) => (
-                <div className="qcard" key={b.hub}>
-                  <h3><Link href={href(b.hub)}>{b.label}</Link></h3>
-                  <p className="qblurb">{b.blurb}</p>
-                  <p className="qmeta">
-                    {b.count > 0
-                      ? <>{b.count} {b.count === 1 ? "artículo" : "artículos"} · {b.words.toLocaleString()} palabras</>
-                      : <em>sin artículos propios todavía</em>}
-                    {b.lives && <> · <code>{b.lives}</code></>}
-                  </p>
-                  {b.sample.length > 0 && (
-                    <ul className="qlist">
-                      {b.sample.map((n) => (
-                        <li key={n.id}><Link href={href(n.id)}>{n.title}</Link></li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
           <section className="panel grey">
             <h2>Cómo está organizado</h2>
             <div>
-              <p>
-                El vault se organiza por <strong>preguntas</strong>, no por categorías
-                temáticas. Las categorías se pudren; las preguntas no: <em>¿qué sabe
-                Bernardo?</em> seguirá siendo la pregunta correcta en diez años.
-              </p>
+              <p>{bold(ARCH.rationale)}</p>
               <table className="structtable">
                 <tbody>
-                  <tr><td><code>00-Bernardo/</code></td><td>quién es — los hubs, la biografía y las personas</td></tr>
-                  <tr><td><code>01-Hacer/</code></td><td>qué hace — Veridia, contenido, finanzas, salud</td></tr>
-                  <tr><td><code>02-Saber/</code></td><td>qué sabe — el árbol de conocimiento</td></tr>
-                  <tr><td><code>03-Journal/</code></td><td>el histórico — <strong>nunca se reescribe</strong></td></tr>
-                  <tr><td><code>04-Sistema/</code></td><td>la maquinaria del AIOS</td></tr>
+                  {ARCH.folders.map((f) => (
+                    <tr key={f.path}>
+                      <td><code>{f.path}</code></td>
+                      <td>{bold(f.purpose)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
               <p className="dim" style={{ margin: "10px 0 0" }}>
@@ -103,46 +249,17 @@ export default function MainPage() {
         </div>
 
         <div>
-          <section className="panel green">
-            <h2>Actualizado recientemente</h2>
-            <div>
-              <ul>
-                {recent.map((n) => (
-                  <li key={n.id}>
-                    <Link href={href(n.id)}>{n.title}</Link>{" "}
-                    <span className="dim">({n.updated})</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
           <section className="panel blue">
             <h2>Explorar</h2>
             <div>
               <ul>
                 <li><Link href="/graph">Grafo</Link> — el mapa de enlaces; el hover muestra el título, ⌘clic lo abre en pestaña</li>
                 <li><Link href="/random">Artículo aleatorio</Link></li>
-                <li><Link href="/categories">Categorías</Link> — agrupaciones propias, aparte de la estructura</li>
+                <li><Link href="#categorias">Categorías</Link> — el índice temático de aquí arriba</li>
                 <li><Link href="/health">Salud del wiki</Link> — validación contra la spec</li>
               </ul>
               <p className="dim" style={{ margin: "8px 0 0" }}>
                 <kbd>⌘O</kbd> abre el buscador rápido desde cualquier parte.
-              </p>
-            </div>
-          </section>
-
-          <section className="panel grey">
-            <h2>Procedencia</h2>
-            <div>
-              <p className="dim" style={{ margin: 0 }}>
-                {s.byAuthor.human ?? 0} notas escritas por Bernardo ·{" "}
-                {s.byAuthor.agent ?? 0} por el agente ·{" "}
-                {s.byAuthor.mixed ?? 0} mixtas.
-              </p>
-              <p style={{ margin: "8px 0 0" }}>
-                Lo que escribe el agente va envuelto en marcadores dentro del propio
-                archivo. El texto sin marcar se lee como escrito por Bernardo.
               </p>
             </div>
           </section>

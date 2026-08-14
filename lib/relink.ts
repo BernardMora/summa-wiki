@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { VAULT } from "./server.ts";
+import { ARCH } from "@/src/config.ts";
+import { underAny } from "@/src/match.ts";
 import { EXCLUDE_DIRS } from "@/src/config.ts";
 
 /**
@@ -23,7 +25,9 @@ function walk(dir: string, out: string[] = []): string[] {
     let isDir = e.isDirectory();
     if (e.isSymbolicLink()) { try { isDir = fs.statSync(abs).isDirectory(); } catch { continue; } }
     if (isDir) {
-      if (path.relative(VAULT, abs).startsWith("05-Projects")) continue;
+      // Mismas carpetas que el indexador no recorre: reescribir enlaces
+      // dentro de un codebase entero sería tocar miles de archivos ajenos.
+      if (underAny(path.relative(VAULT, abs) + "/", ARCH.indexShallow)) continue;
       walk(abs, out);
     } else if (e.name.endsWith(".md")) out.push(abs);
   }
@@ -36,7 +40,7 @@ function resolveHref(baseDirRel: string, href: string): string | null {
   let decoded: string;
   try { decoded = decodeURIComponent(href); } catch { return null; }
   const parts: string[] = [];
-  for (const seg of `${baseDirRel}/${decoded}`.split("/")) {
+  for (const seg of `${baseDirRel}/${decoded}`.split(/[\\/]/)) {
     if (!seg || seg === ".") continue;
     if (seg === "..") parts.pop();
     else parts.push(seg);

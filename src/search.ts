@@ -112,7 +112,11 @@ export function health(index: WikiIndex) {
   const issues: { kind: string; note: string; detail: string }[] = [];
   const today = new Date().toISOString().slice(0, 10);
 
+  const EXEMPT_SLUGS = new Set(["CLAUDE", "AGENTS", "README", "EXPANSIONS", "Index"]);
+
   for (const n of index.notes) {
+    if (EXEMPT_SLUGS.has(n.slug)) continue;
+
     if (!n.type) issues.push({ kind: "missing-type", note: n.id, detail: "no type field" });
     else if (!VALID.has(n.type)) issues.push({ kind: "invalid-type", note: n.id, detail: n.type });
     if (!n.title) issues.push({ kind: "missing-title", note: n.id, detail: "" });

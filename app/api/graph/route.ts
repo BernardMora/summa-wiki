@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { getIndex } from "@/lib/server.ts";
+import { ARCH } from "@/src/config.ts";
+import { containsAny } from "@/src/match.ts";
 
 export const dynamic = "force-dynamic";
 
 /** Nodes and edges for the graph view, trimmed to what the canvas needs. */
 export async function GET() {
   const idx = getIndex();
-  const keep = idx.notes.filter((n) => !n.path.includes("/Templates/"));
+  const keep = idx.notes.filter((n) => !containsAny(n.path, ARCH.articles.notArticles.contains));
   const ids = new Set(keep.map((n) => n.id));
 
   const nodes = keep.map((n) => ({
@@ -36,5 +38,8 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ nodes, edges });
+  // El selector de bundles del grafo los listaba a mano —"personal" y
+  // "veridia"— así que un vault con otros bundles ofrecía filtros que no
+  // existen y escondía los suyos.
+  return NextResponse.json({ nodes, edges, bundles: idx.bundles.map((b) => b.id) });
 }

@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import path from "node:path";
 import { getIndex, readNote, VAULT } from "@/lib/server.ts";
 import { parseFrontmatter } from "@/src/indexer.ts";
+import { categoriesOf } from "@/lib/nav.ts";
+import { isCore } from "@/lib/identity.ts";
 
 export const dynamic = "force-dynamic";
 
-const LINK_RE = /!?\[[^\]]*\]\(([^)\s]+)\)/g;
+// El `title` opcional es parte del formato: es el pie de foto (ver livePreview).
+const LINK_RE = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
 /**
  * Everything one article pane needs. The main pane is seeded server-side; a
@@ -57,6 +60,7 @@ export async function GET(req: Request) {
       tags: note.tags, words: note.words,
       humanWords: note.provenance.humanWords, agentWords: note.provenance.agentWords,
       vaultPath: path.relative(VAULT, note.abs).split(path.sep).join("/"),
+      core: isCore(id), categories: categoriesOf(id),
     },
     backlinks: note.backlinks.map((b) => byId.get(b)).filter(Boolean).map(ref),
     outbound: note.links.filter((l) => l.kind === "internal" && l.target)

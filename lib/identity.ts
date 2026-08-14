@@ -1,14 +1,29 @@
 import { getIndex } from "./server.ts";
+import { ARCH, PRIMARY_BUNDLE } from "@/src/config.ts";
+import { underAny, containsAny } from "@/src/architecture.ts";
 import type { Note } from "@/src/types.ts";
 
 /**
- * The identity map: the vault is organised by questions about Bernardo, not by
- * topic folders. This module is the single definition of that map so the
- * homepage and the sidebar cannot drift apart.
+ * ¿Esta ruta es un artículo? Plantillas y codebases no lo son.
  *
- * `where` is a predicate over the vault-relative path rather than a folder
- * string, because three of the questions are interpretive — their content is
- * scattered by design and does not live under one directory.
+ * Vive aquí y no en `nav.ts` porque lo usan los dos: los conteos por pregunta
+ * y el archivado por categoría parten del mismo universo, y solo después
+ * `nav.ts` le quita además lo cronológico.
+ */
+export const isArticle = (p: string) =>
+  !containsAny(p, ARCH.articles.notArticles.contains) &&
+  !underAny(p, ARCH.articles.notArticles.paths);
+
+/**
+ * The identity map: the vault is organised by questions, not by topic folders.
+ * This module is the single definition of that map so the homepage and the
+ * sidebar cannot drift apart.
+ *
+ * Desde la Fase 12 el mapa no se declara aquí: se lee de la arquitectura
+ * (`src/architecture.ts`). Lo que antes era un predicado JS por pregunta ahora
+ * es una lista de rutas, porque los cinco predicados resultaron ser todos
+ * disyunciones de "ruta exacta" y "empieza con" — exactamente la regla que ya
+ * usaban las categorías.
  */
 export interface Question {
   id: string;
@@ -21,67 +36,32 @@ export interface Question {
   where: (p: string) => boolean;
 }
 
-const P = "personal:00-Bernardo";
+/**
+ * Ruta del vault a id de nota. Los hubs viven en el bundle primario, cuya raíz
+ * ES el vault, así que su ruta relativa al bundle y al vault coinciden.
+ */
+const idOf = (p: string) => `${PRIMARY_BUNDLE}:${p}`;
 
-export const CENTRE = `${P}/quien-es-bernardo.md`;
+export const CENTRE = idOf(ARCH.centre);
 
-export const QUESTIONS: Question[] = [
-  {
-    id: "vivido",
-    label: "¿Qué ha vivido?",
-    hub: `${P}/que-ha-vivido.md`,
-    blurb: "Infancia, formación, trabajo, y las personas que lo acompañaron.",
-    lives: "00-Bernardo/biografia/",
-    where: (p) => p.startsWith("00-Bernardo/biografia/"),
-  },
-  {
-    id: "sabe",
-    label: "¿Qué sabe?",
-    hub: `${P}/que-sabe.md`,
-    blurb: "El árbol de conocimiento: lo estudiado, lo leído, lo que quedó.",
-    lives: "02-Saber/",
-    where: (p) => p.startsWith("02-Saber/"),
-  },
-  {
-    id: "hace",
-    label: "¿Qué hace?",
-    hub: `${P}/que-hace.md`,
-    blurb: "En qué se le va el día y qué hábitos lo sostienen.",
-    lives: "01-Hacer/",
-    where: (p) => p.startsWith("01-Hacer/"),
-  },
-  {
-    id: "piensa",
-    label: "¿Cómo piensa?",
-    hub: `${P}/marco-de-pensamiento.md`,
-    blurb: "Filosofía dominante, fundamentos éticos, contexto e ideas clave.",
-    lives: "artículos de posición, repartidos",
-    where: (p) =>
-      p === "00-Bernardo/marco-de-pensamiento.md" ||
-      p === "00-Bernardo/metodo-de-reflexion-y-limpieza-mental.md" ||
-      p === "00-Bernardo/articulos-de-sintesis.md" ||
-      p.startsWith("02-Saber/filosofia/") ||
-      p.startsWith("02-Saber/tecnologia/"),
-  },
-  {
-    id: "porque",
-    label: "¿Por qué hace lo que hace?",
-    hub: `${P}/por-que-hace-lo-que-hace.md`,
-    blurb: "Motivaciones declaradas y gustos revelados — y la distancia entre unas y otros.",
-    lives: "00-Bernardo/ + el log de decisiones",
-    where: (p) =>
-      p === "00-Bernardo/obsesion.md" ||
-      p === "00-Bernardo/por-que-hace-lo-que-hace.md" ||
-      p === "03-Journal/decisions.md",
-  },
-];
+export const QUESTIONS: Question[] = ARCH.hubs.map((h) => ({
+  id: h.id,
+  label: h.label,
+  hub: idOf(h.hub),
+  blurb: h.blurb,
+  lives: h.lives,
+  where: (p: string) => underAny(p, h.paths),
+}));
 
-export const PEOPLE = {
-  label: "Personas",
-  hub: `${P}/personas/personas.md`,
-  blurb: "Atraviesan todas las preguntas, así que son entidades y no una rama.",
-  where: (p: string) => p.startsWith("00-Bernardo/personas/"),
-};
+/**
+ * The núcleo: the centre plus the five questions. Six articles that are not
+ * subject matter but the frame the subject matter hangs on, so they are shown
+ * apart — above the categories, in their own colour — and never filed into an
+ * ordinary category, where they would read as one shelf among twenty.
+ */
+export const CORE: string[] = [CENTRE, ...QUESTIONS.map((q) => q.hub)];
+const CORE_SET = new Set(CORE);
+export const isCore = (id: string) => CORE_SET.has(id);
 
 /** Vault-relative path, derived from the bundle roots rather than hardcoded. */
 export function vaultPath(n: Note, root: string): string {
@@ -97,12 +77,12 @@ export interface Branch {
 /** Counts and a few real articles per question, computed from the index. */
 export function identityBranches(sample = 4): Branch[] {
   const idx = getIndex();
-  const root = idx.bundles.find((b) => b.id === "personal")?.root ?? "";
+  const root = idx.bundles.find((b) => b.id === PRIMARY_BUNDLE)?.root ?? "";
   // `_index` notes are counted here on purpose: some branches — biografía is
   // the clearest case — legitimately hold their content in one.
-  const notes = idx.notes.filter(
-    (n) => !n.path.includes("/Templates/") && !n.path.startsWith("05-Projects/"),
-  );
+  // Solo `notArticles`: las notas diarias SÍ cuentan para su pregunta. Son
+  // contenido real; lo que no hacen es archivarse por tema (ver `lib/nav.ts`).
+  const notes = idx.notes.filter((n) => isArticle(n.path));
 
   const build = (q: { label: string; hub: string; blurb: string; lives?: string; where: (p: string) => boolean }): Branch => {
     const hit = notes.filter((n) => q.where(vaultPath(n, root)) && n.id !== q.hub);
@@ -118,5 +98,5 @@ export function identityBranches(sample = 4): Branch[] {
     };
   };
 
-  return [...QUESTIONS.map(build), build({ ...PEOPLE, lives: "00-Bernardo/personas/" })];
+  return QUESTIONS.map(build);
 }

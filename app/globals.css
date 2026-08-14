@@ -18,6 +18,11 @@
   --ai-line: #8b74e8;
   --human-bg: #fff8e0;
   --human-line: #d4a72c;
+  /* Núcleo: distinto de los tres paneles a propósito, para que los seis
+     artículos del marco no se confundan con una categoría más. */
+  --core-bg: #fdf6ec;
+  --core-head: #f0dfc4;
+  --core-line: #b8842b;
   --serif: "Linux Libertine", Georgia, "Times New Roman", serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
@@ -34,6 +39,7 @@
     --panel-green: #1b2620; --panel-green-head: #2b3f30;
     --panel-grey: #202024; --panel-grey-head: #303034;
     --ai-bg: #241f3a; --ai-line: #7d6ad0;
+    --core-bg: #2a2318; --core-head: #3d3122; --core-line: #d4a24a;
     --human-bg: #302914; --human-line: #a3862f;
     --sel: rgba(120,150,220,.34);
     color-scheme: dark;
@@ -48,6 +54,7 @@
     --panel-green: #1b2620; --panel-green-head: #2b3f30;
     --panel-grey: #202024; --panel-grey-head: #303034;
     --ai-bg: #241f3a; --ai-line: #7d6ad0;
+    --core-bg: #2a2318; --core-head: #3d3122; --core-line: #d4a24a;
     --human-bg: #302914; --human-line: #a3862f;
     --sel: rgba(120,150,220,.34);
     color-scheme: dark;
@@ -69,6 +76,21 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
   padding: 13px 22px 9px; display: flex; align-items: flex-start; gap: 24px;
   position: sticky; top: 0; z-index: 50;
 }
+/* Ventana de escritorio sin barra de título (titleBarStyle: hiddenInset).
+   El atributo lo pone electron/preload.cjs, así que en el navegador nada de
+   esto aplica. La sangría deja pasar los semáforos de macOS; sin la región
+   arrastrable la ventana no se podría mover, porque ya no hay barra que
+   agarrar. Todo lo interactivo tiene que volver a no-drag: dentro de una
+   región de arrastre no llegan los clics. */
+[data-desktop="mac"] .masthead {
+  padding-left: 92px;
+  -webkit-app-region: drag;
+}
+[data-desktop] .masthead a,
+[data-desktop] .masthead input,
+[data-desktop] .masthead button,
+[data-desktop] .masthead select { -webkit-app-region: no-drag; }
+
 .wordmark { display: block; line-height: 1.08; }
 .wordmark .name {
   display: block; font-family: var(--serif); font-size: 26px;
@@ -123,7 +145,13 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
   background: var(--panel-grey); border: 1px solid var(--line-soft);
   display: grid; place-items: center;
   font-family: var(--serif); font-size: 40px; color: var(--muted);
+  overflow: hidden;
 }
+/* Con foto, el recuadro es solo el marco: la imagen lo llena y se recorta al
+   círculo. `cover` y no `contain` porque la foto que ponga el usuario no tiene
+   por qué ser cuadrada, y encajarla dejaría franjas. */
+.side .logo.haspic { background: none; }
+.side .logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .side .sidename { text-align: center; font-family: var(--serif); font-variant: small-caps; font-size: 15px; }
 .side .sidetag { text-align: center; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
 .side h4 {
@@ -234,6 +262,8 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
 
 .tree { font-size: 12.4px; line-height: 1.5; }
 .tree .row {
+  /* relative: las guías de indentación se posicionan contra la fila */
+  position: relative;
   display: flex; align-items: center; gap: 3px; padding: 1px 3px;
   border-radius: 2px; cursor: pointer; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
@@ -245,6 +275,47 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
 .tree .dir > .name { font-weight: 600; }
 .tree .file .name { color: var(--link); }
 .tree .other .name { color: var(--muted); }
+
+/* Guía de indentación: un segmento por fila que, apilado con los de las filas
+   vecinas, forma la línea continua que recorre el contenido de una carpeta.
+   `top: -1px` cierra la costura entre filas consecutivas — sin él la línea se
+   ve punteada en pantallas no-Retina. */
+.tree .guide {
+  position: absolute; top: -1px; bottom: -1px; width: 1px;
+  background: var(--line-soft); pointer-events: none;
+}
+/* La rama que lleva a la nota abierta, más marcada: dice dónde estás sin
+   tener que seguir el resaltado hasta arriba. */
+.tree .guide.on { background: var(--muted); opacity: .55; }
+
+.ficon { width: 14px; height: 14px; flex: 0 0 auto; }
+/* Las carpetas siguen al tema; los archivos llevan el color de su lenguaje. */
+.ficon-dir { color: var(--muted); }
+.tree .row.sel .ficon-dir, .tree .row.dir:hover .ficon-dir { color: var(--fg); }
+
+/* Editor de archivos arbitrarios.
+ *
+ * Aquí CodeMirror scrollea POR DENTRO, al revés que el editor de notas. Aquel
+ * crece con el contenido y deja scrollear a la página (de ahí las reglas
+ * globales `height: auto` / `overflow: visible` de arriba); un archivo de
+ * código quiere altura fija, gutter pegado y virtualización.
+ *
+ * Sin devolverle el `overflow` al scroller pasaba esto: CodeMirror no
+ * scrolleaba nunca, así que medía su viewport como la altura del panel y
+ * renderizaba solo ~59 de 252 líneas, mientras el contenido se desbordaba
+ * visible hasta 4.910 px. El fondo del editor cubría únicamente sus 728 px
+ * — las primeras ~37 líneas — y el resto caía sobre el fondo de la página:
+ * se veía como si ese bloque estuviera seleccionado.
+ *
+ * El selector lleva `.cm-editor` de más a propósito: la regla global tiene la
+ * misma especificidad que `.codepane .cm-scroller` y aparece antes, así que
+ * empatar no basta — hay que ganar.
+ */
+.codewrap { flex: 1; min-height: 0; overflow: hidden; }
+.codepane { height: 100%; }
+.codepane .cm-editor { height: 100%; font-size: 12.5px; }
+.codepane .cm-editor .cm-scroller { overflow: auto; font-family: var(--mono); line-height: 1.55; }
+.codepane .cm-gutters { border-right: 1px solid var(--line-soft); }
 .newbtn {
   width: 100%; margin: 8px 0 4px; font: inherit; font-size: 12px; padding: 4px;
   border: 1px solid var(--line); background: var(--page-bg); color: var(--fg);
@@ -298,8 +369,10 @@ body.resizing { cursor: col-resize; user-select: none; }
 .provnote { color: var(--ai-line); font-weight: 600; }
 
 .treehint { font-size: 11px; color: var(--muted); padding: 2px 4px 6px; }
-.cm-editor { border: 0; height: auto; }
-.cm-editor .cm-scroller { overflow: visible; }
+/* Las dos reglas de .cm-editor que había aquí eran una copia literal de las
+   de arriba (~línea 244). Duplicadas no eran inocuas: al venir DESPUÉS, ganaban
+   por orden de aparición a cualquier regla posterior de igual especificidad
+   — que es como el editor de código acabó con el scroller sin scroll. */
 
 /* ---------------------------------------------------------------- theme toggle */
 .themebtn {
@@ -308,6 +381,135 @@ body.resizing { cursor: col-resize; user-select: none; }
   line-height: 1; align-self: center; margin-left: 10px;
 }
 .themebtn:hover { background: var(--panel-blue); }
+.themebtn svg { display: block; }
+
+/* Panel de configuración. `relative` sobre el envoltorio para anclar el
+   desplegable al botón, y no al masthead entero. */
+.cfgwrap { position: relative; align-self: center; }
+.cfgpanel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+  width: 260px; padding: 10px 12px 12px;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 3px; box-shadow: 0 6px 22px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column; gap: 7px;
+  /* Dentro del masthead arrastrable de la app de escritorio, los controles
+     tienen que volver a ser clicables. */
+  -webkit-app-region: no-drag;
+}
+.cfgsec {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-top: 3px;
+}
+.cfgmodes { display: flex; gap: 4px; }
+.cfgmodes button {
+  flex: 1; font: inherit; font-size: 12px; padding: 4px 0; cursor: pointer;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--muted);
+  border-radius: 2px;
+}
+.cfgmodes button.on { background: var(--bg); color: var(--fg); font-weight: 600; border-color: var(--line); }
+.cfgpanel input {
+  font: inherit; font-size: 12.5px; padding: 5px 7px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; width: 100%; box-sizing: border-box;
+}
+.cfgrow { display: flex; align-items: center; gap: 8px; }
+.cfghint { margin: 2px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+.cfghint code { font-size: 10px; }
+
+/* Ruta del vault. `break-all` y no `ellipsis`: una ruta cortada por la mitad
+   no sirve para confirmar que es la carpeta correcta, que es lo único para lo
+   que se muestra. Que ocupe dos renglones es preferible a que mienta. */
+.cfgpath {
+  font-size: 11px; line-height: 1.4; word-break: break-all;
+  color: var(--fg); background: var(--page-bg);
+  border: 1px solid var(--line-soft); border-radius: 2px; padding: 4px 6px;
+}
+.vaultpick { display: flex; flex-direction: column; gap: 7px; }
+
+/* ---------------------------------------------------------------- asistente */
+/* Botón que se lee como enlace: para lo secundario ("volver"), donde un botón
+   con marco competiría con la acción principal de la pantalla. */
+.linkish {
+  font: inherit; font-size: 12.5px; color: var(--muted);
+  background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline;
+}
+.linkish:hover { color: var(--fg); }
+
+.setupchoices { display: grid; gap: 12px; margin: 22px auto 0; max-width: 560px; }
+.setupcard {
+  display: flex; flex-direction: column; gap: 5px; text-align: left;
+  font: inherit; cursor: pointer; padding: 14px 16px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+.setupcard:hover { border-color: var(--muted); }
+.setupcard strong { font-size: 15px; }
+.setupcard span { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+
+.setupcreate { max-width: 620px; margin-inline: auto; text-align: left; }
+.setupfield { margin-top: 20px; display: flex; flex-direction: column; gap: 6px; }
+.setupfield > label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.setupfield input {
+  font: inherit; font-size: 13px; padding: 6px 8px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; width: 100%; box-sizing: border-box;
+}
+
+/* auto-fit y no un número fijo de columnas: las arquitecturas son tres hoy y
+   pueden ser cinco, y la rejilla no debería tener que enterarse. */
+.archgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.archcard {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  font: inherit; cursor: pointer; padding: 10px 12px;
+  background: var(--page-bg); color: var(--fg);
+  border: 1px solid var(--line-soft); border-radius: 3px;
+}
+.archcard.on { border-color: var(--fg); background: var(--bg); }
+.archcard strong { font-size: 13.5px; }
+.archcard span { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+.cfglink { font-size: 12.5px; }
+.setupfield textarea {
+  font: inherit; font-size: 12.5px; font-family: var(--mono); padding: 6px 8px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; width: 100%; box-sizing: border-box; resize: vertical;
+}
+/* Aviso de riesgo. Rojo y con borde grueso a la izquierda, no un `cfghint`
+   gris: es la única cosa de la interfaz que puede costarle archivos al usuario,
+   y tiene que leerse distinto de una nota al pie. */
+.warnbox {
+  margin-top: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.55;
+  color: var(--fg); background: var(--page-bg);
+  border: 1px solid var(--link-red); border-left-width: 3px; border-radius: 2px;
+}
+.warnbox strong { color: var(--link-red); }
+
+/* Errores y avisos por campo, pegados al campo que los produce: un error
+   general al pie obliga a adivinar cuál de los tres campos lo causó. */
+.fielderr { margin: 2px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--link-red); }
+.fieldwarn { margin: 2px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.steps {
+  margin: -6px 0 18px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted);
+}
+
+/* La terminal del agente. Alta de verdad —no una tira de cuatro renglones—
+   porque el punto es poder LEER lo que está haciendo, no confirmar que corre. */
+.agentrun { margin-top: 12px; }
+.agentterm {
+  height: min(52vh, 460px); margin-top: 8px; padding: 6px;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--bg);
+  overflow: hidden;
+}
+.agentterm > div { height: 100%; }
+
+.archpreview { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 3px; }
+.archpreview .structtable { margin: 6px 0; }
+/* Fuera del panel —en la pantalla de primer arranque— el selector no debe
+   estirarse a lo ancho de la portada. */
+.welcome .vaultpick { max-width: 420px; margin: 18px auto 0; }
 
 /* ---------------------------------------------------------------- open tabs */
 .tabstrip {
@@ -351,6 +553,24 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 
 .catcount { color: var(--muted); font-weight: 400; font-size: 10.5px; }
+
+/* Distintivo de núcleo y pie de categorías del artículo */
+.corebadge {
+  margin-left: 10px; vertical-align: middle; font-family: var(--sans);
+  font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--core-line); background: var(--core-bg);
+  border: 1px solid var(--core-line); border-radius: 10px; padding: 2px 8px;
+}
+.catline {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: -4px 0 14px; font-size: 12.5px;
+}
+.catline a {
+  padding: 1px 8px; border: 1px solid var(--line-soft); border-radius: 10px;
+  background: var(--panel-grey);
+}
+.catline a:hover { background: var(--panel-blue-head); text-decoration: none; }
+.catlinelabel { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
 .hiddenzone { margin-top: 14px; border-top: 1px dashed var(--line-soft); padding-top: 6px; }
 .hiddentoggle {
   width: 100%; text-align: left; font: inherit; font-size: 11.5px; padding: 3px 6px;
@@ -364,6 +584,15 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .newbtn.danger { color: var(--link-red); border-color: var(--link-red); }
 .newbtn.danger:hover { background: var(--link-red); color: #fff; }
+
+/* Arrastrar una imagen desde el Finder. El realce marca el panel entero
+   porque esa es exactamente el área que acepta el soltar — señalar solo el
+   texto mentiría sobre dónde se puede soltar, que es lo que hacía parecer
+   que la función no existía. */
+.panescroll.dropping {
+  outline: 2px dashed var(--link); outline-offset: -6px; border-radius: 3px;
+}
+.panescroll.dropping .cm-content { background: var(--panel-blue); }
 
 /* ---------------------------------------------------------------- contents rail */
 .artrow { display: flex; gap: 22px; align-items: flex-start; }
@@ -418,9 +647,16 @@ body.resizing { cursor: col-resize; user-select: none; }
 .graphlegend span { display: flex; align-items: center; gap: 3px; }
 .graphlegend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .graphcanvas {
-  width: 100%; height: calc(100vh - 230px); min-height: 420px;
+  /* El alto lo fija GraphView midiendo lo que queda de pantalla; aquí solo el
+     mínimo por si el efecto no ha corrido todavía. Ver el comentario allá. */
+  width: 100%; height: 320px;
   border: 1px solid var(--line-soft); cursor: grab; display: block;
 }
+
+/* La página del grafo no lleva el colchón inferior del contenido: el lienzo ya
+   se dimensiona para terminar donde termina la pantalla, y 90 px más debajo son
+   90 px de scroll que solo sirven para esconder el panel del nodo enfocado. */
+.content:has(.graphcanvas) { padding-bottom: 16px; }
 .graphcanvas:active { cursor: grabbing; }
 .graphtip {
   position: absolute; bottom: 10px; left: 10px; background: var(--bg);
@@ -619,11 +855,8 @@ body.workspace .toc { position: sticky; top: 0; max-height: calc(100vh - 190px);
 }
 .pdftext mark.hl:hover { outline: 1px solid var(--link-red); }
 
-.tree .row .extbadge {
-  margin-left: auto; flex: 0 0 auto; font-size: 8.5px; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--muted); background: var(--panel-grey-head);
-  padding: 1px 4px; border-radius: 2px;
-}
+/* La etiqueta de extensión se retiró: el nombre ya la lleva y el icono ya da
+   el tipo de un vistazo. */
 .tree .row.other .name { color: var(--fg); }
 
 /* Placeholders show as blank sheets until their canvas is drawn. */
@@ -683,6 +916,24 @@ body.workspace .toc { position: sticky; top: 0; max-height: calc(100vh - 190px);
   color: var(--muted); font-size: 11px; background: var(--panel-grey);
 }
 
+/* ------------------------------------------------- portada: núcleo */
+/* El núcleo no usa .panel: los paneles son secciones informativas, y esto es
+   la cabecera del wiki. Color propio, borde propio, y ancho completo. */
+.core {
+  background: var(--core-bg); border: 1px solid var(--core-line);
+  border-top: 3px solid var(--core-line); border-radius: 3px;
+  padding: 14px 16px 16px; margin: 0 0 20px;
+}
+.corehead { margin-bottom: 12px; }
+.core > .corehead h2 {
+  margin: 0; padding: 0; border: 0; font-family: var(--sans);
+  font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--core-line);
+}
+.corehead p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.core .centrecard { background: var(--bg); border-color: var(--core-line); border-left-width: 4px; }
+.core .qcard { border-color: var(--core-head); }
+
 /* ------------------------------------------------- portada: mapa de identidad */
 .centrecard {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
@@ -712,6 +963,42 @@ body.workspace .toc { position: sticky; top: 0; max-height: calc(100vh - 190px);
 .qlist { margin: 8px 0 0; padding-left: 16px; font-size: 13px; }
 .qlist li { margin: 2px 0; }
 
+/* ------------------------------------------------- portada: índice temático */
+.catindex { margin: 0 0 20px; }
+.catindexhead h2 {
+  margin: 0; padding: 0 0 4px; font-family: var(--serif); font-size: 22px;
+  font-weight: 400; border-bottom: 1px solid var(--line-soft);
+}
+.catindexhead p { margin: 8px 0 0; color: var(--muted); font-size: 13px; max-width: 82ch; }
+
+/* Saltos rápidos: con veinte categorías, bajar a la de uno no debería ser scroll. */
+.catjump {
+  display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 12px 0 18px;
+  padding-bottom: 12px; border-bottom: 1px dashed var(--line-soft);
+}
+.catjump a {
+  font-size: 12px; padding: 2px 8px; border: 1px solid var(--line-soft);
+  border-radius: 11px; background: var(--panel-grey); color: var(--link);
+  white-space: nowrap;
+}
+.catjump a:hover { background: var(--panel-blue-head); text-decoration: none; }
+
+.catblock { margin: 0 0 16px; scroll-margin-top: 74px; }
+.catblock h3 {
+  margin: 0; font-family: var(--sans); font-size: 14.5px; font-weight: 700;
+  padding-bottom: 3px; border-bottom: 1px solid var(--line-soft);
+}
+.catblurb { margin: 4px 0 6px; color: var(--muted); font-size: 12.5px; }
+.catlist {
+  columns: 3; column-gap: 26px; margin: 6px 0 0; padding-left: 18px; font-size: 13.5px;
+}
+.catlist li { margin: 2px 0; break-inside: avoid; }
+@media (max-width: 1100px) { .catlist { columns: 2; } }
+@media (max-width: 700px) { .catlist { columns: 1; } }
+.cathiddenbox { margin-top: 18px; border-top: 1px dashed var(--line-soft); padding-top: 10px; }
+.cathiddenbox summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.cathiddenbox > .catblock { opacity: .75; margin-top: 12px; }
+
 .structtable { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 13.5px; }
 .structtable td { padding: 4px 8px 4px 0; vertical-align: top; border: 0; }
 .structtable td:first-child { white-space: nowrap; width: 1%; }
@@ -722,6 +1009,12 @@ kbd {
 }
 
 /* ------------------------------------------------- barra: mapa de identidad */
+/* Mismo acento que el núcleo de la portada: los seis artículos se reconocen
+   por color estén donde estén. */
+.side h4.corehead4 {
+  background: var(--core-head); color: var(--core-line);
+  letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px;
+}
 .navid { margin-bottom: 14px; }
 .navid li { display: flex; align-items: baseline; gap: 6px; }
 .navid a { flex: 1; min-width: 0; }

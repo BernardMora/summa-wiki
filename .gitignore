@@ -6,3 +6,9 @@ index.json
 next-env.d.ts
 *.tsbuildinfo
 ocr/.venv/
+
+# Electron
+dist/
+out/
+
+.DS_Store

@@ -57,6 +57,8 @@ export default function GraphView() {
   const [ready, setReady] = useState(false);
   const [stats, setStats] = useState({ n: 0, e: 0 });
   const [bundle, setBundle] = useState("all");
+  /** Los bundles reales del vault. Estaban escritos a mano en el `<select>`. */
+  const [bundles, setBundles] = useState<string[]>([]);
   const [hideIndexes, setHideIndexes] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [overNode, setOverNode] = useState(false);
@@ -64,10 +66,43 @@ export default function GraphView() {
   const [focused, setFocused] = useState<Node | null>(null);
   const tabs = useTabs();
 
+  /**
+   * Alto del lienzo: exactamente lo que queda de pantalla bajo su borde
+   * superior.
+   *
+   * Antes era `calc(100vh - 230px)` en CSS, y esos 230 px eran una estimación
+   * de lo que hay encima —masthead, título, la línea de ayuda, la barra de
+   * controles—. Cuando la leyenda envuelve a dos renglones, o el masthead mide
+   * otra cosa, la cuenta se queda corta: el lienzo sobresale, la página gana
+   * scroll vertical, y lo primero que se pierde por abajo es el panel del nodo
+   * enfocado —el que trae «Abrir nota»— porque va anclado al borde inferior del
+   * lienzo. La función que uno acaba de invocar es justo la que desaparece.
+   *
+   * Medir no puede desviarse: `getBoundingClientRect().top` ya lleva dentro
+   * todo lo que haya encima, mida lo que mida.
+   */
+  useEffect(() => {
+    const fit = () => {
+      const cv = canvas.current;
+      if (!cv) return;
+      const gap = 16;   // aire bajo el lienzo, para que no toque el borde
+      const h = Math.max(320, window.innerHeight - cv.getBoundingClientRect().top - gap);
+      // Solo si cambia de verdad: escribir el mismo valor dispara el
+      // ResizeObserver del dibujo sin que nada se haya movido.
+      if (Math.abs(parseFloat(cv.style.height || "0") - h) > 1) cv.style.height = `${h}px`;
+    };
+    // Diferido un frame: en el primer render la barra de controles todavía no
+    // sabe si su leyenda cabe en un renglón o en dos.
+    const id = requestAnimationFrame(fit);
+    window.addEventListener("resize", fit);
+    return () => { cancelAnimationFrame(id); window.removeEventListener("resize", fit); };
+  }, []);
+
   // ---------------------------------------------------------------- data
   const load = useCallback(async () => {
     const r = await fetch("/api/graph");
     const d = await r.json();
+    setBundles(d.bundles ?? []);
     const keep = (d.nodes as Node[]).filter(
       (n) => (bundle === "all" || n.bundle === bundle) && (!hideIndexes || !n.isIndex),
     );
@@ -299,9 +334,8 @@ export default function GraphView() {
     <div className="graphwrap">
       <div className="graphbar">
         <select value={bundle} onChange={(e) => setBundle(e.target.value)}>
-          <option value="all">Ambos bundles</option>
-          <option value="personal">personal</option>
-          <option value="veridia">veridia</option>
+          <option value="all">{bundles.length === 2 ? "Ambos bundles" : "Todos los bundles"}</option>
+          {bundles.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
         <label>
           <input type="checkbox" checked={hideIndexes} onChange={(e) => setHideIndexes(e.target.checked)} />

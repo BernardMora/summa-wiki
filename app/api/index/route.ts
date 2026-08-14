@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIndex } from "@/lib/server.ts";
+import { ARCH } from "@/src/config.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,12 @@ export async function GET(req: Request) {
   return NextResponse.json({
     generatedAt: idx.generatedAt,
     stats: idx.stats,
+    // Los clientes que listan notas —conmutador rápido, selector de enlaces—
+    // tienen que descartar lo que no es artículo con la MISMA regla que el
+    // servidor. Antes cada uno traía su `05-Projects/` escrito a mano.
+    notArticles: ARCH.articles.notArticles,
     bundles: idx.bundles.map((b) => ({ id: b.id, shared: b.shared })),
+    primaryBundle: ARCH.primaryBundle,
     notes: idx.notes.map((n) => ({
       id: n.id, bundle: n.bundle, path: n.path, slug: n.slug, title: n.title,
       type: n.type, created: n.created, updated: n.updated, author: n.author,

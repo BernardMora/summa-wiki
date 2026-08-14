@@ -5,11 +5,12 @@
 // no después.
 process.env.UV_THREADPOOL_SIZE ??= "64";
 
+import fs from "node:fs";
 import { createServer } from "node:http";
 import next from "next";
 import { WebSocketServer, type WebSocket } from "ws";
 import pty from "node-pty";
-import { VAULT } from "./src/config.ts";
+import { VAULT, readConfig } from "./src/config.ts";
 import { sessions, appendBuffer, type Session } from "./lib/termSessions.ts";
 
 /**
@@ -93,22 +94,47 @@ function shellEnv(): Record<string, string> {
  * mata — ver app/api/terminal/route.ts.
  */
 function onTerminalConnection(ws: WebSocket, req: import("node:http").IncomingMessage) {
-  const id = new URL(req.url ?? "", "http://x").searchParams.get("id") ?? "";
+  const q = new URL(req.url ?? "", "http://x").searchParams;
+  const id = q.get("id") ?? "";
+  /**
+   * Comando a ejecutar al abrir la shell. Lo usa la ingesta para arrancar el
+   * agente sin pedirle al usuario que teclee nada.
+   *
+   * Solo se escribe cuando la sesión es NUEVA: si se reenviara al reengancharse
+   * —cambiar de pestaña, recargar la página— se relanzaría el agente encima del
+   * que ya está corriendo, cada vez.
+   */
+  const cmd = q.get("cmd") ?? "";
+  /**
+   * Directorio de trabajo. Por defecto el vault abierto.
+   *
+   * Se admite otro porque el asistente ingiere a un vault recién creado que
+   * todavía no es el activo, y el agente tiene que correr DENTRO de él: es
+   * donde están la skill, el ledger y la bandeja. Se exige que exista y sea un
+   * directorio; si no, se cae al vault en vez de dejar que la shell arranque en
+   * un sitio impredecible.
+   */
+  let cwd = VAULT;
+  const wanted = q.get("cwd");
+  if (wanted) {
+    try { if (fs.statSync(wanted).isDirectory()) cwd = wanted; } catch { /* se queda el vault */ }
+  }
   const existing = sessions.get(id);
   let session: Session;
 
   if (existing) {
     session = existing;
   } else {
-    const shell = process.env.SHELL ?? "/bin/zsh";
+    const shell = process.platform === "win32" ? "powershell.exe" : (process.env.SHELL ?? "/bin/zsh");
     let term: ReturnType<typeof pty.spawn>;
     try {
       // Login e interactiva, como la que da Terminal.app. -i es explícito
       // en vez de confiar en que zsh deduzca la interactividad del pty.
-      term = pty.spawn(shell, ["-il"], {
+      const args = process.platform === "win32" ? [] : ["-il"];
+      term = pty.spawn(shell, args, {
         name: "xterm-256color",
         cols: 80, rows: 24,
-        cwd: VAULT,
+        cwd,
         env: shellEnv(),
       });
     } catch (e) {
@@ -122,6 +148,12 @@ function onTerminalConnection(ws: WebSocket, req: import("node:http").IncomingMe
     }
     session = { term, buffer: "" };
     if (id) sessions.set(id, session);
+    if (cmd) {
+      // Un respiro antes de escribir: zsh como shell de login tarda unos
+      // milisegundos en montar su prompt, y lo que llegue antes se pierde o
+      // se mezcla con el rc.
+      setTimeout(() => { try { term.write(cmd + "\r"); } catch { /* ya murió */ } }, 400);
+    }
     const created = session;
     term.onData((chunk) => appendBuffer(created, chunk));
     term.onExit(() => { if (id) sessions.delete(id); });
@@ -192,10 +224,32 @@ const upgrade = app.getUpgradeHandler();
 const server = createServer((req, res) => handle(req, res));
 server.on("upgrade", upgrade);
 
+/**
+ * ⚠ El host es obligatorio. No lo quites.
+ *
+ * `listen(port, cb)` NO ata a localhost: el segundo argumento es el callback, y
+ * sin host Node escucha en `::` — TODAS las interfaces. Durante el desarrollo
+ * nunca se nota, porque uno siempre escribe `localhost` en la barra; pero
+ * `lsof` decía `TCP *:4321` y desde otra máquina de la red se podía, sin
+ * ninguna credencial: leer cualquier archivo del vault (`/api/file`),
+ * escribirlo y borrarlo (`/api/fs`), y —lo peor— abrir una shell interactiva
+ * contra el puerto de la terminal. Comprobado desde la IP de LAN: respondió a
+ * `whoami`. Eso es ejecución remota de código en la laptop para cualquiera en
+ * la misma Wi-Fi: la de un café, la de la universidad, la de un cliente.
+ *
+ * Nada de lo que usa la app necesita salir de loopback: Electron, la terminal
+ * integrada, el watcher de archivos y los agentes por CDP hablan todos por
+ * 127.0.0.1. Si algún día hace falta leer el wiki desde el celular, la
+ * respuesta es una VPN de malla (Tailscale) o un túnel SSH — no volver a
+ * abrir el puerto. Autenticar a mano tendría que hacerse dos veces, y la
+ * mitad difícil es el WebSocket de la terminal, que hoy no tiene ni la noción.
+ */
+const HOST = "127.0.0.1";
+
 const termServer = createServer();
 new WebSocketServer({ server: termServer }).on("connection", onTerminalConnection);
-termServer.listen(termPort);
+termServer.listen(termPort, HOST);
 
-server.listen(port, () => {
-  console.log(`> Berni's Wiki en http://localhost:${port} (terminal en el puerto ${termPort})`);
+server.listen(port, HOST, () => {
+  console.log(`> ${readConfig().name} en http://localhost:${port} (terminal en el puerto ${termPort})`);
 });

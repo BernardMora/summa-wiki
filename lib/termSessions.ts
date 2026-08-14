@@ -27,7 +27,7 @@ export interface Session {
 
 const MAX_BUFFER = 200_000;
 
-const KEY = Symbol.for("bernis-wiki.termSessions");
+const KEY = Symbol.for("summa-wiki.termSessions");
 type Registry = Map<string, Session>;
 const g = globalThis as unknown as Record<symbol, Registry>;
 g[KEY] ??= new Map<string, Session>();
