@@ -109,13 +109,44 @@ export function writeIngestSkill(vault: string, arch: Architecture, ledgerRel: s
  * vive `claude` en casi todas las instalaciones. Preguntando desde el proceso
  * daría "no instalado" a gente que lo tiene, y ese es el peor error posible
  * aquí: manda a instalar algo que ya está.
+ *
+ * En Windows la pregunta cambia entera, y durante un tiempo no lo hizo. La
+ * versión anterior daba por hecho POSIX en dos sitios a la vez:
+ *
+ *   1. `process.env.SHELL ?? "/bin/zsh"` — SHELL no es una variable de Windows.
+ *      No existe ni para el usuario ni para la máquina; solo la define Git Bash
+ *      dentro de su propia sesión. Así que en desarrollo, arrancando el servidor
+ *      desde Git Bash, esto funcionaba; en la app instalada, que se abre desde
+ *      el menú de inicio sin SHELL, caía a `/bin/zsh` y fallaba siempre.
+ *
+ *   2. `out.startsWith("/")` — Git Bash devuelve `/c/Users/…/claude`, con
+ *      pinta de ruta POSIX, y por eso el filtro dejaba pasar el resultado. Una
+ *      ruta de Windows de verdad (`C:\…`) no empieza por barra: arreglar solo
+ *      el punto 1 habría seguido devolviendo null, con el fallo ya escondido
+ *      detrás de una shell correcta.
+ *
+ * De ahí que la comprobación de "ruta absoluta" dependa ahora de la plataforma
+ * y no de un carácter. Es el mismo reparto por plataforma que ya hacía
+ * `runInUserShell` en src/agents.ts.
  */
 export function findClaude(): Promise<string | null> {
-  const shell = process.env.SHELL ?? "/bin/zsh";
+  const win = process.platform === "win32";
+  const shell = win ? "powershell.exe" : (process.env.SHELL ?? "/bin/zsh");
+
+  // `Get-Command …).Source` es el `command -v` de PowerShell: la ruta del
+  // ejecutable, o nada. -NoProfile porque el perfil del usuario puede imprimir
+  // banners que ensuciarían stdout, y -NonInteractive para que nada se quede
+  // esperando en un prompt hasta agotar el timeout.
+  const args = win
+    ? ["-NoProfile", "-NonInteractive", "-Command",
+       "(Get-Command claude -ErrorAction SilentlyContinue).Source"]
+    : ["-lic", "command -v claude"];
+
   return new Promise((resolve) => {
-    execFile(shell, ["-lic", "command -v claude"], { timeout: 8000 }, (err, stdout) => {
+    execFile(shell, args, { timeout: 8000 }, (err, stdout) => {
       const out = (stdout ?? "").trim().split("\n").pop()?.trim() ?? "";
-      resolve(!err && out.startsWith("/") ? out : null);
+      const absolute = win ? /^[a-zA-Z]:[\\/]/.test(out) : out.startsWith("/");
+      resolve(!err && absolute ? out : null);
     });
   });
 }
