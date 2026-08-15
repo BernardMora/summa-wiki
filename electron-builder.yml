@@ -1,0 +1,94 @@
+# Configuración de empaquetado.
+#
+# Vive fuera de package.json porque electron-builder valida su esquema contra
+# una lista cerrada de claves y rechaza el truco de `"//": "comentario"` que se
+# usa en el resto del proyecto. La alternativa era dejar sin explicar por qué se
+# excluyen 331 MB, y una exclusión sin motivo escrito es una exclusión que
+# alguien revierte dentro de seis meses "por si acaso". Mismo razonamiento que
+# next.config.mjs: el formato se elige para poder documentar la decisión.
+
+appId: com.veridia.summawiki
+productName: Summa Wiki
+
+# En false a propósito, no por descuido. Next escribe en disco en tiempo de
+# ejecución y dentro de un .asar el sistema de archivos es de solo lectura.
+# Empaquetar con asar exige mover esas escrituras a userData primero; hasta
+# entonces esto se queda como está.
+asar: false
+
+directories:
+  output: dist
+
+files:
+  - .next-build/**/*
+  - electron/**/*
+  - src/**/*
+  - lib/**/*
+  - public/**/*
+  - server.ts
+  - next.config.mjs
+  - package.json
+  - node_modules/**/*
+
+  # Las cuatro exclusiones valen 331 MB de los 579 que pesaba Resources.
+  # Ninguna es una optimización fina: las cuatro son cosas que solo hacen falta
+  # al CONSTRUIR, y que se colaban porque el glob de node_modules las arrastra.
+  #
+  #   cache/          182 MB. La caché incremental de Next. Se regenera sola.
+  #   @next/swc-*     124 MB. El compilador. El servidor de producción sirve la
+  #                   build, no compila — es la misma razón por la que el
+  #                   `output: standalone` de Next tampoco lo incluye, y por la
+  #                   que next.config tiene que ser .mjs y no .ts.
+  #   pdfjs-dist       40 MB. No lo importa una sola línea del código: el visor
+  #                   se sirve vendorizado desde public/.
+  #   @napi-rs         25 MB. La dependencia opcional con la que pdfjs
+  #                   renderiza en Node. Aquí se renderiza en el navegador.
+  #
+  # Quien toque esta lista, que corra `npm run smoke` en las TRES plataformas.
+  # Un recorte de más rompe el arranque del paquete, no el código, y eso solo
+  # se ve después de empaquetar.
+  - '!.next-build/cache/**'
+  - '!node_modules/@next/swc-*/**'
+  - '!node_modules/pdfjs-dist/**'
+  - '!node_modules/@napi-rs/**'
+
+  # 77 MB de source maps. Solo sirven para que un stack trace apunte al
+  # TypeScript original de una dependencia, y nadie depura node_modules desde
+  # una app instalada. Se excluyen aquí y no en .next-build: las de la propia
+  # build sí las quiere quien reporte un fallo del cliente.
+  - '!node_modules/**/*.map'
+
+# Borrador: el Release se publica solo cuando las cuatro plataformas
+# terminaron. Un release que aparece con el .dmg y sin el .exe es peor que uno
+# que tarda cinco minutos más.
+publish:
+  - provider: github
+    releaseType: draft
+
+# El icono hay que nombrarlo. electron-builder busca `build/icon.icns` por
+# convención, el archivo se llama "Summa Wiki.icns", y cuando no lo encuentra
+# no falla: empaqueta con el logo de Electron y sigue. El resultado era un .app
+# que en el Finder no se parecía a la app.
+win:
+  icon: build/icon.png
+  target: nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  icon: build/Summa Wiki.icns
+  target:
+    - dmg
+    - zip
+
+linux:
+  # Un directorio de PNG por tamaño, no un archivo: es lo que esperan los
+  # escritorios de Linux.
+  icon: build/icons
+  target:
+    - AppImage
+    - deb
+  category: Office
