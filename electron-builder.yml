@@ -65,12 +65,12 @@ publish:
   - provider: github
     releaseType: draft
 
-# El icono hay que nombrarlo. electron-builder busca `build/icon.icns` por
-# convención, el archivo se llama "Summa Wiki.icns", y cuando no lo encuentra
-# no falla: empaqueta con el logo de Electron y sigue. El resultado era un .app
-# que en el Finder no se parecía a la app.
+# Windows NO declara icono a propósito: `build/icon.ico` es el candidato de
+# máxima prioridad que electron-builder busca por convención, y ese .ico está
+# armado a mano desde los PNG del repositorio y verificado píxel a píxel.
+# Declarar `icon: build/icon.png` aquí lo pisaría con una conversión del PNG de
+# 512, que es peor arte y encima silenciosamente.
 win:
-  icon: build/icon.png
   target: nsis
 
 nsis:
@@ -78,6 +78,11 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
 
+# mac y linux sí hay que nombrarlos, porque sus archivos no caen donde la
+# convención mira: el .icns se llama "Summa Wiki.icns" y no `icon.icns`, y para
+# linux hace falta el directorio de PNG por tamaño. Sin declararlos,
+# electron-builder no falla — avisa "application icon is not set" y empaqueta
+# con el átomo de Electron, que es como salió el .app hasta ahora.
 mac:
   icon: build/Summa Wiki.icns
   target:
@@ -85,8 +90,6 @@ mac:
     - zip
 
 linux:
-  # Un directorio de PNG por tamaño, no un archivo: es lo que esperan los
-  # escritorios de Linux.
   icon: build/icons
   target:
     - AppImage
