@@ -27,8 +27,64 @@ permissions:
   contents: write
 
 jobs:
+  # Next se compila UNA vez, aquí, y las cuatro plataformas empaquetan lo
+  # mismo. No es un ahorro de minutos: es que compilarlo en Windows fallaba
+  # con un EPERM al hacer glob sobre `C:\Users\<user>\Application Data`, un
+  # junction heredado que no se deja leer, y perseguir ese glob dentro de Next
+  # desde otra plataforma es adivinar.
+  #
+  # Compilarlo cuatro veces nunca tuvo sentido: la salida de `next build` es
+  # JavaScript independiente de plataforma. Lo que sí es específico de cada SO
+  # —el binario de Electron y node-pty— lo resuelve electron-builder, no Next.
+  #
+  # El supuesto que queda por confirmar es que esa salida cruza de SO, no solo
+  # de ruta. Cruzar de ruta ya está probado: el build graba su ruta absoluta en
+  # 83 archivos de `server/` y la app instalada corre desde otro sitio sin
+  # inmutarse. De cruzar de SO responde la prueba de humo de cada plataforma,
+  # que levanta el servidor empaquetado y falla si una ruta no resuelve.
+  web:
+    name: Compilar la web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # El tag manda sobre package.json, no al revés: electron-builder sube los
+      # artefactos al Release del tag `v${version}`, así que un tag v0.3.0 con
+      # un package.json en 0.2.0 publica en un Release que nadie pidió. Aquí,
+      # en el primer job, para romper antes de encender la matriz.
+      - name: El tag coincide con la versión
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::El tag es v$tag y package.json dice $pkg."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # Sin `cache/`: son 182 MB que se regeneran solos y que electron-builder
+      # excluye del paquete de todas formas.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: |
+            .next-build
+            !.next-build/cache
+          if-no-files-found: error
+          retention-days: 1
+
   build:
     name: ${{ matrix.name }}
+    needs: web
     runs-on: ${{ matrix.os }}
     strategy:
       # Sin esto, el primer fallo cancela las otras tres y te quedas sin saber
@@ -70,58 +126,13 @@ jobs:
 
       - run: npm ci
 
-      # El tag manda sobre package.json, no al revés: electron-builder sube los
-      # artefactos al Release del tag `v${version}`, así que un tag v0.3.0 con
-      # un package.json en 0.2.0 publica en un Release que nadie pidió. Vale
-      # más romper aquí, en cinco segundos, que a mitad de la matriz.
-      - name: El tag coincide con la versión
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          pkg="$(node -p "require('./package.json').version")"
-          if [ "$tag" != "$pkg" ]; then
-            echo "::error::El tag es v$tag y package.json dice $pkg."
-            exit 1
-          fi
+      # La build de Next viene del job `web`, no se rehace aquí. Es lo que
+      # electron-builder empaqueta como `.next-build/`.
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next-build
 
-      # `src/config.ts` resuelve el vault al IMPORTARSE, y cuando no hay
-      # ninguno cae al directorio de datos del usuario. Durante `next build`
-      # eso hace que la compilación mire dentro del perfil de quien compila:
-      # en Windows, `C:\Users\<user>\AppData\Roaming\…`, cuyo padre
-      # contiene el junction heredado `Application Data` que devuelve EPERM y
-      # tumba el build con un error de webpack que no menciona ningún vault.
-      # En macOS y Linux el equivalente existe y se lee, así que el fallo solo
-      # se veía en una de las tres plataformas.
-      #
-      # Un directorio vacío dentro del workspace quita la dependencia del
-      # home. El arreglo de fondo es que config.ts no resuelva nada al
-      # importarse — ver docs/future-work.md.
-      - name: Vault vacío para que el build no mire el home
-        shell: bash
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/.ci-vault"
-          echo "WIKI_VAULT=$GITHUB_WORKSPACE/.ci-vault" >> "$GITHUB_ENV"
-
-      - run: npm run build
-
-      # Un secreto que no existe NO deja la variable sin definir: la deja
-      # definida y VACÍA. electron-builder distingue mal los dos casos —
-      # con CSC_LINK="" intenta firmar igual, resuelve la ruta vacía contra
-      # el directorio del proyecto y muere con `<workspace> not a file`,
-      # después de haber empaquetado todo. Por eso las variables de firma se
-      # exportan aquí y solo si traen algo, en vez de declararlas en el `env`
-      # del paso, que es lo que las volvía vacías-pero-presentes.
-      #
-      # Al dar de alta la cuenta de Apple Developer basta con crear los
-      # secretos; este archivo no se toca.
-      #
-      #   CSC_LINK           el .p12 del certificado, en base64
-      #   CSC_KEY_PASSWORD   su contraseña
-      #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarizado
-      #
-      # Sin ellos el .dmg sale sin firmar y macOS dice "la app está dañada".
-      # Es el estado de hoy, y es deliberado: mejor sin firmar que sin build.
       - name: Firma de macOS
         if: runner.os == 'macOS'
         shell: bash
@@ -180,7 +191,7 @@ jobs:
 
   publish:
     name: Publicar el Release
-    needs: build
+    needs: [web, build]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

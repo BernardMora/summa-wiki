@@ -115,11 +115,20 @@ worth it for a "run it on a server, open a browser" story that nobody has asked 
 
 - **`src/config.ts` resolves the vault at import time** (`const resolved = resolveVault()`
   at module scope). When no vault exists it falls back into the user's data
-  directory, which made `next build` read the builder's home — and broke the
-  Windows CI job with an EPERM on the legacy `Application Data` junction, while
-  macOS and Linux passed. CI now points `WIKI_VAULT` at an empty directory inside
-  the workspace, which is a workaround. The real fix is to resolve lazily, so that
-  importing the module has no filesystem side effects.
+  directory, so importing the module has filesystem side effects that depend on
+  whose machine it runs on. That is worth fixing on its own — a build should be
+  hermetic — but note it was *investigated and cleared* as the cause of the
+  Windows CI failure below. The file's own comment explains why it is a `const`:
+  making it lazy means touching the ~40 call sites that import it as a value.
+
+- **`next build` fails on Windows** with `EPERM: scandir 'C:\Users\<user>\Application Data'`
+  — a legacy junction that cannot be read. The glob comes from inside Next
+  (`next/dist/compiled/glob`, reached from `verify-root-layout` / `collect-build-traces`
+  / `inline-static-env`), and the same class of failure is reported upstream against
+  Next, Prisma and better-auth. It was never diagnosed: CI now builds the web assets
+  once on Linux and shares them with all four packaging jobs, which sidesteps it and
+  is better anyway — `next build` output is platform-independent, and only Electron
+  and node-pty are not. If Next ever has to run on Windows again, this is unfinished.
 
 - **`asar: false`.** Enabling it would cut install time and file count, but Next
   writes to disk at runtime and an asar archive is read-only. Requires moving those
