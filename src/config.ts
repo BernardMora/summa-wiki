@@ -211,7 +211,7 @@ export interface WikiConfig {
 }
 
 const CONFIG_DEFAULTS: WikiConfig = {
-  name: "Wiki",
+  name: "Summa Wiki",
   tagline: "La enciclopedia personal",
   icon: null,
 };

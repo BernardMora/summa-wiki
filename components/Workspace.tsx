@@ -116,7 +116,17 @@ export default function Workspace({ initial, seed }: {
     setPanes((ps) => ps.map((p) => {
       if (p.key !== activePane) return p;
       if (p.tabs.some((t) => t.id === id)) return { ...p, activeId: id };
-      if (newTab || !p.activeId) return { ...p, tabs: [...p.tabs, { id, title }], activeId: id };
+      // Una pestaña con sesión viva no se reemplaza: se abre una al lado.
+      //
+      // Reemplazar es el comportamiento normal —abrir notas desde el árbol no
+      // debe llenar la barra— y para una nota no cuesta nada, porque volver a
+      // abrirla la reconstruye idéntica. Una terminal no: el proceso sigue
+      // corriendo en el servidor (la pty sobrevive a todo menos a `closeTab`,
+      // que es la única que hace DELETE). Reemplazar su pestaña no la cerraba,
+      // la volvía inalcanzable — con el comando a medio escribir y el proceso
+      // vivo, sin nada en la interfaz que lo dijera.
+      if (newTab || !p.activeId || isTermId(p.activeId))
+        return { ...p, tabs: [...p.tabs, { id, title }], activeId: id };
       const i = p.tabs.findIndex((t) => t.id === p.activeId);
       const tabs = [...p.tabs];
       tabs[i] = { id, title };

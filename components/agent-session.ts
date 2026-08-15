@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Los parámetros con los que arranca una sesión del agente.
@@ -32,10 +32,21 @@ export const MODELS: Record<string, { id: string; label: string; hint: string }[
     { id: "sonnet", label: "Sonnet", hint: "Equilibrado. Suficiente para material que ya viene ordenado." },
     { id: "haiku", label: "Haiku", hint: "El más rápido y barato. Para lotes grandes y clasificación simple." },
   ],
+  /*
+   * Solo el default: aquí NO se inventan modelos.
+   *
+   * Había un «Pro» y un «Flash» escritos a mano, y ninguno de los dos existe
+   * como id para `agy` —su catálogo real son `gemini-3.7-flash-high`,
+   * `gemini-3.6-flash-medium` y demás—, así que elegirlos armaba un
+   * `--model pro` que el CLI rechaza. Los nombres de esa lista salieron de
+   * suponer cómo se llamarían, no de preguntárselo al CLI.
+   *
+   * La lista de verdad la trae `useAgyModels` de `agy models`. Cuando no se
+   * puede (sin sesión iniciada, sin `agy` instalado) queda solo esta opción,
+   * que es la honesta: el CLI usa el modelo que ya tenga configurado.
+   */
   antigravity: [
     { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en Antigravity." },
-    { id: "pro", label: "Pro", hint: "Para tareas de alto razonamiento y notas complejas." },
-    { id: "flash", label: "Flash", hint: "Rápido y eficiente para tareas sencillas." },
   ],
   opencode: [
     { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en OpenCode." },
@@ -130,16 +141,35 @@ export function agentCommand(agent: string, model: string, perm: string, skill =
 export function useAgyModels(agent: string) {
   const [live, setLive] = useState<{ id: string; label: string }[] | null>(null);
   const [loading, setLoading] = useState(false);
+  /*
+   * Qué agentes YA se preguntaron, hayan respondido lo que hayan respondido.
+   *
+   * Un ref y no estado: es justo lo que no debe provocar un render, porque el
+   * render es lo que volvía a disparar el efecto. La versión anterior se
+   * guardaba con `if (live || loading) return` y las dos son insuficientes,
+   * porque un intento FALLIDO deja `live` en null y `loading` en false — el
+   * mismo estado exacto que antes de intentarlo. El efecto no podía distinguir
+   * «todavía no he preguntado» de «pregunté y no había nada», así que volvía a
+   * preguntar, y como `loading` estaba en las dependencias, cada vuelta lo
+   * cambiaba dos veces y agendaba la siguiente: un bucle cerrado, una petición
+   * cada ~250 ms mientras la pantalla estuviera abierta.
+   *
+   * Se dispara con `agy` instalado pero sin sesión iniciada: el comando
+   * imprime «Please sign in…», sale con código 0, y el parser no encuentra
+   * ninguna línea `id<TAB>label` — un fallo que no parece fallo.
+   */
+  const asked = useRef<string | null>(null);
 
   useEffect(() => {
-    if (agent !== "antigravity" || live || loading) return;
+    if (agent !== "antigravity" || asked.current === agent) return;
+    asked.current = agent;
     setLoading(true);
     fetch("/api/agents/models?agent=antigravity")
       .then((r) => r.json())
       .then((d) => setLive(Array.isArray(d.models) && d.models.length ? d.models : null))
       .catch(() => setLive(null))
       .finally(() => setLoading(false));
-  }, [agent, live, loading]);
+  }, [agent]);
 
   const fallback = MODELS[agent] || MODELS.claude;
   const models = agent === "antigravity" && live

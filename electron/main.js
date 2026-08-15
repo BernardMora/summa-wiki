@@ -61,7 +61,7 @@ app.setName("Summa Wiki");
  */
 function vaultConfig() {
   const { path: vault } = resolveVault();
-  const fallback = { name: "Wiki", icon: null };
+  const fallback = { name: "Summa Wiki", icon: null };
   if (!vault) return fallback;
 
   // `.summa/` primero, `04-Sistema/` después. En el PRIMER arranque tras la
@@ -129,7 +129,25 @@ let server = null;
 let quitting = false;
 
 function startServer() {
-  const isPackaged = app.isPackaged;
+  /*
+   * `app.isPackaged` NO sirve aquí, y el motivo es una trampa propia.
+   *
+   * Ese getter decide mirando el nombre del ejecutable: si no se llama
+   * `electron`, se da por empaquetado. Pero `scripts/dev-brand.mjs` —que corre
+   * solo en el postinstall— renombra `Electron.app` a `Summa Wiki.app` para que
+   * la barra de menús diga la marca durante el desarrollo. Desde ese renombrado,
+   * `npm run desktop` se declaraba empaquetado: serverEnv le ponía
+   * NODE_ENV=production y NEXT_BUILD_DIR=.next-build, y el servidor servía la
+   * build vieja de `.next-build` en vez de compilar las fuentes. Editar CSS o
+   * componentes no cambiaba nada en pantalla y no había ningún error que lo
+   * delatara — la app arrancaba perfecta, sirviendo un bundle congelado.
+   *
+   * `process.defaultApp` no se puede confundir: Electron lo define cuando se
+   * lanza con la ruta de un script (`electron electron/main.js`), que es
+   * exactamente el caso de desarrollo, y lo deja sin definir en un paquete de
+   * verdad. Es independiente de cómo se llame el binario.
+   */
+  const isPackaged = app.isPackaged && !process.defaultApp;
   const node = process.env.WIKI_NODE || (isPackaged ? process.execPath : "node");
 
   // El entorno se arma en server-env.mjs, no aquí: la prueba de humo del
@@ -442,7 +460,7 @@ function buildMenu() {
 // ─── Ciclo de vida ──────────────────────────────────────────────────────────
 
 /** Identidad leída una vez al arrancar; el splash y el Dock la usan. */
-let brand = { name: "Wiki", icon: null };
+let brand = { name: "Summa Wiki", icon: null };
 
 /*
  * Icono del Dock, en caliente. Es la mitad de la identidad que NO está
