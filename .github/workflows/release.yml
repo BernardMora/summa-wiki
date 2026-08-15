@@ -108,8 +108,17 @@ jobs:
           # Un runner Intel de verdad, no una compilación cruzada. Universal
           # queda descartado a propósito: duplicaría el peso del .dmg para dar
           # a cada usuario una arquitectura que no usa.
+          #
+          # `macos-15-intel`, no `macos-13`: la imagen de macOS 13 se retiró el
+          # 4 de diciembre de 2025 y un job que la pide no falla — se queda en
+          # cola indefinidamente, que es peor, porque el run entero parece
+          # "en progreso" mientras no avanza nada.
+          #
+          # Esta etiqueta es la ÚLTIMA imagen x86_64 de Actions y muere en
+          # otoño de 2027, cuando habrá que decidir si se sigue publicando para
+          # Intel o se deja ir. Apple ya lo dejó ir.
           - name: macOS (Intel)
-            os: macos-13
+            os: macos-15-intel
             args: --mac --x64
           - name: Windows
             os: windows-latest
