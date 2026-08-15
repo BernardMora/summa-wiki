@@ -71,14 +71,23 @@ jobs:
 
       - run: npm run build
 
-      # Sin `cache/`: son 182 MB que se regeneran solos y que electron-builder
-      # excluye del paquete de todas formas.
+      # 182 MB de caché incremental que no tiene por qué viajar: se regenera
+      # sola y electron-builder la excluye del paquete de todas formas. Se
+      # BORRA en vez de excluirla en el upload para que el patrón del artefacto
+      # sea una sola cosa, y no dos que además interactúan con la regla de
+      # archivos ocultos de aquí abajo.
+      - run: rm -rf .next-build/cache
+
       - uses: actions/upload-artifact@v4
         with:
           name: next-build
-          path: |
-            .next-build
-            !.next-build/cache
+          path: .next-build
+          # `.next-build` empieza por punto, y upload-artifact trata como
+          # oculto todo lo que cuelgue de un directorio con punto. Sin esto no
+          # sube NADA y falla con "no files were found" — señalando una ruta
+          # que existe y está llena, que es lo que hace el fallo difícil de
+          # leer.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
