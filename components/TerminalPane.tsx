@@ -86,6 +86,26 @@ export default function TerminalPane({ id }: { id: string }) {
         fontSize: 13,
         cursorBlink: true,
         theme: currentTheme(),
+        /*
+         * Scroll: más recorrido por muesca y con interpolación.
+         *
+         * Por defecto xterm mueve UNA línea por muesca de rueda y salta a la
+         * posición nueva sin transición. Las dos cosas juntas son lo que se
+         * siente tosco: en un trackpad, donde el gesto es continuo, hace falta
+         * un barrido largo para avanzar lo que en cualquier otra ventana avanza
+         * de un golpe, y cada paso es un corte seco de una fila.
+         *
+         * 3 líneas es lo que usan Terminal.app e iTerm por muesca. Los 90 ms de
+         * interpolación son deliberadamente cortos: bastan para que el ojo siga
+         * el texto en vez de reconstruirlo, y no tanto como para que el scroll
+         * se sienta con inercia o se quede corriendo después de soltar.
+         *
+         * `fastScrollSensitivity` es el multiplicador con Alt, para saltar un
+         * log largo sin llegar al final a base de gestos.
+         */
+        scrollSensitivity: 3,
+        fastScrollSensitivity: 10,
+        smoothScrollDuration: 90,
       });
       const fit = new FitAddon();
       term.loadAddon(fit);

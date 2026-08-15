@@ -274,6 +274,48 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
 .cm-editor .cm-scroller { overflow: visible; }
 .cm-editor.cm-focused { outline: none; }
 
+/*
+ * Panel de búsqueda (⌘F / Ctrl+F) dentro de una nota o un archivo.
+ *
+ * CodeMirror lo trae sin estilo propio, así que sale con los controles crudos
+ * del navegador: fondo blanco fijo, tipografía del sistema, y en modo oscuro
+ * una franja luminosa encima del texto.
+ *
+ * `position: sticky` y no `static`: `.cm-scroller` lleva `overflow: visible`
+ * —la nota crece y quien hace scroll es el panel, no el editor—, así que un
+ * panel en el flujo normal se va hacia arriba con el documento y desaparece en
+ * cuanto buscas algo que está más abajo. Pegado arriba se queda a la vista
+ * mientras saltas de coincidencia en coincidencia.
+ */
+.cm-editor .cm-panels {
+  position: sticky; top: 0; z-index: 8;
+  background: var(--panel-blue); color: var(--fg);
+  border-bottom: 1px solid var(--line-soft);
+}
+.cm-editor .cm-panels.cm-panels-top { border-top: 0; }
+.cm-editor .cm-search { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 9px; }
+.cm-editor .cm-search input[type="text"] {
+  font: inherit; font-size: 12.7px; padding: 3px 7px;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  background: var(--bg); color: var(--fg); min-width: 160px;
+}
+.cm-editor .cm-search input[type="text"]:focus { outline: 1px solid var(--panel-blue-head); }
+.cm-editor .cm-search button {
+  font: inherit; font-size: 12px; padding: 3px 9px; cursor: pointer;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  background: var(--bg); color: var(--fg);
+}
+.cm-editor .cm-search button:hover { background: var(--panel-blue-head); }
+.cm-editor .cm-search label { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 3px; }
+.cm-editor .cm-panel.cm-search [name="close"] {
+  position: absolute; top: 4px; right: 6px;
+  border: 0; background: none; font-size: 16px; line-height: 1; color: var(--muted); padding: 2px 5px;
+}
+/* La coincidencia bajo el cursor tiene que distinguirse de las demás; con el
+   mismo tono no se sabe cuál de las doce está seleccionada. */
+.cm-editor .cm-searchMatch { background: rgba(255, 200, 0, .32); border-radius: 2px; }
+.cm-editor .cm-searchMatch-selected { background: rgba(255, 145, 0, .62); }
+
 /* ---------------------------------------------------------------- file tree */
 .viewtoggle { display: flex; gap: 3px; margin-bottom: 10px; }
 .viewtoggle button {
