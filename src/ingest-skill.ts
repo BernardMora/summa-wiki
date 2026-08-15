@@ -1,23 +1,25 @@
-import fs from "node:fs";
-import path from "node:path";
 import { execFile } from "node:child_process";
 import type { Architecture } from "./architecture.ts";
+import { writeSkill, localNote, type SkillWrite } from "./skills.ts";
 
 /**
  * La skill que corre el agente para repartir lo ingerido.
  *
- * Se escribe **dentro del vault**, en `.claude/skills/vault-ingest/`, y no se
- * manda como prompt de un solo tiro. Tres razones, en orden de peso:
+ * Se escribe **dentro del vault** —ver `src/skills.ts` para dónde exactamente y
+ * por qué ahí— y no se manda como prompt de un solo tiro. Tres razones, en
+ * orden de peso:
  *
  * 1. Sirve otra vez. La ingesta no es un evento único: dentro de un mes habrá
  *    otra carpeta que meter, y entonces basta con `/vault-ingest`.
- * 2. Es editable. Si el reparto sale torcido, se corrige el criterio en un
- *    archivo que el usuario puede leer, en vez de en el código de la app.
+ * 2. Se puede ajustar. Si el reparto sale torcido, el criterio se corrige en un
+ *    archivo que el usuario lee, en vez de en el código de la app.
  * 3. Viaja con el vault, igual que la arquitectura y las categorías.
  *
  * Se regenera en cada ingesta porque incorpora las reglas de la arquitectura
  * vigente: si el usuario editó `architecture.json`, la skill tiene que decir lo
- * que dice ese archivo hoy, no lo que decía el día que se creó el vault.
+ * que dice ese archivo hoy, no lo que decía el día que se creó el vault. Ese
+ * mismo hecho es lo que hace que la razón 2 necesite `local.md`: lo generado se
+ * pisa, lo propio no.
  */
 
 export function ingestSkill(arch: Architecture, ledgerRel: string): string {
@@ -91,15 +93,11 @@ pendiente, no un error.
 Si te apartaste de la tabla de arriba en algún caso, dilo y explica por qué. Las
 reglas son el criterio por defecto, no una camisa de fuerza: material que venía
 junto y que la tabla separaría es el caso donde apartarse suele ser correcto.
-`;
+${localNote("vault-ingest")}`;
 }
 
-export function writeIngestSkill(vault: string, arch: Architecture, ledgerRel: string): string {
-  const dir = path.join(vault, ".claude", "skills", "vault-ingest");
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, "SKILL.md");
-  fs.writeFileSync(file, ingestSkill(arch, ledgerRel), "utf8");
-  return file;
+export function writeIngestSkill(vault: string, arch: Architecture, ledgerRel: string): SkillWrite {
+  return writeSkill(vault, "vault-ingest", ingestSkill(arch, ledgerRel));
 }
 
 /**
