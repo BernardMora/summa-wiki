@@ -85,28 +85,70 @@ jobs:
             exit 1
           fi
 
+      # `src/config.ts` resuelve el vault al IMPORTARSE, y cuando no hay
+      # ninguno cae al directorio de datos del usuario. Durante `next build`
+      # eso hace que la compilación mire dentro del perfil de quien compila:
+      # en Windows, `C:\Users\<user>\AppData\Roaming\…`, cuyo padre
+      # contiene el junction heredado `Application Data` que devuelve EPERM y
+      # tumba el build con un error de webpack que no menciona ningún vault.
+      # En macOS y Linux el equivalente existe y se lee, así que el fallo solo
+      # se veía en una de las tres plataformas.
+      #
+      # Un directorio vacío dentro del workspace quita la dependencia del
+      # home. El arreglo de fondo es que config.ts no resuelva nada al
+      # importarse — ver docs/future-work.md.
+      - name: Vault vacío para que el build no mire el home
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.ci-vault"
+          echo "WIKI_VAULT=$GITHUB_WORKSPACE/.ci-vault" >> "$GITHUB_ENV"
+
       - run: npm run build
 
-      - name: Empaquetar
+      # Un secreto que no existe NO deja la variable sin definir: la deja
+      # definida y VACÍA. electron-builder distingue mal los dos casos —
+      # con CSC_LINK="" intenta firmar igual, resuelve la ruta vacía contra
+      # el directorio del proyecto y muere con `<workspace> not a file`,
+      # después de haber empaquetado todo. Por eso las variables de firma se
+      # exportan aquí y solo si traen algo, en vez de declararlas en el `env`
+      # del paso, que es lo que las volvía vacías-pero-presentes.
+      #
+      # Al dar de alta la cuenta de Apple Developer basta con crear los
+      # secretos; este archivo no se toca.
+      #
+      #   CSC_LINK           el .p12 del certificado, en base64
+      #   CSC_KEY_PASSWORD   su contraseña
+      #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarizado
+      #
+      # Sin ellos el .dmg sale sin firmar y macOS dice "la app está dañada".
+      # Es el estado de hoy, y es deliberado: mejor sin firmar que sin build.
+      - name: Firma de macOS
+        if: runner.os == 'macOS'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Firma de macOS. Mientras estos secretos no existan, electron-builder
-          # avisa y sigue sin firmar — que es exactamente el estado de hoy. Al
-          # dar de alta la cuenta de Apple Developer basta con crearlos: no hay
-          # que tocar este archivo.
-          #
-          #   CSC_LINK           el .p12 del certificado, en base64
-          #   CSC_KEY_PASSWORD   su contraseña
-          #   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarizado
-          #
-          # Sin ellos, un .dmg descargado da "la app está dañada" en Apple
-          # Silicon. No es un aviso que se pueda saltar con clic derecho.
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            echo "::notice::Certificado presente: se firmará el paquete."
+            for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+              [ -n "${!v}" ] && echo "$v=${!v}" >> "$GITHUB_ENV"
+            done
+          else
+            # La forma documentada de decirle a electron-builder que NO busque
+            # identidades en el llavero. Sin esto encuentra las que haya en el
+            # runner y falla a medias.
+            echo "::warning::Sin certificado de Apple: el paquete sale sin firmar."
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Empaquetar
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # `--publish always` sube al Release en borrador declarado en
         # electron-builder.yml; el primer job de la matriz lo crea y los otros
         # tres lo reutilizan. En borrador para que nadie descargue un .dmg

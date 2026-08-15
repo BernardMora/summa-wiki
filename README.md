@@ -112,6 +112,8 @@ for all four targets by GitHub Actions on a version tag; see
 
 - [**Architecture**](docs/architecture.md) — the vault format, the indexer, categories,
   bundles, ingest, and the reasoning behind each decision.
+- [**Future work**](docs/future-work.md) — extensibility and distribution questions
+  that have been thought through but deliberately not built, with the reasoning.
 
 ## Contributing
 
