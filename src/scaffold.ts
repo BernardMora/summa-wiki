@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Architecture } from "./architecture.ts";
 import { splitBold } from "./match.ts";
+import { writeAuditSkill } from "./audit-skill.ts";
+import { SKILLS_HOME, SKILL_ADAPTERS } from "./skills.ts";
 
 /**
  * Crear un vault: escribir en disco la arquitectura que el usuario eligió.
@@ -197,6 +199,20 @@ El texto sin marcar se lee como escrito por la persona dueña del vault. Si no
 marcas lo tuyo, la procedencia se corrompe en silencio. Actualiza también
 \`author:\` a \`mixed\` cuando metas contenido en una nota que era \`human\`.
 
+## Skills
+
+Las skills de este vault viven en \`${SKILLS_HOME}/<nombre>/SKILL.md\` — la
+convención neutral, para que las lean varios agentes y no solo uno.
+\`${Object.values(SKILL_ADAPTERS).join("/\` y \`")}/\` son enlaces a esa carpeta, no copias.
+
+| Skill | Para qué |
+|---|---|
+| \`/audit\` | Revisar la salud del vault: qué se rompió y qué falta escribir. |
+| \`/vault-ingest\` | Repartir lo que entró a la bandeja. Aparece tras la primera ingesta. |
+
+Las **regenera la app** cuando cambia la arquitectura. Para reglas propias que
+sobrevivan a eso, escribe \`${SKILLS_HOME}/<nombre>/local.md\`, que nunca se toca.
+
 ## Configuración
 
 \`.summa/\` guarda la configuración de la app: \`architecture.json\` (esta
@@ -264,5 +280,37 @@ export function createVault(dir: string, name: string, arch: Architecture, agent
     write("CLAUDE.md", root);
   }
 
+  // 5. Las skills que no dependen de haber ingerido nada.
+  //
+  // `/audit` va aquí y no en la ingesta porque no necesita un ledger: audita la
+  // estructura, y un vault recién creado ya tiene estructura que auditar. La de
+  // ingesta se escribe cuando hay algo que repartir, que es cuando puede decir
+  // de dónde salió cada archivo.
+  //
+  // Fuera de `write()` a propósito: no es una nota, es un artefacto generado
+  // que se regenera, y pasa por `writeSkill` porque tiene que quedar visible
+  // para los tres agentes, no solo para el que se eligió aquí. Elegir Claude en
+  // el asistente no es motivo para dejar el vault inutilizable desde `agy`
+  // mañana.
+  const audit = writeAuditSkill(dir, arch);
+  created.push(audit.canonical);
+  for (const a of audit.adapters) {
+    if (a.kind === "native") continue;           // el canon, ya contado
+    // `kept` es un directorio de skill escrito a mano que no pisamos. Va a
+    // `skipped` porque eso es exactamente lo que pasó, y contarlo como creado
+    // le diría al usuario que su versión se reemplazó.
+    (a.kind === "kept" ? skipped : created).push(a.path);
+  }
+
   return { created, skipped };
+}
+
+/**
+ * Las rutas de skills que el vault usa, para `.gitignore` o para explicarlo.
+ *
+ * Los adaptadores son enlaces a `SKILLS_HOME`; versionar ambos lados guarda el
+ * mismo contenido dos veces.
+ */
+export function skillPaths(): { canonical: string; adapters: string[] } {
+  return { canonical: SKILLS_HOME, adapters: Object.values(SKILL_ADAPTERS) };
 }

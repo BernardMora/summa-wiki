@@ -107,7 +107,8 @@ export async function POST(req: Request) {
     skipped: ledger.skipped.length,
     errors: ledger.errors,
     ledger: ledgerRel,
-    skill: path.relative(vault, skill).split(path.sep).join("/"),
+    skill: skill.canonical,
+    skillAdapters: skill.adapters,
     vault,
     claude: await findClaude(),
   });
