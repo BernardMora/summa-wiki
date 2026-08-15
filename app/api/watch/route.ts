@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * acumulándose sesión tras sesión, cada uno con su handle del kernel.
  */
 
-type Listener = (rel: string) => void;
+type Listener = (rels: string[]) => void;
 
 interface Hub {
   watcher: fs.FSWatcher | null;
@@ -65,7 +65,7 @@ function ensureWatcher() {
         const batch = [...hub.pending];
         hub.pending.clear();
         hub.timer = null;
-        for (const l of hub.listeners) l(batch[0] ?? "");
+        for (const l of hub.listeners) l(batch);
       }, 250);
     });
   } catch {
@@ -92,7 +92,7 @@ export async function GET(req: Request) {
         catch { /* cliente ya cerrado; lo limpia el abort */ }
       };
 
-      const listener: Listener = (rel) => send("change", JSON.stringify({ rel }));
+      const listener: Listener = (rels) => send("change", JSON.stringify({ rels }));
       hub.listeners.add(listener);
       ensureWatcher();
       send("ready", JSON.stringify({ watching: hub.watcher !== null }));

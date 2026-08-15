@@ -17,6 +17,7 @@ export default function Resizer() {
     }
     if (localStorage.getItem("wiki.sidecollapsed") === "1") {
       document.documentElement.style.setProperty("--sidew", "0px");
+      document.documentElement.dataset.side = "collapsed";
       setCollapsed(true);
     }
   }, []);
@@ -46,6 +47,10 @@ export default function Resizer() {
         onClick={() => {
           const next = collapsed ? `${localStorage.getItem(KEY) || 195}px` : "0px";
           document.documentElement.style.setProperty("--sidew", next);
+          // El atributo va con la variable: la barra se apaga con `display`,
+          // porque a 0 el padding la dejaba asomando. Ver globals.css.
+          if (collapsed) delete document.documentElement.dataset.side;
+          else document.documentElement.dataset.side = "collapsed";
           localStorage.setItem("wiki.sidecollapsed", collapsed ? "0" : "1");
           setCollapsed(!collapsed);
         }}
