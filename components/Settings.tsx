@@ -157,7 +157,7 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
-            placeholder="Wiki"
+            placeholder="Summa Wiki"
             maxLength={60}
           />
           <input

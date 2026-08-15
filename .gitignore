@@ -2,7 +2,7 @@ node_modules/
 index.json
 .next/
 .next-build/
-.next/
+.next-test/
 next-env.d.ts
 *.tsbuildinfo
 ocr/.venv/

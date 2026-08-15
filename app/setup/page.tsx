@@ -39,7 +39,7 @@ export default async function SetupPage({
     <Setup
       startAt={deliberate ? "create" : "start"}
       suggestDir={suggest?.dir ?? ""}
-      suggestName={suggest?.name && suggest.name !== "Wiki" ? suggest.name : ""}
+      suggestName={suggest?.name && suggest.name !== "Summa Wiki" ? suggest.name : ""}
     />
   );
 }

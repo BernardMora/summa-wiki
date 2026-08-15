@@ -1,6 +1,7 @@
 {
   "name": "summa-wiki",
   "version": "0.2.0",
+  "author": "Bernardo <hola@veridia.com.mx>",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
@@ -23,6 +24,9 @@
     "brand": "node scripts/dev-brand.mjs",
     "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true",
     "package:win": "npm run build && electron-builder --win && npm run smoke:win",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:linux": "npm run build && electron-builder --linux",
+    "package:linux:docker": "docker run --platform linux/amd64 --rm -v ${PWD}:/host -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder -w /tmp/app node:22-bookworm bash -c \"apt-get update && apt-get install -y fakeroot dpkg squashfs-tools python3 build-essential && cp -r /host/. . && rm -rf node_modules .next-build && npm install && npm run build && npx electron-builder --linux --x64 && mkdir -p /host/dist && cp -r dist/* /host/dist/\"",
     "smoke:win": "node scripts/smoke-package.mjs"
   },
   "dependencies": {
@@ -81,6 +85,19 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office"
     }
   }
 }

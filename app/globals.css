@@ -139,6 +139,29 @@ a.xbundle::after { content: " \29C9"; font-size: .85em; }
 .side {
   padding: 16px 10px 60px; font-size: 12.7px; overflow-x: hidden;
   position: sticky; top: 62px; max-height: calc(100vh - 62px); overflow-y: auto;
+  min-width: 0;
+}
+
+/*
+ * Colapsada pierde el padding, y por eso llega a cero de verdad.
+ *
+ * Llevar `--sidew` a 0 no bastaba: con `box-sizing: border-box` el ancho usado
+ * de una caja nunca baja de su padding + borde, así que quedaba una franja de
+ * 20px (10 + 10) con los textos de la navegación cortados asomando por encima
+ * del contenido. Ni `min-width: 0` ni `overflow: hidden` la quitan — el padding
+ * no es contenido, y ninguna de las dos reglas lo toca.
+ *
+ * `display: none` tampoco sirve, aunque parezca lo obvio: saca a `.side` del
+ * grid, y entonces `.content` pasa a ser el primer item y aterriza en la
+ * columna de `var(--sidew)` —cero— con el artículo entero en una palabra por
+ * línea. La barra tiene que seguir OCUPANDO su columna; lo que sobra es el
+ * relleno.
+ *
+ * El atributo lo pone el mismo componente que mueve la variable (Resizer), en
+ * el mismo acto, para que no puedan describir estados distintos.
+ */
+:root[data-side="collapsed"] .side {
+  padding-left: 0; padding-right: 0; border-left: 0; border-right: 0;
 }
 .side .logo {
   width: 88px; height: 88px; margin: 0 auto 8px; border-radius: 50%;
@@ -698,9 +721,9 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 .sidetoggle {
   position: absolute; top: 8px; z-index: 46; transform: translateX(-50%);
-  width: 15px; height: 30px; padding: 0; line-height: 1;
+  width: 22px; height: 38px; padding: 0; line-height: 1;
   border: 1px solid var(--line-soft); background: var(--bg); color: var(--muted);
-  border-radius: 3px; cursor: pointer; font-size: 11px;
+  border-radius: 4px; cursor: pointer; font-size: 16px;
 }
 .sidetoggle:hover { background: var(--panel-blue); color: var(--fg); }
 
