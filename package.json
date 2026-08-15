@@ -8,6 +8,13 @@
   "description": "Local reader/editor for the AIOS knowledge base",
   "//productName": "La MARCA, no el contenido. Acaba en CFBundleName, el rótulo de la barra de menús de macOS, que no se puede cambiar en caliente. Cómo se llama TU wiki es otra cosa y vive en 04-Sistema/wiki-config.json: por eso la app puede llamarse 'Summa Wiki' y tu instancia 'Wiki de Ana' sin pelearse.",
   "productName": "Summa Wiki",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BernardMora/summa-wiki.git"
+  },
+  "homepage": "https://github.com/BernardMora/summa-wiki",
+  "bugs": "https://github.com/BernardMora/summa-wiki/issues",
   "bin": {
     "wiki": "./bin/wiki"
   },
