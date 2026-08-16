@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Locale } from "./locales.mjs";
 
 /**
  * Dónde se guarda una skill para que la vean VARIOS agentes.
@@ -123,8 +124,9 @@ export function writeSkill(vault: string, name: string, content: string): SkillW
  * editable y se sobrescribía en cada corrida. Ahora lo generado y lo propio son
  * dos archivos, y solo uno se regenera.
  */
-export function localNote(name: string): string {
-  return `
+export function localNote(name: string, locale: Locale = "en"): string {
+  if (locale === "es") {
+    return `
 ## Criterio propio
 
 Este archivo lo **regenera la app** cada vez que cambia la arquitectura del
@@ -134,5 +136,17 @@ vault: lo que edites aquí se pierde. Para reglas propias que duren, escribe
 Si ese archivo existe, **léelo antes de empezar y gana sobre lo de arriba**.
 Lo de aquí es el criterio por defecto; lo de ahí es el de quien mantiene este
 vault.
+`;
+  }
+  return `
+## Your own criteria
+
+The app **regenerates this file** every time the vault's architecture changes:
+anything you edit here is lost. For your own rules that last, write
+\`${SKILLS_HOME}/${name}/local.md\` — the app never touches it.
+
+If that file exists, **read it before starting and let it win over the above**.
+What's here is the default criteria; what's there belongs to whoever maintains
+this vault.
 `;
 }

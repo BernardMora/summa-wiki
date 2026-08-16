@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
 import { FileIcon, FolderIcon } from "./FileIcon.tsx";
+import { useT } from "./I18n";
+import { bold } from "./markup";
 
 /** Sangría por nivel, en px. Es también la separación entre guías. */
 const STEP = 11;
@@ -24,6 +26,7 @@ const OPEN_KEY = "wiki.tree.open";
  * it live".
  */
 export default function FileTree() {
+  const t = useT();
   const [root, setRoot] = useState<Node[]>([]);
   /**
    * Carpetas abiertas, recordadas entre sesiones.
@@ -454,7 +457,7 @@ export default function FileTree() {
       setDeleting({ node, notEmptyCount: d.count });
       return;
     }
-    if (!r.ok) { setErr(d.error ?? "error al borrar"); return; }
+    if (!r.ok) { setErr(d.error ?? t("tree.deleteFailed")); return; }
     setDeleting(null);
     // Sin esto, la carpeta borrada (y cualquier hija que estuviera abierta)
     // se queda en `open` para siempre — inofensivo gracias a `gaveUp`, pero
@@ -589,7 +592,7 @@ export default function FileTree() {
             {mkdirIn === n.rel && (
               <div className="newform" style={pad}>
                 <input
-                  autoFocus placeholder="Nombre de la carpeta" value={draft}
+                  autoFocus placeholder={t("tree.folderNamePlaceholder")} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") createFolder(n.rel);
@@ -597,8 +600,8 @@ export default function FileTree() {
                   }}
                 />
                 <div style={{ display: "flex", gap: 4 }}>
-                  <button className="newbtn" style={{ margin: 0 }} onClick={() => createFolder(n.rel)}>Crear</button>
-                  <button className="newbtn" style={{ margin: 0 }} onClick={() => { setMkdirIn(null); setDraft(""); }}>Cancelar</button>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => createFolder(n.rel)}>{t("common.create")}</button>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => { setMkdirIn(null); setDraft(""); }}>{t("common.cancel")}</button>
                 </div>
                 {err && <div className="err">{err}</div>}
               </div>
@@ -607,7 +610,7 @@ export default function FileTree() {
             {creatingIn === n.rel && (
               <div className="newform" style={{ marginLeft: 4 + depth * 11 }}>
                 <input
-                  autoFocus placeholder="Título de la nota" value={draft}
+                  autoFocus placeholder={t("tree.noteTitlePlaceholder")} value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") createNote(n.rel);
@@ -618,8 +621,8 @@ export default function FileTree() {
                   {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <button className="newbtn" style={{ margin: 0 }} onClick={() => createNote(n.rel)}>Crear</button>
-                  <button className="newbtn" style={{ margin: 0 }} onClick={() => setCreatingIn(null)}>Cancelar</button>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => createNote(n.rel)}>{t("common.create")}</button>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => setCreatingIn(null)}>{t("common.cancel")}</button>
                 </div>
                 {err && <div className="err">{err}</div>}
               </div>
@@ -627,7 +630,7 @@ export default function FileTree() {
 
             {isOpen && (n.children
               ? render(n.children, depth + 1, [...trail, n.rel])
-              : <div className="row" style={{ paddingLeft: 4 + (depth + 1) * STEP, opacity: 0.5 }}>Cargando…</div>)}
+              : <div className="row" style={{ paddingLeft: 4 + (depth + 1) * STEP, opacity: 0.5 }}>{t("common.loading")}</div>)}
           </div>
         );
       }
@@ -668,17 +671,17 @@ export default function FileTree() {
   return (
     <div ref={boxRef}>
       <div className="treehint" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <span style={{ flex: 1 }}>{moving ? "Moviendo y repuntando enlaces…" : "Clic derecho para crear, renombrar o borrar · arrastra para mover"}</span>
+        <span style={{ flex: 1 }}>{moving ? t("tree.moving") : t("tree.hint")}</span>
         <label style={{ display: "flex", gap: 4, alignItems: "center", cursor: "pointer", opacity: showHidden ? 1 : 0.6, whiteSpace: "nowrap" }}>
           <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} style={{ margin: 0 }} />
-          <span>Ocultos</span>
+          <span>{t("tree.hidden")}</span>
         </label>
       </div>
 
       {creatingIn === "" && (
         <div className="newform">
           <input
-            autoFocus placeholder="Título de la nota" value={draft}
+            autoFocus placeholder={t("tree.noteTitlePlaceholder")} value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") createNote(""); if (e.key === "Escape") setCreatingIn(null); }}
           />
@@ -686,8 +689,8 @@ export default function FileTree() {
             {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <div style={{ display: "flex", gap: 4 }}>
-            <button className="newbtn" style={{ margin: 0 }} onClick={() => createNote("")}>Crear</button>
-            <button className="newbtn" style={{ margin: 0 }} onClick={() => setCreatingIn(null)}>Cancelar</button>
+            <button className="newbtn" style={{ margin: 0 }} onClick={() => createNote("")}>{t("common.create")}</button>
+            <button className="newbtn" style={{ margin: 0 }} onClick={() => setCreatingIn(null)}>{t("common.cancel")}</button>
           </div>
           {err && <div className="err">{err}</div>}
         </div>
@@ -703,13 +706,13 @@ export default function FileTree() {
               setCreatingIn(menu.node.rel); setSelDir(menu.node.rel);
               setOpen((p) => new Set(p).add(menu.node.rel));
               setDraft(""); setErr(""); setMenu(null);
-            }}>Nueva nota aquí</button>
+            }}>{t("tree.newNoteHere")}</button>
           )}
           {menu.node.dir && (
             <button onClick={() => {
               setMkdirIn(menu.node.rel); setCreatingIn(null); setDraft(""); setMenu(null);
               setOpen((p) => { const n = new Set(p); n.add(menu.node.rel); return n; });
-            }}>Nueva carpeta aquí</button>
+            }}>{t("tree.newFolderHere")}</button>
           )}
           {!menu.node.dir && (menu.node.id || /\.pdf$/i.test(menu.node.name)) && (
             <button onClick={() => {
@@ -720,16 +723,16 @@ export default function FileTree() {
               if (cur && !cur.startsWith("pdf:")) {
                 router.push(`/note/${encodeURIComponent(cur)}?split=${encodeURIComponent(sid)}`);
               } else {
-                alert("Abre primero una nota; el panel lateral se abre junto a ella.");
+                alert(t("tree.openBesideBlocked"));
               }
-            }}>Abrir al lado</button>
+            }}>{t("tree.openBeside")}</button>
           )}
           {!menu.node.dir && menu.node.id && (
             <div className="ctxsub">
-              <button onClick={() => setPinOpen((v) => !v)}>Fijar en ▸</button>
+              <button onClick={() => setPinOpen((v) => !v)}>{t("tree.pinTo")}</button>
               {pinOpen && (
                 <div className="ctxsubmenu">
-                  {cats.length === 0 && <div className="ctxhead">Sin categorías</div>}
+                  {cats.length === 0 && <div className="ctxhead">{t("tree.noCategories")}</div>}
                   {cats.map((c) => (
                     <button
                       key={c.id}
@@ -751,7 +754,7 @@ export default function FileTree() {
                       })));
                       setMenu(null); setPinOpen(false); router.refresh();
                     }}
-                  >Quitar de todas</button>
+                  >{t("tree.removeFromAll")}</button>
                 </div>
               )}
             </div>
@@ -762,14 +765,14 @@ export default function FileTree() {
               <>
                 <div className="ctxsep" />
                 <button onClick={() => copy(p.rel, "rel")}>
-                  {copied === "rel" ? "✓ copiada" : "Copiar ruta relativa"}
+                  {copied === "rel" ? t("tree.copied") : t("tree.copyRelative")}
                 </button>
                 <button onClick={() => copy(p.abs, "abs")}>
-                  {copied === "abs" ? "✓ copiada" : "Copiar ruta absoluta"}
+                  {copied === "abs" ? t("tree.copied") : t("tree.copyAbsolute")}
                 </button>
                 {p.real !== p.abs && (
                   <button onClick={() => copy(p.real, "real")}>
-                    {copied === "real" ? "✓ copiada" : "Copiar ruta real (Drive)"}
+                    {copied === "real" ? t("tree.copied") : t("tree.copyReal")}
                   </button>
                 )}
                 <div className="ctxsep" />
@@ -798,18 +801,21 @@ export default function FileTree() {
       {deleting && createPortal(
         <div className="qsback" onMouseDown={() => { setDeleting(null); setErr(""); }}>
           <div className="qsbox" style={{ padding: "16px 24px", maxWidth: "480px" }} onMouseDown={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>Confirmar eliminación</h2>
+            <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 16 }}>{t("tree.confirmDelete")}</h2>
             <p style={{ margin: 0, marginBottom: 24, lineHeight: 1.5, color: "var(--fg-dim)" }}>
               {deleting.notEmptyCount !== undefined ? (
-                <>La carpeta <strong>{deleting.node.name}</strong> contiene {deleting.notEmptyCount} elemento(s). ¿Estás seguro de que quieres borrarla junto con todo su contenido?</>
+                bold(t("tree.deleteFolderNotEmpty", { name: deleting.node.name, n: deleting.notEmptyCount }))
               ) : (
-                <>¿Estás seguro de que quieres borrar {deleting.node.dir ? "la carpeta" : "la nota"} <strong>{deleting.node.name}</strong>? Esta acción no se puede deshacer.</>
+                bold(t("tree.deleteConfirm", {
+                  what: deleting.node.dir ? t("tree.deleteFolderLower") : t("tree.deleteNote"),
+                  name: deleting.node.name,
+                }))
               )}
             </p>
             {err && <div className="err" style={{ marginBottom: 16 }}>{err}</div>}
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-              <button onClick={() => { setDeleting(null); setErr(""); }}>Cancelar</button>
-              <button className="danger" onClick={() => doDelete(deleting.node, deleting.notEmptyCount !== undefined)}>Borrar</button>
+              <button onClick={() => { setDeleting(null); setErr(""); }}>{t("common.cancel")}</button>
+              <button className="danger" onClick={() => doDelete(deleting.node, deleting.notEmptyCount !== undefined)}>{t("tree.delete")}</button>
             </div>
           </div>
         </div>,

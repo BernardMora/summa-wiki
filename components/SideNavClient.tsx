@@ -6,6 +6,7 @@ import FileTree from "./FileTree.tsx";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
 import { GRAPH_ID } from "./Tabs.tsx";
+import { useT } from "./I18n";
 
 interface NavItem { id: string; title: string; pinned?: boolean; }
 interface NavGroup { id: string; label: string; blurb?: string; items: NavItem[]; total: number; hidden?: boolean; }
@@ -22,6 +23,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
   /** Hay imagen configurada en el vault; si no, se cae a la inicial. */
   hasIcon: boolean;
 }) {
+  const t = useT();
   const [view, setView] = useState<"cat" | "files">("cat");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -107,7 +109,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
               onClick={(e) => openNote(e, i)}
               onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); tabs?.open(i.id, i.title, true); } }}
             >
-              {i.pinned && <span className="pinmark" title="Fijada">▪</span>}{i.title}
+              {i.pinned && <span className="pinmark" title={t("nav.pinned")}>▪</span>}{i.title}
             </a>
           </li>
         ))}
@@ -136,8 +138,8 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
       {tagline && <div className="sidetag">{tagline}</div>}
 
       <div className="viewtoggle">
-        <button className={view === "cat" ? "on" : ""} onClick={() => setView("cat")}>Categorías</button>
-        <button className={view === "files" ? "on" : ""} onClick={() => setView("files")}>Archivos</button>
+        <button className={view === "cat" ? "on" : ""} onClick={() => setView("cat")}>{t("nav.categories")}</button>
+        <button className={view === "files" ? "on" : ""} onClick={() => setView("files")}>{t("nav.files")}</button>
       </div>
 
       {/* The identity map is the primary navigation: the vault is organised by
@@ -145,7 +147,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
           links below. */}
       {centre && (
         <>
-          <h4 className="corehead4">Núcleo</h4>
+          <h4 className="corehead4">{t("nav.core")}</h4>
           <ul className="navid">
             <li className="navcentre">
               <a href={`/note/${encodeURIComponent(centre.id)}`}
@@ -166,16 +168,16 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
         </>
       )}
 
-      <h4>Navegación</h4>
+      <h4>{t("nav.navigation")}</h4>
       <ul>
-        <li><Link href="/">Portada</Link></li>
-        <li><Link href="/random">Artículo aleatorio</Link></li>
+        <li><Link href="/">{t("nav.home")}</Link></li>
+        <li><Link href="/random">{t("nav.randomArticle")}</Link></li>
         <li>
           {/* El grafo es una pestaña más: ⌘clic lo abre en una nueva. */}
-          <a href="/graph" onClick={(e) => openNote(e, { id: GRAPH_ID, title: "Grafo" })}>Grafo</a>
+          <a href="/graph" onClick={(e) => openNote(e, { id: GRAPH_ID, title: "Grafo" })}>{t("nav.graph")}</a>
         </li>
-        <li><Link href="/#categorias">Todas las categorías</Link></li>
-        <li><Link href="/health">Salud del wiki</Link></li>
+        <li><Link href="/#categorias">{t("nav.allCategories")}</Link></li>
+        <li><Link href="/health">{t("nav.health")}</Link></li>
       </ul>
 
       {view === "files" ? (
@@ -186,7 +188,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
 
           {adding ? (
             <input
-              autoFocus className="inlineedit" placeholder="Nombre de la categoría" value={draft}
+              autoFocus className="inlineedit" placeholder={t("nav.categoryNamePlaceholder")} value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={() => setAdding(false)}
               onKeyDown={(e) => {
@@ -218,7 +220,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
             Renombrar
           </button>
           <button onClick={() => cat(menu.group.hidden ? "show" : "hide", { id: menu.group.id })}>
-            {menu.group.hidden ? "Mostrar" : "Ocultar"}
+            {menu.group.hidden ? t("nav.show") : t("nav.hide")}
           </button>
           <button className="danger" onClick={() => { setConfirming(menu.group); setMenu(null); }}>
             Borrar

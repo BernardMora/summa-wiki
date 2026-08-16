@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Settings from "./Settings.tsx";
+import Help from "./Help.tsx";
+import { useT } from "./I18n";
 import { openInWorkspace, newTermId } from "./Tabs.tsx";
 
 interface Hit { id: string; title: string; path: string; type: string; bundle: string; }
@@ -13,6 +15,7 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const t = useT();
 
   useEffect(() => {
     if (q.trim().length < 2) { setHits([]); return; }
@@ -47,10 +50,10 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onFocus={() => hits.length && setOpen(true)}
-            placeholder="Buscar en el wiki"
-            aria-label="Buscar"
+            placeholder={t("masthead.searchPlaceholder")}
+            aria-label={t("masthead.searchLabel")}
           />
-          <button type="submit">Buscar</button>
+          <button type="submit">{t("masthead.searchLabel")}</button>
         </form>
         {open && hits.length > 0 && (
           <div className="suggest">
@@ -66,11 +69,12 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
 
       <button
         className="themebtn"
-        title="Abrir una terminal en una pestaña nueva"
+        title={t("masthead.newTerminal")}
         onClick={() => openInWorkspace(newTermId(), "Terminal", true)}
       >
         ⌗ Terminal
       </button>
+      <Help />
       <Settings name={name} tagline={tagline} />
     </header>
   );

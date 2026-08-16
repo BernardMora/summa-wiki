@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import type { BundleConfig } from "./types.ts";
-import { resolveVault, userDataDir, inspectVault } from "./appdata.mjs";
+import { resolveVault, userDataDir, inspectVault, resolveLocale } from "./appdata.mjs";
 import type { Architecture } from "./architecture.ts";
 import { loadArchitecture } from "./architectures/index.ts";
 
@@ -48,7 +48,13 @@ export const HAS_VAULT = resolved.path !== null;
  * del que importar configuración, y para que el ciclo config → arquitectura →
  * config no exista: `loadArchitecture` recibe la ruta, no la importa.
  */
-export const ARCH: Architecture = loadArchitecture(VAULT);
+export const LOCALE = resolveLocale();
+
+/**
+ * ...y el idioma solo decide el respaldo, nunca lo que el vault ya declaró.
+ * Ver la cabecera de `loadArchitecture`.
+ */
+export const ARCH: Architecture = loadArchitecture(VAULT, LOCALE);
 
 /**
  * Deja la arquitectura escrita en el vault la primera vez.

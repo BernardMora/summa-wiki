@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { PACKS, getPack } from "@/src/architectures/index.ts";
+import { getPacks, getPack } from "@/src/architectures/index.ts";
 import { createVault } from "@/src/scaffold.ts";
 import { validateCreate, blocking } from "@/src/validate.ts";
+import { getLocale } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   return NextResponse.json({
-    packs: PACKS.map((p) => ({
+    packs: getPacks(getLocale()).map((p) => ({
       id: p.id,
       name: p.name,
       description: p.description,
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
   const problems = validateCreate(name, raw);
   const errors = blocking(problems);
 
-  const pack = getPack(packId);
+  const pack = getPack(packId, getLocale());
   if (!pack) errors.push({ field: "path", level: "error", message: "arquitectura desconocida" });
 
   // `?check=1` valida y no escribe nada. Es lo que consulta la interfaz
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    result = createVault(dir, name.trim(), pack!, agent);
+    result = createVault(dir, name.trim(), pack!, agent, getLocale());
   } catch (e) {
     return NextResponse.json({ error: `no se pudo escribir: ${(e as Error).message}` }, { status: 500 });
   }

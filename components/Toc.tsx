@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { EditorView } from "@codemirror/view";
+import { useT } from "./I18n";
 
 export interface Head { level: number; text: string; line: number; }
 
@@ -52,6 +53,7 @@ function scrollerOf(el: HTMLElement | null): HTMLElement | null {
 export default function Toc({
   heads, view,
 }: { heads: Head[]; view: EditorView | null }) {
+  const t = useT();
   const [open, setOpen] = useState(true);
   const [active, setActive] = useState<number | null>(null);
 
@@ -117,7 +119,7 @@ export default function Toc({
 
   return (
     <aside className={`toc${open ? "" : " closed"}`}>
-      <button className="toctoggle" onClick={() => setOpen((v) => !v)} title="Contenidos">
+      <button className="toctoggle" onClick={() => setOpen((v) => !v)} title={t("chrome.contents")}>
         {open ? "Contenidos ›" : "‹"}
       </button>
       {open && (

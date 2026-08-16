@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { useT } from "./I18n";
 
 /**
  * Shell real dentro de la app — para no saltar de pestaña a correr Claude
@@ -70,6 +71,7 @@ export function runInNewTerminal(id: string, cmd: string, cwd?: string) {
 }
 
 export default function TerminalPane({ id }: { id: string }) {
+  const t = useT();
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,7 +135,7 @@ export default function TerminalPane({ id }: { id: string }) {
       };
       ws.onopen = sendResize;
       ws.onmessage = (e) => term.write(e.data as string);
-      ws.onclose = () => term.write("\r\n\x1b[2m— sesión terminada —\x1b[0m\r\n");
+      ws.onclose = () => term.write(`\r\n\x1b[2m${t("agent.terminalEnded")}\x1b[0m\r\n`);
       term.onData((s) => { if (ws.readyState === ws.OPEN) ws.send(s); });
 
       // xterm no tiene mapeo propio para estos: Cmd+flecha/Delete se los

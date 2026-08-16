@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { VAULT, invalidate } from "@/lib/server.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
 
   const destAbs = safe(rel);
   if (!destAbs || !fs.existsSync(destAbs) || !fs.statSync(destAbs).isDirectory()) {
-    return NextResponse.json({ error: "destino inválido" }, { status: 400 });
+    return NextResponse.json({ error: getT()("err.invalidTarget") }, { status: 400 });
   }
 
   const finalName = file.name;

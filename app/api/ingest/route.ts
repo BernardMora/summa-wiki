@@ -7,6 +7,7 @@ import fs from "node:fs";
 import { invalidate } from "@/lib/server.ts";
 import { scanFolders, planIngest, applyPlan, writeLedger } from "@/src/ingest.ts";
 import { writeIngestSkill, findClaude } from "@/src/ingest-skill.ts";
+import { getLocale, getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -54,20 +55,20 @@ function targetVault(raw: unknown): { dir: string; arch: ReturnType<typeof loadA
   try {
     if (!fs.statSync(path.join(dir, ".summa")).isDirectory()) return null;
   } catch { return null; }
-  return { dir, arch: loadArchitecture(dir) };
+  return { dir, arch: loadArchitecture(dir, getLocale()) };
 }
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const target = targetVault(body?.vault);
   if (!target) {
-    return NextResponse.json({ error: "no se encuentra el vault destino" }, { status: 409 });
+    return NextResponse.json({ error: getT()("err.targetVaultNotFound") }, { status: 409 });
   }
   const { dir: vault, arch } = target;
 
   const raw = Array.isArray(body?.folders) ? body.folders : [];
   const folders = raw.filter((f: unknown) => typeof f === "string" && f.trim()).map((f: string) => expand(f.trim()));
-  if (!folders.length) return NextResponse.json({ error: "no elegiste ninguna carpeta" }, { status: 400 });
+  if (!folders.length) return NextResponse.json({ error: getT()("err.noFolderChosen") }, { status: 400 });
 
   const dry = new URL(req.url).searchParams.get("dry") === "1";
 
@@ -95,7 +96,7 @@ export async function POST(req: Request) {
   const ledger = applyPlan(plan, vault, arch, folders);
   const ledgerFile = writeLedger(vault, ledger);
   const ledgerRel = path.relative(vault, ledgerFile).split(path.sep).join("/");
-  const skill = writeIngestSkill(vault, arch, ledgerRel);
+  const skill = writeIngestSkill(vault, arch, ledgerRel, getLocale());
   // Solo si se escribió en el vault ABIERTO: invalidar el índice de otro vault
   // no significa nada, y el de este no ha cambiado.
   if (vault === VAULT) invalidate();

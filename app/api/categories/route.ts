@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readCategories, writeCategories, type Category } from "@/lib/categories.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -17,22 +18,22 @@ export async function POST(req: Request) {
 
   switch (action) {
     case "create": {
-      if (!label?.trim()) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
+      if (!label?.trim()) return NextResponse.json({ error: getT()("err.nameRequired") }, { status: 400 });
       const newId = slug(label) || `cat-${Date.now()}`;
-      if (cats.some((c) => c.id === newId)) return NextResponse.json({ error: "ya existe" }, { status: 409 });
+      if (cats.some((c) => c.id === newId)) return NextResponse.json({ error: getT()("err.alreadyExists") }, { status: 409 });
       cats.push({ id: newId, label: label.trim(), notes: [] });
       break;
     }
     case "rename": {
       const c = cats.find((x) => x.id === id);
-      if (!c) return NextResponse.json({ error: "no existe" }, { status: 404 });
-      if (!label?.trim()) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
+      if (!c) return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 });
+      if (!label?.trim()) return NextResponse.json({ error: getT()("err.nameRequired") }, { status: 400 });
       c.label = label.trim();
       break;
     }
     case "delete": {
       const i = cats.findIndex((x) => x.id === id);
-      if (i < 0) return NextResponse.json({ error: "no existe" }, { status: 404 });
+      if (i < 0) return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 });
       // Deleting a category never touches notes; it only drops the grouping.
       cats.splice(i, 1);
       break;
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
     case "hide":
     case "show": {
       const c = cats.find((x) => x.id === id);
-      if (!c) return NextResponse.json({ error: "no existe" }, { status: 404 });
+      if (!c) return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 });
       // Hiding keeps the category and its pins; it only collapses the group.
       if (action === "hide") c.hidden = true; else delete c.hidden;
       break;
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
     case "pin":
     case "unpin": {
       const c = cats.find((x) => x.id === id);
-      if (!c || !noteId) return NextResponse.json({ error: "categoría o nota inválida" }, { status: 400 });
+      if (!c || !noteId) return NextResponse.json({ error: getT()("err.invalidCategoryOrNote") }, { status: 400 });
       c.notes = action === "pin"
         ? [...new Set([...c.notes, noteId])]
         : c.notes.filter((n) => n !== noteId);
@@ -56,12 +57,12 @@ export async function POST(req: Request) {
     }
     case "reorder": {
       const order: string[] = (await Promise.resolve(id)) as unknown as string[];
-      if (!Array.isArray(order)) return NextResponse.json({ error: "orden inválido" }, { status: 400 });
+      if (!Array.isArray(order)) return NextResponse.json({ error: getT()("err.invalidOrder") }, { status: 400 });
       cats.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
       break;
     }
     default:
-      return NextResponse.json({ error: "acción desconocida" }, { status: 400 });
+      return NextResponse.json({ error: getT()("err.unknownAction") }, { status: 400 });
   }
 
   writeCategories(cats as Category[]);

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useT } from "./I18n";
 
 /**
  * Elegir la carpeta del vault.
@@ -22,6 +23,7 @@ import { useEffect, useState } from "react";
  */
 
 export default function VaultPicker({ current, onDone }: { current: string | null; onDone?: () => void }) {
+  const t = useT();
   const [desktop, setDesktop] = useState(false);
   const [draft, setDraft] = useState(current ?? "");
   const [err, setErr] = useState("");
@@ -41,7 +43,7 @@ export default function VaultPicker({ current, onDone }: { current: string | nul
       // normalmente muere con la página. No es un error.
       await window.summa!.pickVault();
     } catch {
-      setErr("no se pudo abrir el selector");
+      setErr(t("picker.openFailed"));
     } finally {
       setBusy(false);
     }
@@ -57,11 +59,11 @@ export default function VaultPicker({ current, onDone }: { current: string | nul
         body: JSON.stringify({ path: p }),
       });
       const d = await r.json();
-      if (!r.ok) { setErr(d.error ?? "no se pudo guardar"); return; }
+      if (!r.ok) { setErr(d.error ?? t("picker.saveFailed")); return; }
       if (d.needsRestart) setRestart(true);
       onDone?.();
     } catch {
-      setErr("no se pudo guardar");
+      setErr(t("picker.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -72,7 +74,7 @@ export default function VaultPicker({ current, onDone }: { current: string | nul
       <div className="vaultpick">
         <button className="newbtn" style={{ margin: 0, width: "auto", padding: "4px 12px" }}
                 onClick={pick} disabled={busy}>
-          {current ? "Cambiar vault…" : "Elegir carpeta…"}
+          {current ? t("picker.changeVault") : t("picker.chooseFolder")}
         </button>
         {err && <div className="err">{err}</div>}
       </div>
@@ -85,13 +87,13 @@ export default function VaultPicker({ current, onDone }: { current: string | nul
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") save(); }}
-        placeholder="~/Documents/mi-wiki"
+        placeholder={t("picker.pathPlaceholder")}
         spellCheck={false}
       />
       <div className="cfgrow">
         <button className="newbtn" style={{ margin: 0, width: "auto", padding: "4px 12px" }}
                 onClick={save} disabled={busy || !draft.trim()}>
-          {busy ? "Guardando…" : "Usar esta carpeta"}
+          {busy ? t("common.saving") : t("picker.useThisFolder")}
         </button>
       </div>
       {err && <div className="err">{err}</div>}

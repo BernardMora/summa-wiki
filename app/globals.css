@@ -491,6 +491,37 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .vaultpick { display: flex; flex-direction: column; gap: 7px; }
 
+/* Panel de ayuda del formato. Comparte el armazón del de configuración
+   (.cfgpanel) y solo cambia el ancho: aquí lo que manda es que una línea de
+   markdown de ejemplo quepa sin partirse, porque un ejemplo cortado a la mitad
+   se copia mal y se lee peor. */
+.helppanel { width: min(440px, 88vw); }
+.helptext { margin: 0; font-size: 12px; line-height: 1.5; color: var(--fg); }
+
+/* El ejemplo es un botón porque hace algo al pulsarlo (copiar), pero tiene que
+   leerse como un bloque de código: de ahí que no herede nada de button. */
+.helpsnip {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  font: inherit; cursor: pointer; padding: 6px 7px; border-radius: 2px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+}
+.helpsnip:hover { background: var(--panel-blue); }
+.helpsnip code {
+  flex: 1; min-width: 0; font-size: 11px; line-height: 1.45; word-break: break-all;
+}
+.helpcopy {
+  flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted);
+}
+
+.helptable { border-collapse: collapse; font-size: 12px; width: 100%; }
+.helptable td { padding: 3px 0; vertical-align: top; line-height: 1.45; }
+.helptable td:first-child { white-space: nowrap; padding-right: 12px; }
+.helptable code { font-size: 11px; color: var(--fg); }
+
+.helplist { margin: 0; padding-left: 16px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.helplist li { margin-bottom: 3px; }
+
 /* ---------------------------------------------------------------- asistente */
 /* Botón que se lee como enlace: para lo secundario ("volver"), donde un botón
    con marco competiría con la acción principal de la pantalla. */

@@ -111,6 +111,126 @@ Shipping the whole app as `npx summa-wiki web` (dsh's model) is feasible but hea
 the tarball would carry the Next build and `next` itself, well over 150 MB. Only
 worth it for a "run it on a server, open a browser" story that nobody has asked for.
 
+## Representation: the graph view is one idiom out of many
+
+`components/GraphView.tsx` is a hand-written force-directed canvas — nodes colored
+by `type:`, radius from `degree`, filtered by bundle, with a focus mode that pins a
+neighbourhood and flies the camera to it. It is a good implementation of exactly one
+visualization idiom, and it is the same idiom essentially every ontology tool ever
+shipped picked.
+
+That is worth stating as a finding rather than a preference. A survey of 37 OWL
+visualization tools (Dudáš, Lohmann, Svátek & Pavlov) found them *mostly 2D, mostly
+node-link, focused on the class hierarchy, with color, size and shape used with
+little variation*. The field's own conclusion is that node-link is a **default, not a
+result**. [`docs/research/ontology-representations.html`](research/ontology-representations.html)
+is a field guide to fourteen idioms that exist — indented lists, Euler regions,
+treemaps, adjacency matrices, hyperbolic disks, embedding maps, floor plans,
+rewriting systems — each one drawn with the same nine-class reference ontology so
+they can be compared rather than described. Read it before designing a second view.
+It is also published at <https://claude.ai/code/artifact/c8d80aab-7aa3-43ac-80e0-4e1486860322>.
+
+### What the current view cannot say
+
+Three things the index already contains and the canvas cannot show.
+
+**Edges have no type.** `/api/graph` emits `{ s, t }` derived from internal Markdown
+links, so "cites", "is part of", "contradicts" and "mentioned once in passing" all
+render as the same line. This is a *format* gap before it is a rendering one: there
+is nowhere in `schema-spec.md` to put a relation type today.
+
+**Membership is not a tree, and a force layout assumes it is.** Categories are rules
+(`.summa/categories.json`) and a note can match several at once — set structure, not
+hierarchy. Euler regions draw exactly that; a force layout cannot draw it at all,
+because a multi-category note either sits inside one cluster or floats between
+clusters, and both readings are false.
+
+**Weight is invisible.** `words` and `pillar` are fetched by `/api/graph`, carried
+into the `Node` interface, and never used for any visual encoding — only `type`
+(color) and `degree` (radius) are. `isIndex` is a filter, and the alpha channel is
+spent on focus dimming rather than on data. So the vault cannot answer "where is this
+actually dense?" from the one view it has, even though the index knows.
+
+### The cheapest useful additions, roughly in order
+
+An ordering by ratio of insight to work, not a plan.
+
+1. **Use the retinal channels already on the canvas.** The survey's most damning
+   finding is that tools *have* these channels and leave them idle. `updated`
+   recency as opacity, `pillar` as shape, orphan status as a ring — no new view, no
+   new data, no new endpoint.
+
+2. **A treemap by pillar → type → note.** Answers the density question the graph
+   structurally cannot, reuses the index as-is, and needs no simulation — so no
+   layout instability and nothing to tune.
+
+3. **An indented tree over the graph, not the filesystem.** `FileTree.tsx` shows
+   folders; a tree keyed on `pillar:`/`type:` is a different object. Fu et al. found
+   indented trees *beat* node-link for exactly the list-checking and lookup tasks a
+   reading app performs most.
+
+4. **Coordinated views.** Selection in one view highlights in the others. Every
+   survey since 2007 recommends it and almost no tool ships it; it is also the only
+   thing that makes items 2 and 3 worth more than the sum of their parts, since each
+   individual view drops something a sibling view recovers.
+
+5. **Typed edges.** The expensive one, and it starts in the format rather than the
+   UI — a way to annotate a link with a relation has to exist before anything can
+   render one. Do not start here.
+
+### Constraints that shape any of this
+
+The simulation is hand-written **on purpose**, and `GraphView.tsx` says why: no d3,
+so the project stays dependency-free and the CLI can run the same modules under
+`node --experimental-strip-types` with no install step. That rules out reaching for
+Cosmograph or sigma.js the moment scale bites — and it also means a treemap or an
+indented tree, neither of which needs a simulation at all, is a *better* fit for this
+codebase than a fancier graph would be.
+
+Scale is not currently the problem. At ~235 notes the vault is three orders of
+magnitude below where node-link diagrams break down. The reason to add a view is not
+that the graph is slow; it is that the graph answers one question and the vault
+raises several.
+
+The through-line from the field guide, which is the part worth keeping if everything
+else here is discarded: **every representation is a projection and each one drops
+something.** Indented lists drop relations, node-link drops scale, treemaps drop
+edges, embedding maps drop the axioms, hairballs drop identity. The question is never
+which is best — it is which loss is acceptable for the question being asked, and
+whether a second coordinated view recovers it.
+
+## Ingest: local OCR
+
+Spiked in July 2026 and declined, with the measurements kept here because the
+blocker is not quality.
+
+The spike ran `sahilchachra/unlimited-ocr-8bit-mlx` through `mlx-vlm` against three
+deliberately different page classes: dense book prose, a technical page with
+footnotes and inline math, and a designed multi-column marketing layout. The model
+returns block-typed regions with bounding boxes (`header`, `title`, `text`, `image`),
+so it does layout analysis rather than a flat text dump, and it held up on all three
+— including the math and the multi-column reading order, which is where cheaper OCR
+usually falls apart.
+
+What it cost, on Apple Silicon:
+
+- dense prose — 35.7s for 2,542 characters
+- technical page with footnotes and math — 36.1s for 3,969 characters
+- multi-column designed layout — 78.7s for 7,042 characters
+
+Two things follow. Half a minute to a minute and a half *per page* is not a bulk
+ingest story: a 300-page scanned book is somewhere between three and six hours, and
+the feature people actually want is "drop a PDF in and walk away."
+
+The disqualifying one is the second: MLX is Apple Silicon only. This app ships four
+targets, and an ingest path that exists on exactly one of them is worse than no
+ingest path — it makes the vault format itself platform-dependent, because notes
+produced on a Mac would have no way to be produced anywhere else.
+
+Whenever this is revisited, the constraint to design against is *cross-platform
+first*, which likely means an ONNX or GGUF runtime rather than MLX, and accepting
+worse per-page quality in exchange for a feature that exists everywhere.
+
 ## Smaller items
 
 - **`src/config.ts` resolves the vault at import time** (`const resolved = resolveVault()`

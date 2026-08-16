@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import { SUMMA_DIR, summaFile } from "@/src/config.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const { p, page } = await req.json();
   if (typeof p !== "string" || typeof page !== "number") {
-    return NextResponse.json({ error: "p y page requeridos" }, { status: 400 });
+    return NextResponse.json({ error: getT()("err.pAndPageRequired") }, { status: 400 });
   }
   const pages = read();
   if (page <= 1) delete pages[p]; else pages[p] = page;

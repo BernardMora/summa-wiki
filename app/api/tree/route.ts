@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { VAULT, getIndex } from "@/lib/server.ts";
 import { EXCLUDE_DIRS, ARCH } from "@/src/config.ts";
+import { getT, getCollator } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,8 @@ function listDir(
       out.push({ name: e.name, rel: childRel, dir: false, id: byPath.get(childRel), ext });
     }
   }
-  out.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, "es") : a.dir ? -1 : 1));
+  const cmp = getCollator();
+  out.sort((a, b) => (a.dir === b.dir ? cmp.compare(a.name, b.name) : a.dir ? -1 : 1));
   return out;
 }
 
@@ -101,7 +103,7 @@ export async function GET(req: Request) {
   const dir = url.searchParams.get("dir") ?? "";
   const showHidden = url.searchParams.get("hidden") === "1";
   const abs = safeDir(dir);
-  if (!abs) return NextResponse.json({ error: "ruta inválida" }, { status: 400 });
+  if (!abs) return NextResponse.json({ error: getT()("err.invalidPath") }, { status: 400 });
 
   const idx = getIndex();
   const byPath = new Map(

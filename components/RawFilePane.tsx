@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CodePane from "./CodePane.tsx";
 import { FileIcon, extOf } from "./FileIcon.tsx";
+import { useT } from "./I18n";
+import type { MessageKey } from "@/lib/i18n.ts";
 
 /**
  * El panel de "cualquier otro archivo".
@@ -14,12 +16,16 @@ import { FileIcon, extOf } from "./FileIcon.tsx";
  * conserva la ficha, que sigue siendo la respuesta correcta para un `.docx`.
  */
 
-const NOTA: Record<string, string> = {
-  excalidraw:
-    "Dibujo de Excalidraw (formato del plugin de Obsidian: markdown con la escena comprimida). Todavía no hay editor para este formato en la app. Los diagramas de nodos y conexiones sí se editan aquí: son los archivos .canvas.",
-  docx: "Documento de Word. Se abre en Word o en Google Docs desde Drive.",
-  xlsx: "Hoja de cálculo. Se abre en Excel o en Google Sheets desde Drive.",
-  pptx: "Presentación. Se abre en PowerPoint o en Google Slides desde Drive.",
+/**
+ * Qué es cada formato que la app no sabe editar. Claves, no texto: este mapa es
+ * una constante de módulo y se resolvería una sola vez, en el idioma que
+ * hubiera al cargar.
+ */
+const NOTA: Record<string, MessageKey> = {
+  excalidraw: "raw.excalidraw",
+  docx: "raw.docx",
+  xlsx: "raw.xlsx",
+  pptx: "raw.pptx",
 };
 
 const kb = (n: number) =>
@@ -34,6 +40,7 @@ interface Loaded {
 }
 
 export default function RawFilePane({ rel }: { rel: string }) {
+  const t = useT();
   const name = rel.split("/").pop() ?? rel;
   const ext = extOf(name);
   const href = `/api/asset?p=${encodeURIComponent(rel)}`;
@@ -61,7 +68,7 @@ export default function RawFilePane({ rel }: { rel: string }) {
         mtime.current = d.mtimeMs;
         setData(d);
       })
-      .catch(() => { if (alive) setErr("no se pudo leer el archivo"); });
+      .catch(() => { if (alive) setErr(t("raw.readFailed")); });
     return () => { alive = false; };
   }, [rel]);
 
@@ -77,10 +84,10 @@ export default function RawFilePane({ rel }: { rel: string }) {
       if (r.status === 409) {
         // No se pisa nada sin avisar: el archivo cambió por fuera mientras se
         // editaba (git, otro editor, un agente).
-        setErr("el archivo cambió en disco desde que se abrió — recarga la pestaña para ver la versión nueva");
+        setErr(t("raw.changedOnDisk"));
         return;
       }
-      if (!r.ok) { setErr(d.error ?? "no se pudo guardar"); return; }
+      if (!r.ok) { setErr(d.error ?? t("raw.saveFailed")); return; }
       mtime.current = d.mtimeMs;
       setDirty(false);
       setSaved(true);
@@ -112,15 +119,15 @@ export default function RawFilePane({ rel }: { rel: string }) {
       <div className="panescroll">
         <article>
           <h1>{name}</h1>
-          <p className="infoline"><span>{ext || "sin extensión"}</span><span>{kb(data.size)}</span><span>{rel}</span></p>
+          <p className="infoline"><span>{ext || t("raw.noExtension")}</span><span>{kb(data.size)}</span><span>{rel}</span></p>
           <p>
             {data.tooBig
-              ? `El archivo pesa ${kb(data.size)}; el editor abre hasta 2 MB. Descárgalo para verlo completo.`
-              : (NOTA[ext] ?? "Es un archivo binario: no hay nada legible que mostrar como texto.")}
+              ? t("raw.tooBig", { size: kb(data.size) })
+              : (NOTA[ext] ? t(NOTA[ext]) : t("raw.binary"))}
           </p>
           <p>
-            <a className="centrego" href={href} download>Descargar</a>{" "}
-            <a href={href} target="_blank" rel="noreferrer">Abrir en el navegador</a>
+            <a className="centrego" href={href} download>{t("chrome.download")}</a>{" "}
+            <a href={href} target="_blank" rel="noreferrer">{t("raw.openInBrowser")}</a>
           </p>
         </article>
       </div>
@@ -140,7 +147,7 @@ export default function RawFilePane({ rel }: { rel: string }) {
                   disabled={!dirty || saving} onClick={save}>
             {saving ? "Guardando…" : "Guardar"}
           </button>
-          <a className="dim" href={href} download>Descargar</a>
+          <a className="dim" href={href} download>{t("chrome.download")}</a>
         </span>
       </div>
       <div className="codewrap">

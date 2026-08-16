@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { MessageKey } from "@/lib/i18n.ts";
 
 /**
  * Los parámetros con los que arranca una sesión del agente.
@@ -25,12 +26,36 @@ import { useEffect, useRef, useState } from "react";
  * la última versión de esa familia, así que la elección no se queda vieja
  * cuando salga el siguiente modelo.
  */
-export const MODELS: Record<string, { id: string; label: string; hint: string }[]> = {
+/**
+ * `hint` es una CLAVE del diccionario, no texto.
+ *
+ * Este módulo no es un componente y no puede llamar a `useT()`; traduce quien
+ * lo pinta. Guardar la clave y no la cadena es además lo correcto: estas tablas
+ * viven en memoria mientras la app está abierta, y con el texto ya resuelto se
+ * quedarían en el idioma que hubiera al cargar el módulo.
+ *
+ * `label` NO es una clave, y la asimetría es deliberada: «Opus», «Haiku» y
+ * «gemini-3.7-flash» son nombres propios y no se traducen. El único rótulo que
+ * sí es prosa —«el de tu CLI»— lleva `labelKey` aparte, y por eso los modelos
+ * que llegan del catálogo en vivo de `agy` pueden entrar en la misma lista sin
+ * inventarles una clave que nunca existiría en el diccionario.
+ */
+/** Una opción de modelo, venga de la tabla de abajo o del catálogo en vivo. */
+export interface ModelChoice {
+  id: string;
+  /** Nombre propio del modelo. Vacío cuando el rótulo es prosa: ver `labelKey`. */
+  label: string;
+  /** Solo el «el de tu CLI», que sí es prosa y sí se traduce. */
+  labelKey?: MessageKey;
+  hint: MessageKey;
+}
+
+export const MODELS: Record<string, ModelChoice[]> = {
   claude: [
-    { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en Claude Code." },
-    { id: "opus", label: "Opus", hint: "El mejor criterio con notas ambiguas. Más lento y más caro." },
-    { id: "sonnet", label: "Sonnet", hint: "Equilibrado. Suficiente para material que ya viene ordenado." },
-    { id: "haiku", label: "Haiku", hint: "El más rápido y barato. Para lotes grandes y clasificación simple." },
+    { id: "", label: "", labelKey: "agent.cliDefault", hint: "agent.cliDefaultClaude" },
+    { id: "opus", label: "Opus", hint: "agent.opusHint" },
+    { id: "sonnet", label: "Sonnet", hint: "agent.sonnetHint" },
+    { id: "haiku", label: "Haiku", hint: "agent.haikuHint" },
   ],
   /*
    * Solo el default: aquí NO se inventan modelos.
@@ -46,12 +71,12 @@ export const MODELS: Record<string, { id: string; label: string; hint: string }[
    * que es la honesta: el CLI usa el modelo que ya tenga configurado.
    */
   antigravity: [
-    { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en Antigravity." },
+    { id: "", label: "", labelKey: "agent.cliDefault", hint: "agent.cliDefaultAntigravity" },
   ],
   opencode: [
-    { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en OpenCode." },
-    { id: "pro", label: "Pro", hint: "Modelo complejo y de alto rendimiento." },
-    { id: "flash", label: "Flash", hint: "Modelo ágil para volúmenes grandes." },
+    { id: "", label: "", labelKey: "agent.cliDefault", hint: "agent.cliDefaultOpencode" },
+    { id: "pro", label: "Pro", hint: "agent.proHint" },
+    { id: "flash", label: "Flash", hint: "agent.flashHint" },
   ],
 };
 
@@ -61,47 +86,47 @@ export const MODELS: Record<string, { id: string; label: string; hint: string }[
  * pidiendo permiso para todo lo demás. El bypass existe porque es la máquina
  * del usuario; lo que no puede es estar sin etiquetar.
  */
-export const PERMS: Record<string, { id: string; flag: string; label: string; hint: string }[]> = {
+export const PERMS: Record<string, { id: string; flag: string; label: MessageKey; hint: MessageKey }[]> = {
   claude: [
     {
       id: "acceptEdits",
       flag: "--permission-mode acceptEdits",
-      label: "Aceptar ediciones",
-      hint: "Mueve y edita archivos sin preguntar. Para lo demás pide permiso.",
+      label: "agent.acceptEdits",
+      hint: "agent.acceptEditsHint",
     },
     {
       id: "bypass",
       flag: "--dangerously-skip-permissions",
-      label: "No preguntar nada",
-      hint: "Sin ninguna confirmación, para todo.",
+      label: "agent.askNothing",
+      hint: "agent.askNothingHint",
     },
   ],
   antigravity: [
     {
       id: "acceptEdits",
       flag: "--mode=accept-edits",
-      label: "Aceptar ediciones",
-      hint: "Escribe archivos sin preguntar. Los comandos de shell se siguen deteniendo a pedir permiso.",
+      label: "agent.acceptEdits",
+      hint: "agent.acceptEditsAg",
     },
     {
       id: "bypass",
       flag: "--dangerously-skip-permissions",
-      label: "No preguntar nada",
-      hint: "Sin ninguna confirmación, para todo.",
+      label: "agent.askNothing",
+      hint: "agent.askNothingHint",
     },
   ],
   opencode: [
     {
       id: "acceptEdits",
       flag: "--yes",
-      label: "Aceptar ediciones",
-      hint: "Acepta los cambios automáticamente.",
+      label: "agent.acceptEdits",
+      hint: "agent.yesHint",
     },
     {
       id: "bypass",
       flag: "--dangerously-skip-permissions",
-      label: "No preguntar nada",
-      hint: "Sin ninguna confirmación, para todo.",
+      label: "agent.askNothing",
+      hint: "agent.askNothingHint",
     },
   ],
 };
@@ -172,8 +197,8 @@ export function useAgyModels(agent: string) {
   }, [agent]);
 
   const fallback = MODELS[agent] || MODELS.claude;
-  const models = agent === "antigravity" && live
-    ? [fallback[0], ...live.map((m) => ({ ...m, hint: "Del catálogo en vivo de agy." }))]
+  const models: ModelChoice[] = agent === "antigravity" && live
+    ? [fallback[0], ...live.map((m) => ({ ...m, hint: "agent.liveCatalogue" as MessageKey }))]
     : fallback;
 
   return { models, loading: agent === "antigravity" && loading && !live };

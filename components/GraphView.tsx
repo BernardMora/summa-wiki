@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTabs } from "./Tabs.tsx";
+import { useT } from "./I18n";
 
 interface Node {
   id: string; title: string; type: string; bundle: string; pillar: string;
@@ -25,6 +26,7 @@ const COLOR: Record<string, string> = {
  * the same code with node --experimental-strip-types and no install step.
  */
 export default function GraphView() {
+  const t = useT();
   const canvas = useRef<HTMLCanvasElement>(null);
   const nodes = useRef<Node[]>([]);
   const edges = useRef<Edge[]>([]);
@@ -334,12 +336,12 @@ export default function GraphView() {
     <div className="graphwrap">
       <div className="graphbar">
         <select value={bundle} onChange={(e) => setBundle(e.target.value)}>
-          <option value="all">{bundles.length === 2 ? "Ambos bundles" : "Todos los bundles"}</option>
+          <option value="all">{bundles.length === 2 ? t("graph.bothBundles") : t("graph.allBundles")}</option>
           {bundles.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
         <label>
           <input type="checkbox" checked={hideIndexes} onChange={(e) => setHideIndexes(e.target.checked)} />
-          {" "}ocultar índices
+          {" "}{t("graph.hideIndexes")}
         </label>
         <button
           onClick={() => {
@@ -348,7 +350,7 @@ export default function GraphView() {
             setPinned(0);
           }}
           disabled={!pinned}
-          title="Los nodos que arrastras se quedan fijos; esto los suelta"
+          title={t("graph.releasePinned")}
         >
           Soltar fijados{pinned ? ` (${pinned})` : ""}
         </button>
@@ -369,8 +371,8 @@ export default function GraphView() {
             </span>
           </div>
           <div className="gfocusbtns">
-            <button onClick={() => tabs?.open(focused.id, focused.title, true)}>Abrir nota</button>
-            <button onClick={() => focusNode(null)}>Salir</button>
+            <button onClick={() => tabs?.open(focused.id, focused.title, true)}>{t("graph.openNote")}</button>
+            <button onClick={() => focusNode(null)}>{t("graph.exit")}</button>
           </div>
         </div>
       )}

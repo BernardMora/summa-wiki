@@ -16,6 +16,8 @@ interface SummaBridge {
   switchVault: (dir: string) => Promise<{ ok: boolean; vault?: string; reason?: string }>;
   /** Solo elige una carpeta y devuelve la ruta; no toca nada. */
   chooseFolder: (title?: string) => Promise<string | null>;
+  /** Avisa que cambió el idioma, para reconstruir el menú nativo. */
+  localeChanged: () => Promise<boolean>;
 }
 
 interface Window {

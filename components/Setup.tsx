@@ -4,6 +4,8 @@ import { postJSON, TimeoutError } from "./net";
 import VaultPicker from "./VaultPicker";
 import AgentSession from "./AgentSession";
 import { PERMS, useAgyModels } from "./agent-session";
+import { useT } from "./I18n";
+import { bold } from "./markup";
 
 /**
  * El asistente de arranque, de principio a fin.
@@ -55,6 +57,7 @@ export default function Setup({
   suggestDir?: string;
   suggestName?: string;
 }) {
+  const t = useT();
   const [step, setStep] = useState<Step>(startAt);
   const [desktop, setDesktop] = useState(false);
 
@@ -102,7 +105,7 @@ export default function Setup({
     if (step !== "create" || packs.length) return;
     fetch("/api/vault/create").then((r) => r.json())
       .then((d) => { setPacks(d.packs ?? []); setChosen((c) => c || d.packs?.[0]?.id || ""); })
-      .catch(() => setErr("no se pudo leer el catálogo de arquitecturas"));
+      .catch(() => setErr(t("setup.catalogFailed")));
   }, [step, packs.length]);
 
   /**
@@ -137,7 +140,7 @@ export default function Setup({
   const chosenSources = desktop ? sources : srcText.split("\n").map((s) => s.trim()).filter(Boolean);
 
   async function browseDest() {
-    const p = await window.summa?.chooseFolder("Dónde crear el vault");
+    const p = await window.summa?.chooseFolder(t("setup.pickDestTitle"));
     if (p) { setDir(p); setName((n) => n || (p.split("/").pop() ?? "")); }
   }
 
@@ -150,10 +153,10 @@ export default function Setup({
         body: JSON.stringify({ path: dir, name, architecture: chosen, agent }),
       });
       const d = await r.json();
-      if (!r.ok) { setErr(d.error ?? "no se pudo crear"); return; }
+      if (!r.ok) { setErr(d.error ?? t("setup.createFailed")); return; }
       setVault(d.vault);
       setStep("sources");
-    } catch { setErr("no se pudo crear"); } finally { setBusy(""); }
+    } catch { setErr(t("setup.createFailed")); } finally { setBusy(""); }
   }
 
   async function addSource() {
@@ -168,12 +171,12 @@ export default function Setup({
     try {
       const { ok, data } = await postJSON<Preview & { error?: string }>(
         "/api/ingest?dry=1", { folders: chosenSources, vault });
-      if (!ok) { setErr(data.error ?? "no se pudo analizar"); return; }
+      if (!ok) { setErr(data.error ?? t("setup.analyseFailed")); return; }
       setPreview(data);
     } catch (e) {
       setErr(e instanceof TimeoutError
-        ? `El análisis no respondió en ${e.seconds} s. Suele pasar con carpetas en la nube (Drive, iCloud): prueba con una carpeta más concreta.`
-        : "no se pudo analizar");
+        ? t("setup.analyseTimeout", { n: e.seconds })
+        : t("setup.analyseFailed"));
     } finally { setBusy(""); }
   }
 
@@ -182,11 +185,11 @@ export default function Setup({
     try {
       const { ok, data } = await postJSON<{ copied: number; skipped: number; claude: string | null; error?: string }>(
         "/api/ingest", { folders: chosenSources, vault }, { timeoutMs: 300_000 });
-      if (!ok) { setErr(data.error ?? "no se pudo copiar"); return; }
+      if (!ok) { setErr(data.error ?? t("setup.copyFailed")); return; }
       setCopied({ copied: data.copied, skipped: data.skipped, claude: data.claude });
       setStep("run");
     } catch (e) {
-      setErr(e instanceof TimeoutError ? `La copia no terminó en ${e.seconds} s.` : "no se pudo copiar");
+      setErr(e instanceof TimeoutError ? t("setup.copyTimeout", { n: e.seconds }) : t("setup.copyFailed"));
     } finally { setBusy(""); }
   }
 
@@ -212,21 +215,15 @@ export default function Setup({
     return (
       <div className="welcome">
         <h1>Bienvenido</h1>
-        <p>
-          Un vault es la carpeta donde viven tus notas en markdown. Esta app la
-          lee y la escribe desde tu disco — nada sale de tu computadora.
-        </p>
+        <p>{t("setup.intro")}</p>
         <div className="setupchoices">
           <button className="setupcard" onClick={() => setStep("open")}>
-            <strong>Ya tengo notas</strong>
-            <span>Abre una carpeta que ya uses — de Obsidian, de iCloud, un repo.</span>
+            <strong>{t("setup.haveNotes")}</strong>
+            <span>{t("setup.haveNotesHint")}</span>
           </button>
           <button className="setupcard" onClick={() => setStep("create")}>
-            <strong>Empezar de cero</strong>
-            <span>
-              Elige una estructura, trae tus carpetas de archivos, y deja que un
-              agente los lea y los acomode.
-            </span>
+            <strong>{t("setup.fromScratch")}</strong>
+            <span>{t("setup.fromScratchHint")}</span>
           </button>
         </div>
       </div>
@@ -236,10 +233,10 @@ export default function Setup({
   if (step === "open") {
     return (
       <div className="welcome">
-        <h1>Abre tu vault</h1>
-        <p>Elige la carpeta donde ya viven tus notas.</p>
+        <h1>{t("setup.openTitle")}</h1>
+        <p>{t("setup.openHint")}</p>
         <VaultPicker current={null} />
-        <p className="counts"><button className="linkish" onClick={() => setStep("start")}>← volver</button></p>
+        <p className="counts"><button className="linkish" onClick={() => setStep("start")}>{t("setup.backLink")}</button></p>
       </div>
     );
   }
@@ -248,41 +245,41 @@ export default function Setup({
     const pack = packs.find((p) => p.id === chosen);
     return (
       <div className="welcome setupcreate">
-        <h1>Crea tu vault</h1>
-        <p className="steps">Configuración</p>
+        <h1>{t("setup.createTitle")}</h1>
+        <p className="steps">{t("setup.stepConfig")}</p>
 
         <div className="setupfield">
-          <label>Cómo se llama</label>
+          <label>{t("setup.fieldName")}</label>
           <input value={name} onChange={(e) => setName(e.target.value)}
-                 placeholder="Mi wiki" maxLength={80} />
+                 placeholder={t("setup.namePlaceholder")} maxLength={80} />
           {errorsOf("name").map((p) => <p key={p.message} className="fielderr">{p.message}</p>)}
         </div>
 
         <div className="setupfield">
-          <label>Dónde va</label>
+          <label>{t("setup.fieldWhere")}</label>
           {desktop ? (
             <div className="cfgrow">
               <button className="newbtn" style={{ margin: 0, width: "auto", padding: "4px 12px" }}
-                      onClick={browseDest}>{dir ? "Cambiar…" : "Elegir carpeta…"}</button>
+                      onClick={browseDest}>{dir ? t("setup.change") : t("setup.chooseFolder")}</button>
               {dir && <code className="cfgpath">{dir}</code>}
             </div>
           ) : (
             <input value={dir} onChange={(e) => setDir(e.target.value)}
-                   placeholder="~/Documents/mi-wiki" spellCheck={false} />
+                   placeholder={t("setup.dirPlaceholder")} spellCheck={false} />
           )}
           {errorsOf("path").map((p) => <p key={p.message} className="fielderr">{p.message}</p>)}
           {warningsOf("path").map((p) => <p key={p.message} className="fieldwarn">{p.message}</p>)}
           {!errorsOf("path").length && !warningsOf("path").length && (
             <p className="cfghint">
               {dir && dir === suggestDir
-                ? "Es el vault que tienes abierto. Se le montará la estructura adentro."
-                : "Puede no existir todavía; se crea."}
+                ? t("setup.dirIsCurrent")
+                : t("setup.dirMayNotExist")}
             </p>
           )}
         </div>
 
         <div className="setupfield">
-          <label>Cómo se organiza</label>
+          <label>{t("setup.fieldStructure")}</label>
           <div className="archgrid">
             {packs.map((p) => (
               <button key={p.id} className={`archcard${p.id === chosen ? " on" : ""}`}
@@ -295,72 +292,67 @@ export default function Setup({
         </div>
 
         <div className="setupfield">
-          <label>Agente preferido</label>
+          <label>{t("setup.fieldAgent")}</label>
           <div className="archgrid">
             <button className={`archcard${agent === "claude" ? " on" : ""}`}
                     onClick={() => { setAgent("claude"); setModel(""); setPerm("acceptEdits"); }}>
               <strong>Claude Code</strong>
-              <span>Agente CLI de Anthropic.</span>
+              <span>{t("setup.agentClaude")}</span>
             </button>
             <button className={`archcard${agent === "antigravity" ? " on" : ""}`}
                     onClick={() => { setAgent("antigravity"); setModel(""); setPerm("acceptEdits"); }}>
               <strong>Antigravity CLI</strong>
-              <span>Asistente CLI de Google.</span>
+              <span>{t("setup.agentAntigravity")}</span>
             </button>
             <button className={`archcard${agent === "opencode" ? " on" : ""}`}
                     onClick={() => { setAgent("opencode"); setModel(""); setPerm("acceptEdits"); }}>
               <strong>OpenCode</strong>
-              <span>Agente open-source.</span>
+              <span>{t("setup.agentOpencode")}</span>
             </button>
           </div>
         </div>
 
         <div className="setupfield">
-          <label>Modelo</label>
+          <label>{t("setup.fieldModel")}</label>
           <div className="archgrid">
             {agentModels.map((m) => (
               <button key={m.id} className={`archcard${m.id === model ? " on" : ""}`}
                       onClick={() => setModel(m.id)}>
-                <strong>{m.label}</strong>
-                <span>{m.hint}</span>
+                <strong>{m.labelKey ? t(m.labelKey) : m.label}</strong>
+                <span>{t(m.hint)}</span>
               </button>
             ))}
           </div>
           <p className="cfghint">
             {modelsLoading
-              ? "Pidiéndole a agy su catálogo de modelos…"
-              : "Solo para el reparto. La preferencia permanente se configura en tu CLI, y es de donde sale el default."}
+              ? t("setup.modelsLoading")
+              : t("setup.modelsHint")}
           </p>
         </div>
 
         <div className="setupfield">
-          <label>Permisos</label>
+          <label>{t("setup.fieldPerms")}</label>
           <div className="archgrid">
             {(PERMS[agent] || PERMS.claude).map((p) => (
               <button key={p.id} className={`archcard${p.id === perm ? " on" : ""}`}
                       onClick={() => setPerm(p.id)}>
-                <strong>{p.label}</strong>
-                <span>{p.hint}</span>
+                <strong>{t(p.label)}</strong>
+                <span>{t(p.hint)}</span>
               </button>
             ))}
           </div>
           {perm === "bypass" && (
             <div className="warnbox">
-              <strong>Sin red de seguridad.</strong> El agente podrá ejecutar
-              cualquier comando y escribir cualquier archivo de tu computadora
-              —también fuera del vault— sin pedirte permiso ni una vez. Una
-              instrucción mal entendida, o un texto malicioso dentro de un
-              archivo que estás ingiriendo, se ejecuta sin que nadie lo pare.
+              <strong>{t("setup.bypassTitle")}</strong> {t("setup.bypassBody")}
               <br /><br />
-              Los originales no se tocan aunque esto salga mal —se copiaron, no
-              se movieron— pero el resto de tu disco sí está al alcance.
+              {t("setup.bypassBody2")}
             </div>
           )}
         </div>
 
         {pack && (
           <div className="archpreview">
-            <p className="cfghint">Se crean estas carpetas:</p>
+            <p className="cfghint">{t("setup.foldersCreated")}</p>
             <table className="structtable">
               <tbody>
                 {pack.folders.map((f) => (
@@ -373,9 +365,9 @@ export default function Setup({
             </table>
             <p className="cfghint">
               {pack.hubs.length
-                ? `Con ${pack.hubs.length} artículos guía y ${pack.categories} categorías.`
-                : `Sin artículos guía — organiza por etiquetas. ${pack.categories} categorías.`}
-              {" "}Todo queda editable en <code>.summa/architecture.json</code>.
+                ? t("setup.packWithHubs", { hubs: pack.hubs.length, cats: pack.categories })
+                : t("setup.packNoHubs", { cats: pack.categories })}
+              {" "}{t("setup.packEditable", { file: ".summa/architecture.json" })}
             </p>
           </div>
         )}
@@ -385,10 +377,10 @@ export default function Setup({
         <div className="cfgrow" style={{ marginTop: 14 }}>
           <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
                   disabled={!canCreate || !!busy} onClick={create}>
-            {busy === "creando" ? "Creando…" : "Crear y continuar"}
+            {busy === "creando" ? t("setup.creating") : t("setup.createContinue")}
           </button>
-          {checking && <span className="dim" style={{ fontSize: 11.5 }}>comprobando…</span>}
-          <button className="linkish" onClick={() => setStep("start")}>← volver</button>
+          {checking && <span className="dim" style={{ fontSize: 11.5 }}>{t("setup.checking")}</span>}
+          <button className="linkish" onClick={() => setStep("start")}>{t("setup.backLink")}</button>
         </div>
       </div>
     );
@@ -397,27 +389,24 @@ export default function Setup({
   if (step === "sources") {
     return (
       <div className="welcome setupcreate">
-        <h1>Trae tus archivos</h1>
-        <p className="steps">Contenido inicial</p>
-        <p>
-          Elige carpetas de tu computadora con material que quieras en tu wiki.
-          Se <strong>copian</strong>: los originales no se tocan ni se mueven.
-        </p>
+        <h1>{t("setup.sourcesTitle")}</h1>
+        <p className="steps">{t("setup.stepContent")}</p>
+        <p>{bold(t("setup.sourcesIntro"))}</p>
 
         <div className="setupfield">
-          <label>Qué carpetas</label>
+          <label>{t("setup.fieldSources")}</label>
           {desktop ? (
             <>
               <div className="cfgrow">
                 <button className="newbtn" style={{ margin: 0, width: "auto", padding: "4px 12px" }}
-                        onClick={addSource}>Agregar carpeta…</button>
+                        onClick={addSource}>{t("setup.addFolder")}</button>
               </div>
               {sources.map((f) => (
                 <div key={f} className="cfgrow">
                   <code className="cfgpath" style={{ flex: 1 }}>{f}</code>
                   <button className="linkish"
                           onClick={() => { setSources((x) => x.filter((y) => y !== f)); setPreview(null); }}>
-                    quitar
+                    {t("setup.remove")}
                   </button>
                 </div>
               ))}
@@ -425,12 +414,10 @@ export default function Setup({
           ) : (
             <textarea rows={4} value={srcText}
                       onChange={(e) => { setSrcText(e.target.value); setPreview(null); }}
-                      placeholder={"~/Documents/notas-viejas\n~/Desktop/pendientes"} spellCheck={false} />
+                      placeholder={t("setup.sourcesPlaceholder")} spellCheck={false} />
           )}
           <p className="cfghint">
-            Se saltan <code>node_modules</code>, <code>.git</code>, ocultos,
-            ejecutables y lo que pese más de 100 MB. Los duplicados exactos
-            entran una vez.
+            {t("setup.skipsHint", { nodeModules: "node_modules", git: ".git" })}
           </p>
         </div>
 
@@ -439,37 +426,36 @@ export default function Setup({
         <div className="cfgrow" style={{ marginTop: 14 }}>
           <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
                   disabled={!chosenSources.length || !!busy} onClick={analyse}>
-            {busy === "analizando" ? `Analizando… ${elapsed}s` : "Analizar"}
+            {busy === "analizando" ? t("setup.analysing", { n: elapsed }) : t("setup.analyse")}
           </button>
-          <button className="linkish" onClick={openVault}>saltar y abrir el wiki vacío →</button>
+          <button className="linkish" onClick={openVault}>{t("setup.skipEmpty")}</button>
         </div>
 
         {preview && (
           <div className="archpreview" style={{ marginTop: 18 }}>
-            <p>
-              <strong>{preview.willCopy}</strong> archivos entrarían a{" "}
-              <code>{preview.inbox}</code> — {mb(preview.bytes)}.
-            </p>
+            <p>{bold(t("setup.wouldEnter", {
+              n: preview.willCopy, inbox: preview.inbox, size: mb(preview.bytes),
+            }))}</p>
             <table className="structtable">
               <tbody>
-                <tr><td><code>{preview.counts.note}</code></td><td>notas y texto</td></tr>
-                <tr><td><code>{preview.counts.source}</code></td><td>documentos, cada uno con su nota compañera</td></tr>
-                <tr><td><code>{preview.counts.image}</code></td><td>imágenes</td></tr>
-                <tr><td><code>{preview.willSkip}</code></td><td>se saltan{preview.duplicates > 0 && `, ${preview.duplicates} por duplicados`}</td></tr>
+                <tr><td><code>{preview.counts.note}</code></td><td>{t("setup.rowNotes")}</td></tr>
+                <tr><td><code>{preview.counts.source}</code></td><td>{t("setup.rowSources")}</td></tr>
+                <tr><td><code>{preview.counts.image}</code></td><td>{t("setup.rowImages")}</td></tr>
+                <tr><td><code>{preview.willSkip}</code></td><td>{t("setup.rowSkipped")}{preview.duplicates > 0 && t("setup.rowSkippedDup", { n: preview.duplicates })}</td></tr>
               </tbody>
             </table>
             {preview.truncated && (
               <p className="err">
                 {preview.truncatedBy === "time"
-                  ? "El escaneo tardó demasiado y se cortó — típico de carpetas sincronizadas en la nube."
-                  : "Se alcanzó el tope de 20,000 archivos."}
-                {" "}Esta vista no está completa: elige carpetas más concretas.
+                  ? t("setup.truncatedTime")
+                  : t("setup.truncatedFiles")}
+                {" "}{t("setup.truncatedTail")}
               </p>
             )}
             <div className="cfgrow" style={{ marginTop: 12 }}>
               <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
                       disabled={!!busy || preview.willCopy === 0} onClick={ingest}>
-                {busy === "copiando" ? "Copiando…" : `Copiar ${preview.willCopy} archivos`}
+                {busy === "copiando" ? t("setup.copying") : t("setup.copyN", { n: preview.willCopy })}
               </button>
             </div>
           </div>
@@ -481,24 +467,19 @@ export default function Setup({
   // step === "run"
   return (
     <div className="welcome setupcreate">
-      <h1>Que el agente lo acomode</h1>
-      <p className="steps">Reparto</p>
-      <p>
-        {copied?.copied} archivos están en la bandeja, con la estructura de
-        carpetas que traían. Para decidir en qué parte del vault va cada nota hay
-        que leerla, y de eso se encarga el agente — con el modelo y los permisos
-        que ya elegiste.
-      </p>
+      <h1>{t("setup.runTitle")}</h1>
+      <p className="steps">{t("setup.stepSort")}</p>
+      <p>{t("setup.runIntro", { n: copied?.copied ?? 0 })}</p>
 
       <AgentSession cwd={vault} agent={agent} model={model} perm={perm} />
 
       <div className="cfgrow" style={{ marginTop: 22 }}>
         <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
                 onClick={openVault}>
-          Abrir mi wiki
+          {t("setup.openMyWiki")}
         </button>
         <span className="dim" style={{ fontSize: 11.5 }}>
-          puedes abrirlo aunque el agente siga trabajando
+          {t("setup.openAnyway")}
         </span>
       </div>
     </div>

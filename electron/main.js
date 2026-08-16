@@ -4,7 +4,8 @@ import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveVault, rememberVault, readSettings, inspectVault } from "../src/appdata.mjs";
+import { resolveVault, rememberVault, readSettings, inspectVault, resolveLocale, seedLocale } from "../src/appdata.mjs";
+import { menuT } from "./menu-messages.mjs";
 import { serverEnv, SERVER_ARGV } from "./server-env.mjs";
 
 /**
@@ -176,10 +177,8 @@ function startServer() {
   });
   server.on("error", (e) => {
     dialog.showErrorBox(
-      "No se pudo arrancar el servidor",
-      `No se encontró \`${node}\`.\n\n${e.message}\n\n` +
-      `Lanza la app desde una terminal (npm run desktop) o exporta WIKI_NODE ` +
-      `con la ruta absoluta a node.`,
+      t("serverFailedTitle"),
+      t("serverFailedBody", { node: `\`${node}\``, message: e.message }),
     );
     app.quit();
   });
@@ -190,8 +189,8 @@ function startServer() {
   server.on("exit", (code, signal) => {
     if (quitting || signal) return;
     dialog.showErrorBox(
-      "El servidor se detuvo",
-      `\`server.ts\` terminó con código ${code}.\n\nLog de error:\n${lastStderr}`,
+      t("serverStoppedTitle"),
+      t("serverStoppedBody", { code, log: lastStderr }),
     );
   });
 }
@@ -241,8 +240,8 @@ async function restartServer() {
     // `npm run dev` aparte, por ejemplo). Arrancar otro solo produciría un
     // EADDRINUSE ilegible.
     dialog.showErrorBox(
-      "No se pudo reiniciar",
-      `El puerto ${PORT} sigue ocupado por otro proceso. Ciérralo y vuelve a intentarlo.`,
+      t("restartFailedTitle"),
+      t("restartFailedBody", { port: PORT }),
     );
     return false;
   }
@@ -369,10 +368,10 @@ async function openVault(dir = null) {
   let target = dir;
   if (!target) {
     const r = await dialog.showOpenDialog(win ?? undefined, {
-      title: "Elegir vault",
-      message: "La carpeta donde vive tu base de conocimiento",
+      title: t("pickVaultTitle"),
+      message: t("pickVaultMessage"),
       properties: ["openDirectory", "createDirectory"],
-      buttonLabel: "Abrir",
+      buttonLabel: t("pickVaultButton"),
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false, reason: "cancelled" };
     target = r.filePaths[0];
@@ -388,11 +387,11 @@ async function openVault(dir = null) {
   if (kind === "empty") {
     const { response } = await dialog.showMessageBox(win ?? undefined, {
       type: "question",
-      buttons: ["Usarla igual", "Cancelar"],
+      buttons: [t("emptyVaultUseAnyway"), t("emptyVaultCancel")],
       defaultId: 1,
       cancelId: 1,
-      message: "Esa carpeta está vacía",
-      detail: "No se encontró ningún archivo .md adentro. Puedes usarla como vault nuevo, pero al abrirla no habrá nada que leer.",
+      message: t("emptyVaultMessage"),
+      detail: t("emptyVaultDetail"),
     });
     if (response !== 0) return { ok: false, reason: "cancelled" };
   }
@@ -405,6 +404,18 @@ async function openVault(dir = null) {
   return { ok, vault: target };
 }
 
+/**
+ * El traductor del menú, releído en cada uso.
+ *
+ * Una función y no una constante porque el idioma cambia en caliente desde el
+ * panel de la página: la renderer avisa por IPC, se vuelve a construir el menú,
+ * y esta llamada tiene que devolver ya la tabla nueva. Una constante resuelta al
+ * cargar el módulo dejaría el menú en el idioma del arranque hasta reiniciar.
+ */
+function t(key, vars) {
+  return menuT(resolveLocale())(key, vars);
+}
+
 /** Los últimos vaults abiertos, para el submenú. Se reconstruye al cambiar. */
 function recentsSubmenu() {
   const { recents } = readSettings();
@@ -413,7 +424,7 @@ function recentsSubmenu() {
     .filter((r) => r !== current)
     .slice(0, 8)
     .map((r) => ({ label: r.replace(process.env.HOME ?? process.env.USERPROFILE ?? "~", "~"), click: () => openVault(r) }));
-  return items.length ? items : [{ label: "Sin vaults recientes", enabled: false }];
+  return items.length ? items : [{ label: t("noRecents"), enabled: false }];
 }
 
 function buildMenu() {
@@ -422,27 +433,27 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(mac ? [{ role: "appMenu" }] : []),
     {
-      label: "Archivo",
+      label: t("file"),
       submenu: [
-        { label: "Abrir nota…", accelerator: "CmdOrCtrl+O", click: () => press("o") },
-        { label: "Nueva terminal", accelerator: "CmdOrCtrl+T", click: newTerminal },
+        { label: t("openNote"), accelerator: "CmdOrCtrl+O", click: () => press("o") },
+        { label: t("newTerminal"), accelerator: "CmdOrCtrl+T", click: newTerminal },
         { type: "separator" },
-        { label: "Abrir vault…", accelerator: "CmdOrCtrl+Shift+O", click: () => openVault() },
+        { label: t("openVault"), accelerator: "CmdOrCtrl+Shift+O", click: () => openVault() },
         {
-          label: "Nuevo vault…",
+          label: t("newVault"),
           accelerator: "CmdOrCtrl+Shift+N",
           click: () => win?.loadURL(`${ORIGIN}/setup?new=1`).catch(() => {}),
         },
-        { label: "Vaults recientes", submenu: recentsSubmenu() },
+        { label: t("recentVaults"), submenu: recentsSubmenu() },
         { type: "separator" },
-        { label: "Guardar", accelerator: "CmdOrCtrl+S", click: () => press("s") },
+        { label: t("save"), accelerator: "CmdOrCtrl+S", click: () => press("s") },
         { type: "separator" },
         mac ? { role: "close" } : { role: "quit" },
       ],
     },
     { role: "editMenu" },
     {
-      label: "Ver",
+      label: t("view"),
       submenu: [
         { role: "reload" },
         { role: "forceReload" },
@@ -513,6 +524,18 @@ function windowIcon() {
 }
 
 app.whenReady().then(() => {
+  /*
+    El idioma del sistema entra al proyecto AQUÍ y en ningún otro sitio.
+    `app.getLocale()` es lo único que sabe qué idioma tiene el sistema
+    operativo: el servidor de Next corre sin cabeza y `process.env.LANG` no es
+    fiable dentro de un `.app` empaquetado.
+
+    Solo siembra: si ya hay una elección guardada, `seedLocale` no la toca. Un
+    usuario que puso inglés en un Mac en español lo puso a propósito, y volver a
+    preguntarle al sistema en cada arranque le desharía la elección.
+  */
+  seedLocale(app.getLocale());
+
   brand = vaultConfig();
   applyDockIcon();
   buildMenu();
@@ -528,11 +551,22 @@ app.whenReady().then(() => {
     if (typeof dir !== "string" || !dir.trim()) return { ok: false, reason: "missing" };
     return openVault(dir);
   });
+  /*
+    La página cambió el idioma y el menú nativo no se entera solo.
+
+    Un aviso explícito y no vigilar `settings.json`: `writeSettings` escribe con
+    rename atómico, que reemplaza el inodo y deja sordo a `fs.watch` en macOS,
+    y la alternativa (`fs.watchFile`) es un sondeo permanente para un evento que
+    ocurre dos veces en la vida de la app. La única vía por la que el idioma
+    cambia es este panel, así que que avise él es exacto y gratis.
+  */
+  ipcMain.handle("locale:changed", () => { buildMenu(); return true; });
+
   ipcMain.handle("dialog:folder", async (_e, title) => {
     const r = await dialog.showOpenDialog(win ?? undefined, {
-      title: typeof title === "string" && title ? title : "Elegir carpeta",
+      title: typeof title === "string" && title ? title : t("chooseFolder"),
       properties: ["openDirectory", "createDirectory"],
-      buttonLabel: "Elegir",
+      buttonLabel: t("choose"),
     });
     return r.canceled ? null : (r.filePaths[0] ?? null);
   });

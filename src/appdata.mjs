@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { LOCALES, FALLBACK_LOCALE, normalizeLocale, isLocale } from "./locales.mjs";
+
+/** Reexportados: el resto del proyecto pide los primitivos de idioma aquí. */
+export { LOCALES, FALLBACK_LOCALE, normalizeLocale };
 
 /**
  * Configuración de NIVEL MÁQUINA: qué vault está abierto y cuáles se abrieron
@@ -48,10 +52,19 @@ export function settingsPath() {
  * @typedef {object} Settings
  * @property {string|null} vault    Ruta absoluta del vault abierto.
  * @property {string[]} recents     Vaults abiertos antes, del más reciente al más viejo.
+ * @property {Locale|null} locale   Idioma elegido. `null` = todavía sin elegir.
  */
 
-/** @type {Settings} */
-const DEFAULTS = { vault: null, recents: [] };
+/**
+ * `locale: null` y no `"en"` a propósito.
+ *
+ * Distingue «nunca eligió» de «eligió inglés», y esa diferencia es la que deja
+ * que el primer arranque siembre el idioma del sistema sin pisar una elección
+ * real. Sembrar el default aquí borraría esa distinción para siempre.
+ *
+ * @type {Settings}
+ */
+const DEFAULTS = { vault: null, recents: [], locale: null };
 
 /** @returns {Settings} */
 export function readSettings() {
@@ -69,6 +82,9 @@ export function readSettings() {
     recents: Array.isArray(raw.recents)
       ? raw.recents.filter((r) => typeof r === "string" && r.trim()).slice(0, 10)
       : [],
+    // Se valida contra la lista, no se normaliza: aquí interesa si hay una
+    // elección guardada, y un valor basura equivale a no haber elegido.
+    locale: isLocale(raw.locale) ? raw.locale : null,
   };
 }
 
@@ -92,6 +108,50 @@ export function writeSettings(patch) {
   fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n", "utf8");
   fs.renameSync(tmp, settingsPath());
   return next;
+}
+
+/**
+ * El idioma efectivo de la app.
+ *
+ * Mismo patrón que `resolveVault()`, y por la misma razón: el proceso principal
+ * de Electron y el servidor de Next tienen que dar la MISMA respuesta, y el
+ * primero no puede importar TypeScript. Por eso vive aquí y no en `lib/i18n`.
+ *
+ * Orden: variable de entorno → lo elegido en la app → respaldo. El sistema
+ * operativo NO entra en esta cadena: entra una sola vez, en `seedLocale()`, y
+ * queda escrito. Consultarlo en cada arranque haría que cambiar el idioma del
+ * Mac cambiara el de una app donde el usuario ya eligió otro.
+ *
+ * `WIKI_LOCALE` existe para las pruebas y para arrancar el servidor en un
+ * idioma sin tocar los settings de la máquina.
+ *
+ * @returns {Locale}
+ */
+export function resolveLocale() {
+  if (process.env.WIKI_LOCALE) return normalizeLocale(process.env.WIKI_LOCALE);
+  const { locale } = readSettings();
+  return locale ?? FALLBACK_LOCALE;
+}
+
+/**
+ * Siembra el idioma del sistema la primera vez, y solo la primera vez.
+ *
+ * Lo llama `electron/main.js` con `app.getLocale()`, que es el único sitio del
+ * proyecto que sabe qué idioma tiene el sistema operativo — el servidor de Next
+ * corre sin cabeza y `process.env.LANG` no es fiable en un `.app` empaquetado.
+ *
+ * Si ya hay una elección guardada no se toca nada: quien puso inglés en una
+ * máquina en español lo puso a propósito.
+ *
+ * @param {string|undefined} systemLocale
+ * @returns {Locale}
+ */
+export function seedLocale(systemLocale) {
+  const { locale } = readSettings();
+  if (locale) return locale;
+  const seeded = normalizeLocale(systemLocale);
+  writeSettings({ locale: seeded });
+  return seeded;
 }
 
 /**

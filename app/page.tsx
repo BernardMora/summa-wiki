@@ -6,6 +6,7 @@ import { navGroups } from "@/lib/nav.ts";
 import { readConfig, HAS_VAULT, VAULT, VAULT_SOURCE, vaultExists, ARCH } from "@/src/config.ts";
 import { splitBold } from "@/src/architecture.ts";
 import VaultPicker from "@/components/VaultPicker";
+import { getT, getLocale } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -29,40 +30,32 @@ const bold = (text: string) =>
  * que solo le falta meter notas o apuntar a otra carpeta.
  */
 function NoVault({ state }: { state: "missing" | "empty" }) {
+  const t = getT();
   const TITLE = {
-    missing: "No se encuentra el vault",
-    empty: "Este vault está vacío",
+    missing: "home.vaultMissing",
+    empty: "home.vaultEmpty",
   } as const;
 
   return (
     <div className="welcome">
-      <h1>{TITLE[state]}</h1>
+      <h1>{t(TITLE[state])}</h1>
 
       {state === "missing" && (
-        <p>
-          La app apunta a <code>{VAULT}</code>, pero esa carpeta no está en disco.
-          Si vive en un disco externo o en una carpeta sincronizada, conéctala;
-          si se movió, elígela de nuevo.
-        </p>
+        <p>{t("home.vaultMissingBody", { vault: VAULT })}</p>
       )}
 
       {state === "empty" && (
         <>
-          <p>
-            <code>{VAULT}</code> existe, pero no tiene ninguna nota que indexar.
-          </p>
+          <p>{t("home.vaultEmptyBody", { vault: VAULT })}</p>
           {/* La salida natural desde aquí es montarle una estructura, no elegir
               otra carpeta. Es adonde llega quien apuntó la app a una carpeta
               vacía esperando que se la organizara. */}
-          <p><a href="/setup?new=1">Darle una estructura →</a></p>
+          <p><a href="/setup?new=1">{t("home.giveStructure")}</a></p>
         </>
       )}
 
       {VAULT_SOURCE === "env" && (
-        <p className="counts">
-          La ruta viene de la variable <code>WIKI_VAULT</code>, que manda sobre
-          lo que se elija aquí.
-        </p>
+        <p className="counts">{t("home.envPathNote", { var: "WIKI_VAULT" })}</p>
       )}
 
       <VaultPicker current={HAS_VAULT ? VAULT : null} />
@@ -71,6 +64,8 @@ function NoVault({ state }: { state: "missing" | "empty" }) {
 }
 
 export default function MainPage() {
+  const t = getT();
+  const locale = getLocale();
   // Sin vault configurado no hay portada que degradar: se va al asistente,
   // que es una pantalla propia y no una portada vacía con un botón.
   if (!HAS_VAULT) redirect("/setup");
@@ -99,16 +94,18 @@ export default function MainPage() {
   return (
     <>
       <div className="welcome">
-        <h1>Bienvenido a {cfg.name}</h1>
+        <h1>{t("home.welcome", { name: cfg.name })}</h1>
         {/* La descripción de la arquitectura, no la bajada del vault: esa ya
             se pinta en el masthead y repetirla dos pulgadas más abajo no dice
             nada nuevo. Antes era una frase fija sobre el AIOS, que no describe
             el wiki de nadie más. */}
         <p>{ARCH.description}</p>
-        <p className="counts">
-          {s.notes} artículos · {s.words.toLocaleString()} palabras ·{" "}
-          {s.internalLinks} enlaces internos · {s.brokenLinks} rotos
-        </p>
+        <p className="counts">{t("home.counts", {
+          notes: s.notes,
+          words: s.words.toLocaleString(locale),
+          links: s.internalLinks,
+          broken: s.brokenLinks,
+        })}</p>
       </div>
 
       {/* Núcleo. Va arriba y va en otro color porque no es una categoría más:
@@ -121,11 +118,8 @@ export default function MainPage() {
       {coreCount > 0 && (
       <section className="core">
         <div className="corehead">
-          <h2>Núcleo</h2>
-          <p>
-            {ARCH.hubs.length + 1} artículos. No son un tema — son el marco
-            desde el que se leen todos los temas.
-          </p>
+          <h2>{t("home.core")}</h2>
+          <p>{t("home.coreBlurb", { n: ARCH.hubs.length + 1 })}</p>
         </div>
 
         {centre && (
@@ -133,11 +127,10 @@ export default function MainPage() {
             <div>
               <h2><Link href={href(centre.id)}>{centre.title}</Link></h2>
               <p>
-                Todo retroalimenta a este nodo, y este nodo alimenta de vuelta a cada uno
-                de los otros. Es la entrada del wiki.
+                {t("home.centreBlurb")}
               </p>
             </div>
-            <Link className="centrego" href={href(centre.id)}>Entrar →</Link>
+            <Link className="centrego" href={href(centre.id)}>{t("home.enter")}</Link>
           </div>
         )}
 
@@ -148,8 +141,12 @@ export default function MainPage() {
               <p className="qblurb">{b.blurb}</p>
               <p className="qmeta">
                 {b.count > 0
-                  ? <>{b.count} {b.count === 1 ? "artículo" : "artículos"} · {b.words.toLocaleString()} palabras</>
-                  : <em>sin artículos propios todavía</em>}
+                  ? t("home.cardCounts", {
+                      n: b.count,
+                      noun: t(b.count === 1 ? "home.articleOne" : "home.articleMany"),
+                      words: b.words.toLocaleString(locale),
+                    })
+                  : <em>{t("home.noOwnArticles")}</em>}
                 {b.lives && <> · <code>{b.lives}</code></>}
               </p>
               {b.sample.length > 0 && (
@@ -169,14 +166,11 @@ export default function MainPage() {
           aparte: es lo que se viene a buscar. */}
       <section className="catindex" id="categorias">
         <div className="catindexhead">
-          <h2>Categorías</h2>
-          <p>
-            {groups.filter((g) => g.id !== "__uncategorised").length} categorías ·{" "}
-            {filed} artículos clasificados. Un artículo puede estar en varias a la
-            vez, y se archiva solo: la categoría es una regla (ruta, etiqueta o
-            pilar), no una lista que alguien mantiene a mano. Las notas diarias
-            quedan fuera a propósito.
-          </p>
+          <h2>{t("home.categories")}</h2>
+          <p>{t("home.categoriesBlurb", {
+            n: groups.filter((g) => g.id !== "__uncategorised").length,
+            filed,
+          })}</p>
         </div>
 
         <nav className="catjump">
@@ -193,14 +187,14 @@ export default function MainPage() {
               <ul className="catlist">
                 {g.items.map((i) => (
                   <li key={i.id}>
-                    {i.pinned && <span className="pinmark" title="Fijada a mano">▪</span>}
+                    {i.pinned && <span className="pinmark" title={t("home.pinned")}>▪</span>}
                     <Link href={href(i.id)}>{i.title}</Link>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="dim" style={{ fontSize: 13, margin: 0 }}>
-                Vacía todavía — la regla existe, falta escribir.
+                {t("home.emptyCategory")}
               </p>
             )}
           </section>
@@ -208,7 +202,7 @@ export default function MainPage() {
 
         {hidden.length > 0 && (
           <details className="cathiddenbox">
-            <summary>Ocultas ({hidden.length})</summary>
+            <summary>{t("home.hidden", { n: hidden.length })}</summary>
             {hidden.map((g) => (
               <section className="catblock" key={g.id} id={`cat-${g.id}`}>
                 <h3>{g.label} <span className="catcount">{g.total}</span></h3>
@@ -226,7 +220,7 @@ export default function MainPage() {
       <div className="cols">
         <div>
           <section className="panel grey">
-            <h2>Cómo está organizado</h2>
+            <h2>{t("home.howOrganised")}</h2>
             <div>
               <p>{bold(ARCH.rationale)}</p>
               <table className="structtable">
@@ -240,9 +234,7 @@ export default function MainPage() {
                 </tbody>
               </table>
               <p className="dim" style={{ margin: "10px 0 0" }}>
-                Dos reglas lo sostienen: las notas personales son historial estático y no
-                se reescriben nunca; los artículos de síntesis son archivos nuevos
-                que <strong>citan</strong> esas notas — si hay contradicción, manda la fuente.
+                {bold(t("home.twoRules"))}
               </p>
             </div>
           </section>
@@ -250,16 +242,16 @@ export default function MainPage() {
 
         <div>
           <section className="panel blue">
-            <h2>Explorar</h2>
+            <h2>{t("home.explore")}</h2>
             <div>
               <ul>
-                <li><Link href="/graph">Grafo</Link> — el mapa de enlaces; el hover muestra el título, ⌘clic lo abre en pestaña</li>
-                <li><Link href="/random">Artículo aleatorio</Link></li>
-                <li><Link href="#categorias">Categorías</Link> — el índice temático de aquí arriba</li>
-                <li><Link href="/health">Salud del wiki</Link> — validación contra la spec</li>
+                <li><Link href="/graph">{t("home.graph")}</Link> — {t("home.graphHint")}</li>
+                <li><Link href="/random">{t("home.random")}</Link></li>
+                <li><Link href="#categorias">{t("home.categories")}</Link> — {t("home.categoriesLink")}</li>
+                <li><Link href="/health">{t("home.health")}</Link> — {t("home.healthHint")}</li>
               </ul>
               <p className="dim" style={{ margin: "8px 0 0" }}>
-                <kbd>⌘O</kbd> abre el buscador rápido desde cualquier parte.
+                <kbd>⌘O</kbd> {t("home.quickSwitcher")}
               </p>
             </div>
           </section>

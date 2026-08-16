@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readConfig, writeConfig, configIconPath, vaultExists } from "@/src/config.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +22,12 @@ export async function POST(req: Request) {
   // pidió, en una ruta que puede ser un punto de montaje desconectado. Mismo
   // razonamiento que en `writeCategories`.
   if (!vaultExists()) {
-    return NextResponse.json({ error: "no se encuentra el vault" }, { status: 409 });
+    return NextResponse.json({ error: getT()("err.vaultNotFound") }, { status: 409 });
   }
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "cuerpo inválido" }, { status: 400 });
+    return NextResponse.json({ error: getT()("err.invalidBody") }, { status: 400 });
   }
 
   const patch: Record<string, string> = {};
@@ -34,13 +35,13 @@ export async function POST(req: Request) {
     const name = body.name.trim();
     // Vacío no se acepta: dejaría la app sin nombre en el título, el splash y
     // la barra lateral. Para volver al de fábrica se borra la clave del JSON.
-    if (!name) return NextResponse.json({ error: "el nombre no puede quedar vacío" }, { status: 400 });
-    if (name.length > 60) return NextResponse.json({ error: "nombre demasiado largo" }, { status: 400 });
+    if (!name) return NextResponse.json({ error: getT()("err.nameEmpty") }, { status: 400 });
+    if (name.length > 60) return NextResponse.json({ error: getT()("err.nameTooLong") }, { status: 400 });
     patch.name = name;
   }
   if (typeof body.tagline === "string") {
     if (body.tagline.trim().length > 80) {
-      return NextResponse.json({ error: "bajada demasiado larga" }, { status: 400 });
+      return NextResponse.json({ error: getT()("err.taglineTooLong") }, { status: 400 });
     }
     patch.tagline = body.tagline.trim();
   }

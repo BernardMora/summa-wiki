@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getIndex } from "@/lib/server.ts";
 import { search } from "@/src/search.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -9,13 +10,14 @@ export default async function SearchPage({
 }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const q = sp.q ?? "";
+  const t = getT();
   const hits = q ? search(getIndex(), q, { type: sp.type, pillar: sp.pillar, bundle: sp.bundle, limit: 60 }) : [];
 
   return (
     <article>
-      <h1>Búsqueda</h1>
-      {!q && <p className="dim">Escribe en el buscador de arriba.</p>}
-      {q && <p className="infoline"><span>{hits.length} resultado(s) para “{q}”</span></p>}
+      <h1>{t("search.title")}</h1>
+      {!q && <p className="dim">{t("search.prompt")}</p>}
+      {q && <p className="infoline"><span>{t("search.results", { n: hits.length, q })}</span></p>}
       {hits.map((h) => (
         <div key={h.note.id} style={{ marginBottom: 14 }}>
           <Link href={`/note/${encodeURIComponent(h.note.id)}`}><strong>{h.note.title}</strong></Link>{" "}

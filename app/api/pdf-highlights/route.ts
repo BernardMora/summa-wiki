@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import { getIndex, resolveId, invalidate } from "@/lib/server.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -60,15 +61,15 @@ export async function GET(req: Request) {
 export async function DELETE(req: Request) {
   const { noteId, page, coords } = await req.json();
   if (!noteId || !page || !coords) {
-    return NextResponse.json({ error: "noteId, page y coords requeridos" }, { status: 400 });
+    return NextResponse.json({ error: getT()("err.highlightFieldsRequired") }, { status: 400 });
   }
   const abs = resolveId(noteId);
-  if (!abs || !fs.existsSync(abs)) return NextResponse.json({ error: "nota no encontrada" }, { status: 404 });
+  if (!abs || !fs.existsSync(abs)) return NextResponse.json({ error: getT()("err.noteNotFound") }, { status: 404 });
 
   const needle = `#page=${page}&selection=${coords}`;
   const lines = fs.readFileSync(abs, "utf8").split("\n");
   const at = lines.findIndex((l) => l.includes(needle));
-  if (at < 0) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+  if (at < 0) return NextResponse.json({ error: getT()("err.notFound") }, { status: 404 });
 
   // Expand over the contiguous blockquote around the link.
   let from = at, to = at;

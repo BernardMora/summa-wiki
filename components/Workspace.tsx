@@ -10,6 +10,7 @@ import RawFilePane from "./RawFilePane.tsx";
 import TerminalPane from "./TerminalPane.tsx";
 import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isTermId, isFileId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
+import { useT } from "./I18n";
 
 export interface Tab { id: string; title: string; }
 export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
@@ -56,6 +57,7 @@ export default function Workspace({ initial, seed }: {
   /** Pestaña a abrir al montar, de `?open=`. Se aplica una sola vez. */
   seed?: { id: string; title: string } | null;
 }) {
+  const t = useT();
   const [panes, setPanes] = useState<Pane[]>([
     initial
       ? { key: "p0", tabs: [{ id: initial.id, title: initial.meta.title }], activeId: initial.id }
@@ -345,7 +347,7 @@ export default function Workspace({ initial, seed }: {
                 className={`splitbar${barDrag ? " dragging" : ""}`}
                 onMouseDown={(e) => { e.preventDefault(); setBarDrag(true); document.body.classList.add("resizing"); }}
                 onDoubleClick={() => setRatio(0.5)}
-                title="Arrastra para redimensionar · doble clic para 50/50"
+                title={t("chrome.dragResizeHalf")}
               />
             )}
             <div
@@ -411,14 +413,14 @@ export default function Workspace({ initial, seed }: {
 
               <div className="panecontent">
                 {p.activeId === null ? (
-                  <p className="dim" style={{ padding: 20 }}>Panel vacío.</p>
+                  <p className="dim" style={{ padding: 20 }}>{t("chrome.emptyPane")}</p>
                 ) : isGraphId(p.activeId) ? (
                   <div className="panescroll">
                     <article>
-                      <h1>Grafo</h1>
+                      <h1>{t("nav.graph")}</h1>
                       <p className="infoline">
-                        <span>arrastra un nodo para fijarlo</span><span>rueda para mover</span><span>pellizca para zoom</span>
-                        <span>clic explora el vecindario</span><span>⌘clic abre la nota</span><span>esc sale</span>
+                        <span>{t("graph.dragToPin")}</span><span>{t("graph.wheelToPan")}</span><span>{t("graph.pinchToZoom")}</span>
+                        <span>{t("graph.clickExplores")}</span><span>{t("graph.cmdClickOpens")}</span><span>{t("graph.escExits")}</span>
                       </p>
                       <GraphView />
                     </article>
@@ -436,7 +438,7 @@ export default function Workspace({ initial, seed }: {
                     <div className="imgbar">
                       <span className="imgname">{p.activeId.slice(4).split("/").pop()}</span>
                       <a className="dim" style={{ marginLeft: "auto" }}
-                         href={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`} download>Descargar</a>
+                         href={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`} download>{t("chrome.download")}</a>
                     </div>
                     <div className="imgscroll">
                       <img src={`/api/asset?p=${encodeURIComponent(p.activeId.slice(4))}`}

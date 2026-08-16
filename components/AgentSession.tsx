@@ -3,6 +3,7 @@ import { useState } from "react";
 import TerminalPane, { runInNewTerminal } from "./TerminalPane";
 import { newTermId } from "./Tabs";
 import { PERMS, agentCommand, useAgyModels } from "./agent-session";
+import { useT } from "./I18n";
 
 /**
  * Ver al agente trabajar **dentro de la app**, con modelo y permisos ya
@@ -35,6 +36,7 @@ export default function AgentSession({
   perm?: string;
   onStarted?: () => void;
 }) {
+  const t = useT();
   const [modelState, setModelState] = useState("");
   const [permState, setPermState] = useState("acceptEdits");
   const [termId, setTermId] = useState<string | null>(null);
@@ -60,8 +62,8 @@ export default function AgentSession({
         <p className="cfghint">
           Corriendo <code>{command}</code> en <code>{cwd}</code>.{" "}
           {agent === "antigravity"
-            ? "Corre de un tiro y termina solo — no espera más instrucciones. Puedes pararlo con Ctrl+C si quieres cancelarlo a medio camino; lo copiado se queda donde está."
-            : "Puedes escribir en la terminal para responderle, y pararlo con Ctrl+C — lo copiado se queda donde está."}
+            ? t("agent.oneShot")
+            : t("agent.interactive")}
         </p>
         <div className="agentterm">
           <TerminalPane id={termId} />
@@ -75,31 +77,31 @@ export default function AgentSession({
       {!picked && (
         <>
           <div className="setupfield">
-            <label>Modelo</label>
+            <label>{t("setup.fieldModel")}</label>
             <div className="archgrid">
               {models.map((m) => (
                 <button key={m.id} className={`archcard${m.id === model ? " on" : ""}`}
                         onClick={() => setModelState(m.id)}>
-                  <strong>{m.label}</strong>
-                  <span>{m.hint}</span>
+                  <strong>{m.labelKey ? t(m.labelKey) : m.label}</strong>
+                  <span>{t(m.hint)}</span>
                 </button>
               ))}
             </div>
             <p className="cfghint">
               {modelsLoading
-                ? "Pidiéndole a agy su catálogo de modelos…"
-                : "Solo para esta sesión. La preferencia permanente se configura en tu CLI, y es de donde sale el default."}
+                ? t("setup.modelsLoading")
+                : t("agent.sessionOnly")}
             </p>
           </div>
 
           <div className="setupfield">
-            <label>Permisos</label>
+            <label>{t("setup.fieldPerms")}</label>
             <div className="archgrid">
               {perms.map((p) => (
                 <button key={p.id} className={`archcard${p.id === perm ? " on" : ""}`}
                         onClick={() => setPermState(p.id)}>
-                  <strong>{p.label}</strong>
-                  <span>{p.hint}</span>
+                  <strong>{t(p.label)}</strong>
+                  <span>{t(p.hint)}</span>
                 </button>
               ))}
             </div>
@@ -109,14 +111,9 @@ export default function AgentSession({
 
       {perm === "bypass" && (
         <div className="warnbox">
-          <strong>Sin red de seguridad.</strong> El agente podrá ejecutar
-          cualquier comando y escribir cualquier archivo de tu computadora
-          —también fuera del vault— sin pedirte permiso ni una vez. Una
-          instrucción mal entendida, o un texto malicioso dentro de un archivo
-          que estás ingiriendo, se ejecuta sin que nadie lo pare.
+          <strong>{t("setup.bypassTitle")}</strong> {t("setup.bypassBody")}
           <br /><br />
-          Los originales no se tocan aunque esto salga mal —se copiaron, no se
-          movieron— pero el resto de tu disco sí está al alcance.
+          {t("setup.bypassBody2")}
         </div>
       )}
 
@@ -126,7 +123,7 @@ export default function AgentSession({
           Empezar el reparto
         </button>
       </div>
-      <p className="cfghint">Se ejecutará <code>{command}</code></p>
+      <p className="cfghint">{t("agent.willRun")} <code>{command}</code></p>
     </>
   );
 }

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { resolveId, invalidate } from "@/lib/server.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
 
   const noteAbs = resolveId(id);
   if (!noteAbs || !fs.existsSync(noteAbs)) {
-    return NextResponse.json({ error: "nota no encontrada" }, { status: 404 });
+    return NextResponse.json({ error: getT()("err.noteNotFound") }, { status: 404 });
   }
 
   const srcExt = EXT[file.type];
