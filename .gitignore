@@ -12,3 +12,12 @@ dist/
 out/
 
 .DS_Store
+
+# Material en crudo de la demo: grabaciones de pantalla en Retina, cientos de MB.
+# Lo que se publica es el asset ya optimizado, subido como attachment de GitHub y
+# enlazado por URL absoluta desde el README — no vive aqui.
+#
+# Ignorado y no solo "no anadido" a proposito: asi entro `ocr/` al historial en su
+# dia, con un `git add .` que barrio 900 KB de escaneos que nadie quiso commitear.
+# Sacarlos costo reescribir 73 commits.
+assets/
