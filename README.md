@@ -26,10 +26,12 @@ Grab the file for your platform from the [latest release](https://github.com/Ber
 There is nothing to install alongside it. The app ships its own runtime, so you do
 not need Node.
 
-> **The builds are not code-signed yet.** On macOS, right-click the app and choose
-> *Open* the first time, or Gatekeeper will refuse it. On Windows, SmartScreen shows
-> a warning — choose *More info → Run anyway*. Signing certificates are on the
-> roadmap; until then this is the honest state of things.
+> **The builds are not code-signed yet.** On macOS, opening the app the first time
+> takes a detour: double-click it, dismiss the warning, then open *System Settings →
+> Privacy & Security*, scroll to the Security section at the bottom and click *Open
+> Anyway*. The old right-click → *Open* shortcut does not work — Apple removed it in
+> Sequoia. On Windows, SmartScreen shows a warning; choose *More info → Run anyway*.
+> Signing is on the roadmap; until then this is the honest state of things.
 
 ## What it is
 
