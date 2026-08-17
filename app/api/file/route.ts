@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { VAULT, invalidate } from "@/lib/server.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -49,14 +50,14 @@ function looksBinary(buf: Buffer): boolean {
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams.get("p");
-  if (!p) return NextResponse.json({ error: "p requerido" }, { status: 400 });
+  if (!p) return NextResponse.json({ error: getT()("err.pRequired") }, { status: 400 });
 
   const abs = safe(decodeURIComponent(p));
-  if (!abs) return NextResponse.json({ error: "ruta inválida" }, { status: 400 });
+  if (!abs) return NextResponse.json({ error: getT()("err.invalidPath") }, { status: 400 });
 
   let st: fs.Stats;
-  try { st = fs.statSync(abs); } catch { return NextResponse.json({ error: "no existe" }, { status: 404 }); }
-  if (st.isDirectory()) return NextResponse.json({ error: "es una carpeta" }, { status: 400 });
+  try { st = fs.statSync(abs); } catch { return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 }); }
+  if (st.isDirectory()) return NextResponse.json({ error: getT()("err.isAFolder") }, { status: 400 });
 
   if (st.size > MAX_EDIT) {
     return NextResponse.json({ tooBig: true, size: st.size, mtimeMs: st.mtimeMs });
@@ -77,12 +78,12 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const { p, text, mtimeMs } = await req.json();
   if (typeof p !== "string" || typeof text !== "string") {
-    return NextResponse.json({ error: "p y text requeridos" }, { status: 400 });
+    return NextResponse.json({ error: getT()("err.pAndTextRequired") }, { status: 400 });
   }
 
   const abs = safe(p);
-  if (!abs) return NextResponse.json({ error: "ruta inválida" }, { status: 400 });
-  if (!fs.existsSync(abs)) return NextResponse.json({ error: "no existe" }, { status: 404 });
+  if (!abs) return NextResponse.json({ error: getT()("err.invalidPath") }, { status: 400 });
+  if (!fs.existsSync(abs)) return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 });
 
   // Mismo control optimista que writeNote: si el archivo cambió por debajo
   // (git, otro editor, un agente) se rechaza en vez de pisarlo.

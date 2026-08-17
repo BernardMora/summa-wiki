@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { MessageKey } from "@/lib/i18n.ts";
 
 /**
  * Los parámetros con los que arranca una sesión del agente.
@@ -25,22 +26,57 @@ import { useEffect, useState } from "react";
  * la última versión de esa familia, así que la elección no se queda vieja
  * cuando salga el siguiente modelo.
  */
-export const MODELS: Record<string, { id: string; label: string; hint: string }[]> = {
+/**
+ * `hint` es una CLAVE del diccionario, no texto.
+ *
+ * Este módulo no es un componente y no puede llamar a `useT()`; traduce quien
+ * lo pinta. Guardar la clave y no la cadena es además lo correcto: estas tablas
+ * viven en memoria mientras la app está abierta, y con el texto ya resuelto se
+ * quedarían en el idioma que hubiera al cargar el módulo.
+ *
+ * `label` NO es una clave, y la asimetría es deliberada: «Opus», «Haiku» y
+ * «gemini-3.7-flash» son nombres propios y no se traducen. El único rótulo que
+ * sí es prosa —«el de tu CLI»— lleva `labelKey` aparte, y por eso los modelos
+ * que llegan del catálogo en vivo de `agy` pueden entrar en la misma lista sin
+ * inventarles una clave que nunca existiría en el diccionario.
+ */
+/** Una opción de modelo, venga de la tabla de abajo o del catálogo en vivo. */
+export interface ModelChoice {
+  id: string;
+  /** Nombre propio del modelo. Vacío cuando el rótulo es prosa: ver `labelKey`. */
+  label: string;
+  /** Solo el «el de tu CLI», que sí es prosa y sí se traduce. */
+  labelKey?: MessageKey;
+  hint: MessageKey;
+}
+
+export const MODELS: Record<string, ModelChoice[]> = {
   claude: [
-    { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en Claude Code." },
-    { id: "opus", label: "Opus", hint: "El mejor criterio con notas ambiguas. Más lento y más caro." },
-    { id: "sonnet", label: "Sonnet", hint: "Equilibrado. Suficiente para material que ya viene ordenado." },
-    { id: "haiku", label: "Haiku", hint: "El más rápido y barato. Para lotes grandes y clasificación simple." },
+    { id: "", label: "", labelKey: "agent.cliDefault", hint: "agent.cliDefaultClaude" },
+    { id: "opus", label: "Opus", hint: "agent.opusHint" },
+    { id: "sonnet", label: "Sonnet", hint: "agent.sonnetHint" },
+    { id: "haiku", label: "Haiku", hint: "agent.haikuHint" },
   ],
+  /*
+   * Solo el default: aquí NO se inventan modelos.
+   *
+   * Había un «Pro» y un «Flash» escritos a mano, y ninguno de los dos existe
+   * como id para `agy` —su catálogo real son `gemini-3.7-flash-high`,
+   * `gemini-3.6-flash-medium` y demás—, así que elegirlos armaba un
+   * `--model pro` que el CLI rechaza. Los nombres de esa lista salieron de
+   * suponer cómo se llamarían, no de preguntárselo al CLI.
+   *
+   * La lista de verdad la trae `useAgyModels` de `agy models`. Cuando no se
+   * puede (sin sesión iniciada, sin `agy` instalado) queda solo esta opción,
+   * que es la honesta: el CLI usa el modelo que ya tenga configurado.
+   */
   antigravity: [
-    { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en Antigravity." },
-    { id: "pro", label: "Pro", hint: "Para tareas de alto razonamiento y notas complejas." },
-    { id: "flash", label: "Flash", hint: "Rápido y eficiente para tareas sencillas." },
+    { id: "", label: "", labelKey: "agent.cliDefault", hint: "agent.cliDefaultAntigravity" },
   ],
   opencode: [
-    { id: "", label: "El de tu CLI", hint: "Lo que ya tengas configurado en OpenCode." },
-    { id: "pro", label: "Pro", hint: "Modelo complejo y de alto rendimiento." },
-    { id: "flash", label: "Flash", hint: "Modelo ágil para volúmenes grandes." },
+    { id: "", label: "", labelKey: "agent.cliDefault", hint: "agent.cliDefaultOpencode" },
+    { id: "pro", label: "Pro", hint: "agent.proHint" },
+    { id: "flash", label: "Flash", hint: "agent.flashHint" },
   ],
 };
 
@@ -50,47 +86,47 @@ export const MODELS: Record<string, { id: string; label: string; hint: string }[
  * pidiendo permiso para todo lo demás. El bypass existe porque es la máquina
  * del usuario; lo que no puede es estar sin etiquetar.
  */
-export const PERMS: Record<string, { id: string; flag: string; label: string; hint: string }[]> = {
+export const PERMS: Record<string, { id: string; flag: string; label: MessageKey; hint: MessageKey }[]> = {
   claude: [
     {
       id: "acceptEdits",
       flag: "--permission-mode acceptEdits",
-      label: "Aceptar ediciones",
-      hint: "Mueve y edita archivos sin preguntar. Para lo demás pide permiso.",
+      label: "agent.acceptEdits",
+      hint: "agent.acceptEditsHint",
     },
     {
       id: "bypass",
       flag: "--dangerously-skip-permissions",
-      label: "No preguntar nada",
-      hint: "Sin ninguna confirmación, para todo.",
+      label: "agent.askNothing",
+      hint: "agent.askNothingHint",
     },
   ],
   antigravity: [
     {
       id: "acceptEdits",
       flag: "--mode=accept-edits",
-      label: "Aceptar ediciones",
-      hint: "Escribe archivos sin preguntar. Los comandos de shell se siguen deteniendo a pedir permiso.",
+      label: "agent.acceptEdits",
+      hint: "agent.acceptEditsAg",
     },
     {
       id: "bypass",
       flag: "--dangerously-skip-permissions",
-      label: "No preguntar nada",
-      hint: "Sin ninguna confirmación, para todo.",
+      label: "agent.askNothing",
+      hint: "agent.askNothingHint",
     },
   ],
   opencode: [
     {
       id: "acceptEdits",
       flag: "--yes",
-      label: "Aceptar ediciones",
-      hint: "Acepta los cambios automáticamente.",
+      label: "agent.acceptEdits",
+      hint: "agent.yesHint",
     },
     {
       id: "bypass",
       flag: "--dangerously-skip-permissions",
-      label: "No preguntar nada",
-      hint: "Sin ninguna confirmación, para todo.",
+      label: "agent.askNothing",
+      hint: "agent.askNothingHint",
     },
   ],
 };
@@ -130,20 +166,39 @@ export function agentCommand(agent: string, model: string, perm: string, skill =
 export function useAgyModels(agent: string) {
   const [live, setLive] = useState<{ id: string; label: string }[] | null>(null);
   const [loading, setLoading] = useState(false);
+  /*
+   * Qué agentes YA se preguntaron, hayan respondido lo que hayan respondido.
+   *
+   * Un ref y no estado: es justo lo que no debe provocar un render, porque el
+   * render es lo que volvía a disparar el efecto. La versión anterior se
+   * guardaba con `if (live || loading) return` y las dos son insuficientes,
+   * porque un intento FALLIDO deja `live` en null y `loading` en false — el
+   * mismo estado exacto que antes de intentarlo. El efecto no podía distinguir
+   * «todavía no he preguntado» de «pregunté y no había nada», así que volvía a
+   * preguntar, y como `loading` estaba en las dependencias, cada vuelta lo
+   * cambiaba dos veces y agendaba la siguiente: un bucle cerrado, una petición
+   * cada ~250 ms mientras la pantalla estuviera abierta.
+   *
+   * Se dispara con `agy` instalado pero sin sesión iniciada: el comando
+   * imprime «Please sign in…», sale con código 0, y el parser no encuentra
+   * ninguna línea `id<TAB>label` — un fallo que no parece fallo.
+   */
+  const asked = useRef<string | null>(null);
 
   useEffect(() => {
-    if (agent !== "antigravity" || live || loading) return;
+    if (agent !== "antigravity" || asked.current === agent) return;
+    asked.current = agent;
     setLoading(true);
     fetch("/api/agents/models?agent=antigravity")
       .then((r) => r.json())
       .then((d) => setLive(Array.isArray(d.models) && d.models.length ? d.models : null))
       .catch(() => setLive(null))
       .finally(() => setLoading(false));
-  }, [agent, live, loading]);
+  }, [agent]);
 
   const fallback = MODELS[agent] || MODELS.claude;
-  const models = agent === "antigravity" && live
-    ? [fallback[0], ...live.map((m) => ({ ...m, hint: "Del catálogo en vivo de agy." }))]
+  const models: ModelChoice[] = agent === "antigravity" && live
+    ? [fallback[0], ...live.map((m) => ({ ...m, hint: "agent.liveCatalogue" as MessageKey }))]
     : fallback;
 
   return { models, loading: agent === "antigravity" && loading && !live };

@@ -2,6 +2,7 @@
 import { isArticlePath } from "@/src/match.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fuzzy } from "@/lib/fuzzy.ts";
+import { useT } from "./I18n";
 
 interface Item {
   id: string; title: string; path: string; type: string;
@@ -24,6 +25,7 @@ export default function QuickSwitcher({
   /** newTab is true when the user held ⌘/Ctrl on Enter. */
   onOpen: (id: string, title: string, newTab: boolean) => void;
 }) {
+  const t = useT();
   const [show, setShow] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [q, setQ] = useState("");
@@ -97,7 +99,7 @@ export default function QuickSwitcher({
         <input
           ref={input}
           className="qsinput"
-          placeholder="Buscar nota por título o ruta…"
+          placeholder={t("qs.placeholder")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -124,7 +126,7 @@ export default function QuickSwitcher({
           ))}
         </ul>
         <div className="qsfoot">
-          <span>↑↓ moverse</span><span>↵ abrir</span><span>⌘↵ pestaña nueva</span><span>esc cerrar</span>
+          <span>{t("qs.move")}</span><span>{t("qs.open")}</span><span>{t("qs.newTab")}</span><span>{t("qs.escClose")}</span>
         </div>
       </div>
     </div>

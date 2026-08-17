@@ -1,16 +1,25 @@
 {
   "name": "summa-wiki",
   "version": "0.2.0",
+  "author": "Bernardo <hola@veridia.com.mx>",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
   "description": "Local reader/editor for the AIOS knowledge base",
   "//productName": "La MARCA, no el contenido. Acaba en CFBundleName, el rótulo de la barra de menús de macOS, que no se puede cambiar en caliente. Cómo se llama TU wiki es otra cosa y vive en 04-Sistema/wiki-config.json: por eso la app puede llamarse 'Summa Wiki' y tu instancia 'Wiki de Ana' sin pelearse.",
   "productName": "Summa Wiki",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BernardMora/summa-wiki.git"
+  },
+  "homepage": "https://github.com/BernardMora/summa-wiki",
+  "bugs": "https://github.com/BernardMora/summa-wiki/issues",
   "bin": {
     "wiki": "./bin/wiki"
   },
   "scripts": {
+    "test:appearance": "node --experimental-strip-types --test tests/appearance.test.ts",
     "dev": "cross-env UV_THREADPOOL_SIZE=64 node --experimental-strip-types --no-warnings server.ts",
     "desktop": "electron electron/main.js",
     "build": "cross-env NEXT_BUILD_DIR=.next-build next build",
@@ -20,9 +29,14 @@
     "health": "node --experimental-strip-types --no-warnings src/cli.ts health",
     "typecheck": "tsc --noEmit",
     "icons": "electron scripts/make-icon.mjs",
+    "ico": "electron scripts/make-ico.mjs",
     "brand": "node scripts/dev-brand.mjs",
     "postinstall": "node -e \"try{require('child_process').execSync('chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null')}catch(e){}\" && node scripts/dev-brand.mjs || true",
-    "package:win": "npm run build && electron-builder --win && npm run smoke:win",
+    "package:win": "npm run build && electron-builder --win && npm run smoke",
+    "package:mac": "npm run build && electron-builder --mac && npm run smoke",
+    "package:linux": "npm run build && electron-builder --linux && npm run smoke",
+    "package:linux:docker": "docker run --platform linux/amd64 --rm -v ${PWD}:/host -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder -w /tmp/app node:22-bookworm bash -c \"apt-get update && apt-get install -y fakeroot dpkg squashfs-tools python3 build-essential && cp -r /host/. . && rm -rf node_modules .next-build && npm install && npm run build && npx electron-builder --linux --x64 && mkdir -p /host/dist && cp -r dist/* /host/dist/\"",
+    "smoke": "node scripts/smoke-package.mjs",
     "smoke:win": "node scripts/smoke-package.mjs"
   },
   "dependencies": {
@@ -30,6 +44,7 @@
     "@codemirror/lang-markdown": "^6.3.0",
     "@codemirror/language": "^6.10.0",
     "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.5.0",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.36.0",
@@ -55,32 +70,6 @@
   },
   "engines": {
     "node": ">=22.6"
-  },
-  "build": {
-    "asar": false,
-    "appId": "com.veridia.summawiki",
-    "productName": "Summa Wiki",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      ".next-build/**/*",
-      "electron/**/*",
-      "src/**/*",
-      "lib/**/*",
-      "public/**/*",
-      "server.ts",
-      "next.config.mjs",
-      "package.json",
-      "node_modules/**/*"
-    ],
-    "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true
-    }
   }
+
 }

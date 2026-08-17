@@ -47,4 +47,13 @@ contextBridge.exposeInMainWorld("summa", {
    * asistente dejaría al usuario mirando "este vault está vacío".
    */
   chooseFolder: (title) => ipcRenderer.invoke("dialog:folder", title),
+  /**
+   * Avisa que el idioma cambió, para que el menú nativo se reconstruya.
+   *
+   * El menú lo pinta el proceso principal y no se entera de un POST a
+   * `/api/locale`: ese viaje ocurre entre la página y el servidor de Next, dos
+   * procesos que no son main. Sin este aviso el menú se queda en el idioma
+   * viejo hasta reiniciar la app.
+   */
+  localeChanged: () => ipcRenderer.invoke("locale:changed"),
 });

@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { getIndex } from "@/lib/server.ts";
 import { health } from "@/src/search.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
-const EXPECTED: Record<string, string> = {
-  "no-created": "Por diseño: la fecha se deja vacía en vez de inventarla.",
-  "stale-active": "Proyectos activos sin tocar en 30+ días.",
-};
+/** Hallazgos que NO son problemas, y por qué. Claves: lo pinta un servidor. */
+const EXPECTED = {
+  "no-created": "health.noCreated",
+  "stale-active": "health.staleActive",
+} as const;
 
 export default function Health() {
+  const t = getT();
   const idx = getIndex();
   const issues = health(idx);
   const by = new Map<string, typeof issues>();
@@ -17,15 +20,15 @@ export default function Health() {
 
   return (
     <article>
-      <h1>Salud del wiki</h1>
+      <h1>{t("health.title")}</h1>
       <p className="infoline">
-        <span>{issues.length} hallazgo(s)</span><span>{idx.notes.length} notas</span>
-        <span>{idx.stats.brokenLinks} enlaces rotos</span>
+        <span>{t("health.findings", { n: issues.length })}</span><span>{t("health.notes", { n: idx.notes.length })}</span>
+        <span>{t("health.brokenLinks", { n: idx.stats.brokenLinks })}</span>
       </p>
       {[...by.entries()].sort((a, b) => b[1].length - a[1].length).map(([kind, list]) => (
         <section key={kind}>
           <h2>{kind} <span className="dim">({list.length})</span></h2>
-          {EXPECTED[kind] && <p className="dim">{EXPECTED[kind]}</p>}
+          {kind in EXPECTED && <p className="dim">{t(EXPECTED[kind as keyof typeof EXPECTED])}</p>}
           <ul>
             {list.slice(0, 40).map((i, n) => (
               <li key={n}>
@@ -33,7 +36,7 @@ export default function Health() {
                 {i.detail && <span className="dim"> — {i.detail}</span>}
               </li>
             ))}
-            {list.length > 40 && <li className="dim">… {list.length - 40} más</li>}
+            {list.length > 40 && <li className="dim">{t("health.more", { n: list.length - 40 })}</li>}
           </ul>
         </section>
       ))}

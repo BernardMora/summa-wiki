@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "./I18n";
 
 /**
  * Editor de archivos `.canvas` (Obsidian Canvas).
@@ -51,6 +52,7 @@ const SIDES: Side[] = ["top", "right", "bottom", "left"];
 const AUTOSAVE_MS = 800;
 
 export default function CanvasEditor({ path: filePath }: { path: string }) {
+  const t = useT();
   const [nodes, setNodes] = useState<CNode[]>([]);
   const [edges, setEdges] = useState<CEdge[]>([]);
   const [sel, setSel] = useState<{ kind: "node" | "edge"; id: string } | null>(null);
@@ -74,7 +76,7 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
     let dead = false;
     (async () => {
       const r = await fetch(`/api/canvas?p=${encodeURIComponent(filePath)}`, { cache: "no-store" });
-      if (!r.ok) { setErr("no se pudo abrir el canvas"); return; }
+      if (!r.ok) { setErr(t("canvas.openFailed")); return; }
       const d = await r.json();
       if (dead) return;
       setNodes(d.nodes); setEdges(d.edges); mtime.current = d.mtimeMs;
@@ -95,13 +97,13 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
 
   // --------------------------------------------------------------- guardado
   const save = useCallback(async (ns: CNode[], es: CEdge[]) => {
-    setStatus("guardando…");
+    setStatus(t("canvas.saving"));
     const r = await fetch("/api/canvas", {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ p: filePath, nodes: ns, edges: es, mtimeMs: mtime.current }),
     });
-    if (r.status === 409) { setStatus("cambió en disco — recarga"); return; }
-    if (!r.ok) { setStatus("error al guardar"); return; }
+    if (r.status === 409) { setStatus(t("canvas.changedOnDisk")); return; }
+    if (!r.ok) { setStatus(t("canvas.saveFailed")); return; }
     mtime.current = (await r.json()).mtimeMs;
     dirty.current = false;
     setStatus("guardado");
@@ -110,7 +112,7 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
 
   const touch = useCallback((ns: CNode[], es: CEdge[]) => {
     dirty.current = true;
-    setStatus("sin guardar");
+    setStatus(t("canvas.unsaved"));
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => save(ns, es), AUTOSAVE_MS);
   }, [save]);
@@ -147,7 +149,7 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
   };
 
   const addNode = (x: number, y: number) => {
-    const n: CNode = { id: uid(), type: "text", text: "Nuevo nodo", x: Math.round(x), y: Math.round(y), width: 250, height: 120 };
+    const n: CNode = { id: uid(), type: "text", text: t("canvas.newNode"), x: Math.round(x), y: Math.round(y), width: 250, height: 120 };
     commit([...nodes, n], edges);
     setSel({ kind: "node", id: n.id });
     setEditing(n.id);
@@ -269,13 +271,13 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
         <button
           onClick={() => { const e = edges.find((x) => x.id === sel?.id); if (e) cycleArrows(e); }}
           disabled={sel?.kind !== "edge"}
-          title="Rota entre flecha al destino, al origen, ambas o ninguna"
-        >Dirección</button>
+          title={t("canvas.rotateArrow")}
+        >{t("canvas.direction")}</button>
         <span className="cvcolors">
           {["", "1", "2", "3", "4", "5", "6"].map((c) => (
             <button key={c || "none"} className="cvcolor" disabled={!sel}
               style={{ background: c ? PALETTE[c] : "transparent", borderColor: c ? PALETTE[c] : "var(--line)" }}
-              title={c ? `Color ${c}` : "Sin color"}
+              title={c ? `Color ${c}` : t("canvas.noColour")}
               onClick={() => setColor(c || undefined)} />
           ))}
         </span>
@@ -389,7 +391,7 @@ export default function CanvasEditor({ path: filePath }: { path: string }) {
                       key={s}
                       className="cvport"
                       style={{ left: a.x, top: a.y }}
-                      title="Arrastra a otro nodo para conectar"
+                      title={t("canvas.dragToConnect")}
                       onPointerDown={(ev) => {
                         ev.stopPropagation();
                         const p = toWorld(ev.clientX, ev.clientY);

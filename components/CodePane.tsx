@@ -6,6 +6,7 @@ import {
   highlightActiveLineGutter, drawSelection, rectangularSelection,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import {
   LanguageDescription, bracketMatching, foldGutter, foldKeymap,
   indentOnInput, syntaxHighlighting, defaultHighlightStyle,
@@ -85,6 +86,9 @@ export default function CodePane({
           keymap.of([
             { key: "Mod-s", preventDefault: true, run: () => { onSaveRef.current?.(); return true; } },
           ]),
+          search({ top: true }),
+          highlightSelectionMatches(),
+          keymap.of(searchKeymap),
           keymap.of([...defaultKeymap, ...historyKeymap, ...foldKeymap, indentWithTab]),
           langCompartment.of([]),
           themeCompartment.of(themeExtensions(isDark())),
@@ -114,7 +118,7 @@ export default function CodePane({
       view.current?.dispatch({ effects: themeCompartment.reconfigure(themeExtensions(isDark())) });
     };
     const mo = new MutationObserver(repaint);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette"] });
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     mq.addEventListener("change", repaint);
 

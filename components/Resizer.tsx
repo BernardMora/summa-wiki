@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useT } from "./I18n";
 
 const MIN = 140, MAX = 520, KEY = "wiki.sidew";
 
 /** Drag handle on the sidebar's right edge. Width persists across sessions. */
 export default function Resizer() {
+  const t = useT();
   const [dragging, setDragging] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const w = useRef(195);
@@ -17,6 +19,7 @@ export default function Resizer() {
     }
     if (localStorage.getItem("wiki.sidecollapsed") === "1") {
       document.documentElement.style.setProperty("--sidew", "0px");
+      document.documentElement.dataset.side = "collapsed";
       setCollapsed(true);
     }
   }, []);
@@ -41,18 +44,33 @@ export default function Resizer() {
   return (
     <>
       <button
-        className="sidetoggle"
+        className={`sidetoggle${collapsed ? " collapsed" : ""}`}
         style={{ left: "var(--sidew)" }}
         onClick={() => {
           const next = collapsed ? `${localStorage.getItem(KEY) || 195}px` : "0px";
           document.documentElement.style.setProperty("--sidew", next);
+          // El atributo va con la variable: la barra se apaga con `display`,
+          // porque a 0 el padding la dejaba asomando. Ver globals.css.
+          if (collapsed) delete document.documentElement.dataset.side;
+          else document.documentElement.dataset.side = "collapsed";
           localStorage.setItem("wiki.sidecollapsed", collapsed ? "0" : "1");
           setCollapsed(!collapsed);
         }}
-        title="Contraer / expandir la barra lateral"
-        aria-label="Contraer barra lateral"
+        title={t("chrome.toggleSidebar")}
+        aria-label={t("chrome.toggleSidebar")}
+        aria-expanded={!collapsed}
       >
-        {collapsed ? "›" : "‹"}
+        {collapsed ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="4" width="17" height="16" rx="2" />
+            <path d="M9 4v16" />
+            <path className="side-arrow" d="m13 9 3 3-3 3" />
+          </svg>
+        ) : (
+          <svg className="side-chevron" viewBox="0 0 12 20" aria-hidden="true">
+            <path d="m8 5-4 5 4 5" />
+          </svg>
+        )}
       </button>
     <div
       className={`resizer${dragging ? " dragging" : ""}`}
@@ -63,7 +81,7 @@ export default function Resizer() {
         document.documentElement.style.setProperty("--sidew", "195px");
         localStorage.setItem(KEY, "195");
       }}
-      title="Arrastra para redimensionar · doble clic para restablecer"
+      title={t("chrome.dragResize")}
       role="separator"
       aria-orientation="vertical"
     />

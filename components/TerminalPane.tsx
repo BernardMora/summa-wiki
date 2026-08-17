@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { useT } from "./I18n";
 
 /**
  * Shell real dentro de la app — para no saltar de pestaña a correr Claude
@@ -70,6 +71,7 @@ export function runInNewTerminal(id: string, cmd: string, cwd?: string) {
 }
 
 export default function TerminalPane({ id }: { id: string }) {
+  const t = useT();
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +88,26 @@ export default function TerminalPane({ id }: { id: string }) {
         fontSize: 13,
         cursorBlink: true,
         theme: currentTheme(),
+        /*
+         * Scroll: más recorrido por muesca y con interpolación.
+         *
+         * Por defecto xterm mueve UNA línea por muesca de rueda y salta a la
+         * posición nueva sin transición. Las dos cosas juntas son lo que se
+         * siente tosco: en un trackpad, donde el gesto es continuo, hace falta
+         * un barrido largo para avanzar lo que en cualquier otra ventana avanza
+         * de un golpe, y cada paso es un corte seco de una fila.
+         *
+         * 3 líneas es lo que usan Terminal.app e iTerm por muesca. Los 90 ms de
+         * interpolación son deliberadamente cortos: bastan para que el ojo siga
+         * el texto en vez de reconstruirlo, y no tanto como para que el scroll
+         * se sienta con inercia o se quede corriendo después de soltar.
+         *
+         * `fastScrollSensitivity` es el multiplicador con Alt, para saltar un
+         * log largo sin llegar al final a base de gestos.
+         */
+        scrollSensitivity: 3,
+        fastScrollSensitivity: 10,
+        smoothScrollDuration: 90,
       });
       const fit = new FitAddon();
       term.loadAddon(fit);
@@ -113,7 +135,7 @@ export default function TerminalPane({ id }: { id: string }) {
       };
       ws.onopen = sendResize;
       ws.onmessage = (e) => term.write(e.data as string);
-      ws.onclose = () => term.write("\r\n\x1b[2m— sesión terminada —\x1b[0m\r\n");
+      ws.onclose = () => term.write(`\r\n\x1b[2m${t("agent.terminalEnded")}\x1b[0m\r\n`);
       term.onData((s) => { if (ws.readyState === ws.OPEN) ws.send(s); });
 
       // xterm no tiene mapeo propio para estos: Cmd+flecha/Delete se los
@@ -144,7 +166,7 @@ export default function TerminalPane({ id }: { id: string }) {
       // sistema en modo "auto"): xterm no lee variables CSS por sí solo.
       const repaint = () => { term.options.theme = currentTheme(); };
       const mo = new MutationObserver(repaint);
-      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette"] });
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       mq.addEventListener("change", repaint);
 

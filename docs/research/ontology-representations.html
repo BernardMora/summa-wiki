@@ -1,0 +1,1007 @@
+<title>Fourteen Ways to Draw an Ontology</title>
+<style>
+:root{
+  --paper:#E9ECF0; --plate:#F6F8FA; --card:#FDFEFF;
+  --ink:#12171E; --ink-2:#58626E; --ink-3:#8A939F;
+  --rule:#C2C9D2; --hair:#D7DCE3;
+  --blue:#15528A; --blue-2:#4B7EB2; --wash:#DDE6F0;
+  --red:#A3372A;
+  --serif: Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --mono: ui-monospace,"SF Mono",SFMono-Regular,Menlo,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1217; --plate:#161C24; --card:#1A212A;
+    --ink:#DBE2EA; --ink-2:#8B95A3; --ink-3:#6A7481;
+    --rule:#2B333D; --hair:#242C35;
+    --blue:#7FB0E2; --blue-2:#5A87B4; --wash:#1A2735;
+    --red:#DE8271;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1217; --plate:#161C24; --card:#1A212A;
+  --ink:#DBE2EA; --ink-2:#8B95A3; --ink-3:#6A7481;
+  --rule:#2B333D; --hair:#242C35;
+  --blue:#7FB0E2; --blue-2:#5A87B4; --wash:#1A2735;
+  --red:#DE8271;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--serif); font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:70rem;margin:0 auto;padding:clamp(2rem,5vw,4.5rem) clamp(1.1rem,4vw,2.5rem) 5rem}
+a{color:var(--blue);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:.5px}
+a:hover{text-decoration-thickness:1.5px}
+a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:2px}
+h1,h2,h3{text-wrap:balance;margin:0}
+.eyebrow{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-2);margin:0
+}
+
+/* ---- masthead ---- */
+.masthead{display:grid;gap:clamp(1.6rem,4vw,3rem);grid-template-columns:minmax(0,1fr)}
+@media(min-width:900px){.masthead{grid-template-columns:minmax(0,1fr) minmax(0,340px);align-items:end}}
+h1{
+  font-size:clamp(2.3rem,6vw,3.7rem);line-height:1.02;letter-spacing:-.022em;
+  font-weight:600;margin:.7rem 0 0
+}
+.deck{max-width:60ch;color:var(--ink-2);font-size:1.05rem;margin:1.1rem 0 0}
+.deck strong{color:var(--ink);font-weight:600}
+.masthead hr{border:0;border-top:1px solid var(--rule);margin:2.4rem 0 0}
+
+/* ---- figures ---- */
+figure{margin:0;background:var(--plate);border:1px solid var(--hair);border-radius:2px;padding:.65rem .65rem 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);border-top:1px solid var(--hair);
+  margin-top:.55rem;padding:.45rem .1rem .5rem;line-height:1.5
+}
+svg text{font-family:var(--mono)}
+.nd{fill:var(--card);stroke:var(--blue);stroke-width:1.3}
+.nd-f{fill:var(--blue);stroke:none}
+.ed{stroke:var(--ink-3);stroke-width:.9;fill:none}
+.ed-o{stroke:var(--blue);stroke-width:1;fill:none;stroke-dasharray:3 2.5}
+.lbl{fill:var(--ink);font-size:8.4px}
+.lbl-s{fill:var(--ink-2);font-size:7.4px}
+.lbl-b{fill:var(--blue);font-size:7.4px}
+.lbl-r{fill:var(--red);font-size:7.4px}
+.hair{stroke:var(--hair);stroke-width:.8;fill:none}
+.hull{fill:var(--wash);stroke:var(--blue-2);stroke-width:.8}
+
+/* ---- plates ---- */
+.part{margin:clamp(3.4rem,7vw,5.5rem) 0 0;border-top:2px solid var(--ink);padding-top:.7rem}
+.part h2{font-size:1.35rem;font-weight:600;letter-spacing:-.01em;margin-top:.25rem}
+.part p{color:var(--ink-2);max-width:64ch;margin:.5rem 0 0;font-size:.97rem}
+.plate{
+  display:grid;gap:clamp(1.2rem,3vw,2.6rem);
+  grid-template-columns:minmax(0,1fr);
+  border-top:1px solid var(--rule);
+  margin-top:clamp(2rem,4vw,3rem);padding-top:1.5rem
+}
+@media(min-width:820px){.plate{grid-template-columns:minmax(0,370px) minmax(0,1fr)}}
+.plate-figs{display:flex;flex-direction:column;gap:.7rem;min-width:0}
+.plate-body{min-width:0}
+.plate-num{
+  font-family:var(--mono);font-size:.63rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--blue);display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap
+}
+.plate-num .dim{color:var(--ink-3)}
+.plate h3{font-size:1.45rem;font-weight:600;letter-spacing:-.012em;margin:.35rem 0 .6rem;line-height:1.15}
+.plate p{margin:0 0 .85rem}
+.note{display:grid;grid-template-columns:5.6rem minmax(0,1fr);gap:.5rem 1rem;margin:.9rem 0;align-items:start}
+.note dt{
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-2);padding-top:.36rem
+}
+.note dt.b{color:var(--red)}
+.note dd{margin:0;font-size:.95rem;line-height:1.55}
+.wild{
+  border-top:1px solid var(--hair);padding-top:.7rem;margin-top:1rem;
+  font-size:.88rem;color:var(--ink-2)
+}
+.wild b{
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);display:block;margin-bottom:.25rem;font-weight:400
+}
+
+/* ---- closing ---- */
+.close{margin-top:clamp(3.5rem,7vw,5.5rem);border-top:2px solid var(--ink);padding-top:.7rem}
+.gaps{display:grid;gap:1.4rem;grid-template-columns:minmax(0,1fr);margin-top:1.6rem}
+@media(min-width:760px){.gaps{grid-template-columns:repeat(2,minmax(0,1fr));gap:1.4rem 2.4rem}}
+.gap h4{font-family:var(--mono);font-size:.63rem;letter-spacing:.13em;text-transform:uppercase;color:var(--blue);margin:0 0 .35rem;font-weight:400}
+.gap p{margin:0;font-size:.95rem;color:var(--ink-2)}
+.gap p em{color:var(--ink);font-style:normal}
+ol.path{counter-reset:s;list-style:none;padding:0;margin:1.4rem 0 0;display:grid;gap:.9rem}
+ol.path li{counter-increment:s;display:grid;grid-template-columns:2rem minmax(0,1fr);gap:.9rem;align-items:baseline;font-size:.95rem}
+ol.path li::before{
+  content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:.7rem;
+  color:var(--ink-3);letter-spacing:.06em
+}
+footer{margin-top:3.5rem;border-top:1px solid var(--rule);padding-top:1.2rem;font-size:.82rem;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+footer ul{padding:0;list-style:none;margin:.6rem 0 0;display:grid;gap:.3rem}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div>
+    <p class="eyebrow">A field guide &#183; knowledge representation</p>
+    <h1>Fourteen Ways to Draw an Ontology</h1>
+    <p class="deck">Almost every ontology tool ever built draws the same picture: circles joined by lines. A survey of 37 OWL visualization tools found them <strong>mostly 2D, mostly node&#8209;link, mostly showing only the class hierarchy</strong> &#8212; with color, size and shape barely used at all. That is a default, not a conclusion. Below, the same tiny ontology is drawn fourteen different ways, so the idioms can be compared rather than assumed.</p>
+  </div>
+  <figure>
+    <svg viewBox="0 0 340 200" role="img" aria-label="The reference ontology used in every plate: Thing, Organism, Animal, Plant, Mammal, Bird, Dog, Cat, Person, plus chases and owns relations.">
+      <line class="ed" x1="60" y1="30" x2="60" y2="52"/>
+      <line class="ed" x1="60" y1="52" x2="34" y2="76"/>
+      <line class="ed" x1="60" y1="52" x2="118" y2="76"/>
+      <line class="ed" x1="34" y1="76" x2="34" y2="112"/>
+      <line class="ed" x1="34" y1="76" x2="84" y2="112"/>
+      <line class="ed" x1="34" y1="112" x2="18" y2="150"/>
+      <line class="ed" x1="34" y1="112" x2="58" y2="150"/>
+      <line class="ed" x1="34" y1="112" x2="104" y2="150"/>
+      <path class="ed-o" d="M22 160 Q 40 182 54 162"/>
+      <path class="ed-o" d="M104 158 Q 68 186 26 166"/>
+      <circle class="nd" cx="60" cy="30" r="4.6"/>
+      <circle class="nd" cx="60" cy="52" r="4.6"/>
+      <circle class="nd" cx="34" cy="76" r="4.6"/>
+      <circle class="nd" cx="118" cy="76" r="4.6"/>
+      <circle class="nd" cx="34" cy="112" r="4.6"/>
+      <circle class="nd" cx="84" cy="112" r="4.6"/>
+      <circle class="nd-f" cx="18" cy="150" r="4"/>
+      <circle class="nd-f" cx="58" cy="150" r="4"/>
+      <circle class="nd-f" cx="104" cy="150" r="4"/>
+      <text class="lbl" x="69" y="33">Thing</text>
+      <text class="lbl" x="69" y="55">Organism</text>
+      <text class="lbl" x="43" y="72">Animal</text>
+      <text class="lbl" x="127" y="79">Plant</text>
+      <text class="lbl" x="43" y="108">Mammal</text>
+      <text class="lbl" x="93" y="115">Bird</text>
+      <text class="lbl" x="6" y="170">Dog</text>
+      <text class="lbl" x="48" y="142">Cat</text>
+      <text class="lbl" x="94" y="142">Person</text>
+      <text class="lbl-b" x="38" y="182">chases</text>
+      <text class="lbl-b" x="72" y="176">owns</text>
+      <line class="hair" x1="175" y1="18" x2="175" y2="188"/>
+      <text class="lbl-s" x="192" y="30">Thing</text>
+      <text class="lbl-s" x="192" y="44">&#8627; Organism</text>
+      <text class="lbl-s" x="192" y="58">&#160;&#160;&#8627; Animal</text>
+      <text class="lbl-s" x="192" y="72">&#160;&#160;&#160;&#160;&#8627; Mammal</text>
+      <text class="lbl-s" x="192" y="86">&#160;&#160;&#160;&#160;&#160;&#160;&#8627; Dog, Cat, Person</text>
+      <text class="lbl-s" x="192" y="100">&#160;&#160;&#160;&#160;&#8627; Bird</text>
+      <text class="lbl-s" x="192" y="114">&#160;&#160;&#8627; Plant</text>
+      <line class="hair" x1="192" y1="128" x2="330" y2="128"/>
+      <text class="lbl-b" x="192" y="146">Dog &#8212;chases&#8594; Cat</text>
+      <text class="lbl-b" x="192" y="160">Person &#8212;owns&#8594; Dog</text>
+      <text class="lbl-s" x="192" y="180">Animal &#8851; Plant = &#8869;</text>
+    </svg>
+    <figcaption>The reference ontology. Nine classes, one strict hierarchy, two object properties, one disjointness axiom. Every plate below draws exactly this.</figcaption>
+  </figure>
+</header>
+<hr>
+
+<section class="part">
+  <p class="eyebrow">Part one</p>
+  <h2>The ladder the literature actually built</h2>
+  <p>Dud&#225;&#353;, Lohmann, Sv&#225;tek and Pavlov organise ontology visualization by dimensionality &#8212; a real ladder, from 1.5D text indentation up to 4D animation. Rungs six through eight have almost nothing standing on them.</p>
+</section>
+
+<!-- 01 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Indented list rendering of the ontology, with the two object properties shown as unrepresentable.">
+        <line class="hair" x1="16" y1="28" x2="16" y2="41"/>
+        <line class="hair" x1="34" y1="47" x2="34" y2="174"/>
+        <line class="hair" x1="52" y1="66" x2="52" y2="155"/>
+        <line class="hair" x1="70" y1="85" x2="70" y2="136"/>
+        <text class="lbl" x="10" y="25">&#9660; Thing</text>
+        <text class="lbl" x="28" y="44">&#9660; Organism</text>
+        <text class="lbl" x="46" y="63">&#9660; Animal</text>
+        <text class="lbl" x="64" y="82">&#9660; Mammal</text>
+        <text class="lbl" x="82" y="101">&#9679; Dog</text>
+        <text class="lbl" x="82" y="120">&#9679; Cat</text>
+        <text class="lbl" x="82" y="139">&#9679; Person</text>
+        <text class="lbl" x="64" y="158">&#9679; Bird</text>
+        <text class="lbl" x="46" y="177">&#9679; Plant</text>
+        <line class="hair" x1="176" y1="14" x2="176" y2="188"/>
+        <text class="lbl-r" x="192" y="34">Dog &#8212;chases&#8594; Cat</text>
+        <text class="lbl-r" x="192" y="48">Person &#8212;owns&#8594; Dog</text>
+        <text class="lbl-r" x="192" y="62">Animal &#8851; Plant = &#8869;</text>
+        <line x1="192" y1="76" x2="316" y2="76" stroke="var(--red)" stroke-width=".8"/>
+        <text class="lbl-s" x="192" y="94">not expressible in this</text>
+        <text class="lbl-s" x="192" y="106">idiom &#8212; only the tree</text>
+        <text class="lbl-s" x="192" y="118">survives the projection</text>
+        <text class="lbl-s" x="192" y="146">multiple inheritance</text>
+        <text class="lbl-s" x="192" y="158">requires duplicating</text>
+        <text class="lbl-s" x="192" y="170">the node in two places</text>
+      </svg>
+      <figcaption>Plate 01 &#183; indented list. The class tree renders perfectly; everything that is not a tree falls off.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 01 <span class="dim">/ 1.5D / text + indentation</span></p>
+    <h3>The indented list</h3>
+    <p>The oldest and least glamorous idiom, and still the one most people actually use: Prot&#233;g&#233;'s entity browser, a file tree, your note app's sidebar. The only graphical elements are text labels and indentation guides.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Strict containment, at any size. Familiar to everyone, trivially scannable, no layout algorithm to distrust. A controlled study by Fu et al. found indented trees <em>beat</em> node-link diagrams for list-checking tasks and for larger ontologies.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>One entity type at a time. Multiple inheritance only by duplicating a node. Non-taxonomic relations are invisible. Depth costs endless scrolling.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>Prot&#233;g&#233; Entity Browser &#183; every file manager ever built &#183; <a href="https://chisel.cs.uvic.ca/pubs/fu-ISWC2013.pdf">Fu et al., &#8220;Indented Tree or Graph?&#8221; (ISWC 2013)</a></p>
+  </div>
+</section>
+
+<!-- 02 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 210" role="img" aria-label="Force-directed node-link diagram of the ontology with labelled subclass and object-property edges.">
+        <line class="ed" x1="62" y1="38" x2="140" y2="62"/>
+        <line class="ed" x1="140" y1="62" x2="112" y2="122"/>
+        <line class="ed" x1="140" y1="62" x2="216" y2="36"/>
+        <line class="ed" x1="112" y1="122" x2="172" y2="166"/>
+        <line class="ed" x1="112" y1="122" x2="52" y2="176"/>
+        <line class="ed" x1="172" y1="166" x2="252" y2="140"/>
+        <line class="ed" x1="172" y1="166" x2="256" y2="192"/>
+        <line class="ed" x1="172" y1="166" x2="292" y2="96"/>
+        <path class="ed-o" d="M252 146 Q 268 170 256 186"/>
+        <path class="ed-o" d="M292 102 Q 282 124 256 136"/>
+        <circle class="nd" cx="62" cy="38" r="5.4"/>
+        <circle class="nd" cx="140" cy="62" r="5.4"/>
+        <circle class="nd" cx="112" cy="122" r="5.4"/>
+        <circle class="nd" cx="216" cy="36" r="5.4"/>
+        <circle class="nd" cx="172" cy="166" r="5.4"/>
+        <circle class="nd" cx="52" cy="176" r="5.4"/>
+        <circle class="nd-f" cx="252" cy="140" r="4.6"/>
+        <circle class="nd-f" cx="256" cy="192" r="4.6"/>
+        <circle class="nd-f" cx="292" cy="96" r="4.6"/>
+        <text class="lbl" x="30" y="26">Thing</text>
+        <text class="lbl" x="128" y="52">Organism</text>
+        <text class="lbl" x="76" y="118">Animal</text>
+        <text class="lbl" x="225" y="30">Plant</text>
+        <text class="lbl" x="140" y="182">Mammal</text>
+        <text class="lbl" x="22" y="193">Bird</text>
+        <text class="lbl" x="261" y="136">Dog</text>
+        <text class="lbl" x="265" y="196">Cat</text>
+        <text class="lbl" x="301" y="92">Person</text>
+        <text class="lbl-b" x="272" y="170">chases</text>
+        <text class="lbl-b" x="284" y="124">owns</text>
+        <text class="lbl-s" x="10" y="60">subclass</text>
+        <line class="ed" x1="10" y1="66" x2="44" y2="66"/>
+        <text class="lbl-b" x="10" y="84">object property</text>
+        <line class="ed-o" x1="10" y1="90" x2="44" y2="90"/>
+      </svg>
+      <figcaption>Plate 02 &#183; node-link, force-directed. The whole ontology fits, relations and all &#8212; at nine nodes.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 340 110" role="img" aria-label="Three node-link layout variants: tree, radial, and inverted radial.">
+        <g>
+          <line class="ed" x1="52" y1="18" x2="30" y2="44"/><line class="ed" x1="52" y1="18" x2="74" y2="44"/>
+          <line class="ed" x1="30" y1="44" x2="16" y2="70"/><line class="ed" x1="30" y1="44" x2="44" y2="70"/>
+          <line class="ed" x1="74" y1="44" x2="88" y2="70"/>
+          <circle class="nd" cx="52" cy="18" r="3.4"/><circle class="nd" cx="30" cy="44" r="3.4"/><circle class="nd" cx="74" cy="44" r="3.4"/>
+          <circle class="nd-f" cx="16" cy="70" r="3"/><circle class="nd-f" cx="44" cy="70" r="3"/><circle class="nd-f" cx="88" cy="70" r="3"/>
+          <text class="lbl-s" x="14" y="98">tree &#183; stable</text>
+        </g>
+        <line class="hair" x1="112" y1="8" x2="112" y2="88"/>
+        <g>
+          <circle class="hair" cx="170" cy="44" r="17"/><circle class="hair" cx="170" cy="44" r="32"/>
+          <line class="ed" x1="170" y1="44" x2="184" y2="34"/><line class="ed" x1="170" y1="44" x2="156" y2="55"/><line class="ed" x1="170" y1="44" x2="176" y2="60"/>
+          <line class="ed" x1="184" y1="34" x2="198" y2="22"/><line class="ed" x1="184" y1="34" x2="202" y2="44"/>
+          <line class="ed" x1="156" y1="55" x2="140" y2="70"/><line class="ed" x1="176" y1="60" x2="182" y2="76"/>
+          <circle class="nd-f" cx="170" cy="44" r="3.4"/>
+          <circle class="nd" cx="184" cy="34" r="3"/><circle class="nd" cx="156" cy="55" r="3"/><circle class="nd" cx="176" cy="60" r="3"/>
+          <circle class="nd-f" cx="198" cy="22" r="2.6"/><circle class="nd-f" cx="202" cy="44" r="2.6"/><circle class="nd-f" cx="140" cy="70" r="2.6"/><circle class="nd-f" cx="182" cy="76" r="2.6"/>
+          <text class="lbl-s" x="132" y="98">radial &#183; space-efficient</text>
+        </g>
+        <line class="hair" x1="230" y1="8" x2="230" y2="88"/>
+        <g>
+          <line class="ed" x1="288" y1="78" x2="264" y2="52"/><line class="ed" x1="288" y1="78" x2="288" y2="46"/><line class="ed" x1="288" y1="78" x2="312" y2="52"/>
+          <line class="ed" x1="264" y1="52" x2="252" y2="24"/><line class="ed" x1="264" y1="52" x2="274" y2="22"/>
+          <line class="ed" x1="312" y1="52" x2="322" y2="24"/>
+          <circle class="nd-f" cx="288" cy="78" r="3.4"/>
+          <circle class="nd" cx="264" cy="52" r="3"/><circle class="nd" cx="288" cy="46" r="3"/><circle class="nd" cx="312" cy="52" r="3"/>
+          <circle class="nd-f" cx="252" cy="24" r="2.6"/><circle class="nd-f" cx="274" cy="22" r="2.6"/><circle class="nd-f" cx="322" cy="24" r="2.6"/>
+          <text class="lbl-s" x="240" y="98">inverted radial &#183; GLOW</text>
+        </g>
+      </svg>
+      <figcaption>The layout choice is a separate decision from the notation. Same graph, three readings of it.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 02 <span class="dim">/ 2D / the default</span></p>
+    <h3>Node-link, and the layouts inside it</h3>
+    <p>The overwhelming majority of ontology tools. Worth separating two decisions that usually get conflated: the <em>notation</em> (what a node's shape, fill and label mean) and the <em>layout</em> (where the algorithm puts it).</p>
+    <p>Almost nobody specifies the notation. <a href="https://www.semantic-web-journal.net/system/files/swj1114.pdf">VOWL</a> is the exception &#8212; a real visual language that assigns graphical depictions to OWL constructs, deliberately designed to be readable by people who don't know OWL. It ships as WebVOWL and as a Prot&#233;g&#233; plugin.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Network structure, multiple inheritance, non-taxonomic relations, overviews of small ontologies. The only mainstream family that draws relations other than subsumption.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Hairball past a few hundred nodes. Force layouts are <em>unstable</em> &#8212; re-run it and you get a different picture, which destroys the user's mental map. Labels collide; edge labels collide worse.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b><a href="https://service.tib.eu/webvowl/">WebVOWL</a> &#183; Prot&#233;g&#233; OntoGraf &amp; OWLViz &#183; <a href="https://essepuntato.it/graffoo/">Graffoo</a> (yEd/GraphML) &#183; <a href="https://js.cytoscape.org/">Cytoscape.js</a> &#183; <a href="https://github.com/vasturiano/3d-force-graph">vasturiano's force-graph family</a></p>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Euler diagram: nested regions for Thing, Organism, Animal, Plant, Mammal, Bird with individuals as dots.">
+        <ellipse cx="170" cy="100" rx="160" ry="92" fill="none" stroke="var(--ink-3)" stroke-width="1"/>
+        <ellipse cx="164" cy="104" rx="140" ry="78" fill="var(--wash)" fill-opacity=".45" stroke="var(--blue-2)" stroke-width="1"/>
+        <ellipse cx="120" cy="108" rx="88" ry="62" fill="var(--wash)" fill-opacity=".55" stroke="var(--blue)" stroke-width="1.1"/>
+        <ellipse cx="256" cy="108" rx="36" ry="44" fill="var(--wash)" fill-opacity=".55" stroke="var(--blue)" stroke-width="1.1"/>
+        <ellipse cx="104" cy="118" rx="58" ry="40" fill="var(--card)" fill-opacity=".7" stroke="var(--blue)" stroke-width="1"/>
+        <ellipse cx="166" cy="72" rx="26" ry="20" fill="var(--card)" fill-opacity=".7" stroke="var(--blue)" stroke-width="1"/>
+        <circle class="nd-f" cx="82" cy="120" r="3.2"/>
+        <circle class="nd-f" cx="106" cy="128" r="3.2"/>
+        <circle class="nd-f" cx="126" cy="112" r="3.2"/>
+        <text class="lbl-s" x="70" y="136">Dog</text>
+        <text class="lbl-s" x="96" y="144">Cat</text>
+        <text class="lbl-s" x="118" y="106">Person</text>
+        <text class="lbl" x="60" y="98">Mammal</text>
+        <text class="lbl" x="146" y="70">Bird</text>
+        <text class="lbl" x="86" y="60">Animal</text>
+        <text class="lbl" x="238" y="112">Plant</text>
+        <text class="lbl-s" x="180" y="164">Organism</text>
+        <text class="lbl-s" x="18" y="22">Thing</text>
+        <text class="lbl-r" x="206" y="182">Animal &#8745; Plant = &#8709; &#8212; drawn, not asserted</text>
+      </svg>
+      <figcaption>Plate 03 &#183; Euler diagram. Subsumption is containment; disjointness is the fact that two regions do not touch.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 03 <span class="dim">/ 2D / set-theoretic</span></p>
+    <h3>Euler and Venn regions</h3>
+    <p>The only family in this guide that draws the <em>logic</em> rather than the structure. A class is a region; a subclass is a region inside another; disjointness is two regions that don't touch; intersection is the literal overlap. Nothing has to be read off an edge label &#8212; the semantics are the geometry.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Set membership, subsumption, disjointness and overlap, all at once and without symbols. Excellent for explaining an axiom to someone who will never open a reasoner.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Falls apart past a handful of classes. Worse: some set configurations are simply <em>not drawable</em> in the plane with simple closed curves, so the notation can refuse valid ontologies.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>SWOOP &#183; Venn/Euler layout research &#183; the whiteboard, when someone is explaining a domain model to a client</p>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Treemap of the ontology where rectangle area is proportional to subtree size.">
+        <rect x="2" y="2" width="336" height="196" fill="none" stroke="var(--ink-3)" stroke-width="1"/>
+        <rect x="10" y="18" width="320" height="172" fill="var(--wash)" fill-opacity=".3" stroke="var(--blue-2)" stroke-width="1"/>
+        <rect x="18" y="30" width="222" height="152" fill="var(--wash)" fill-opacity=".45" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="248" y="30" width="82" height="152" fill="var(--card)" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="26" y="42" width="150" height="132" fill="var(--card)" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="184" y="42" width="48" height="132" fill="var(--card)" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="34" y="54" width="44" height="112" fill="var(--wash)" stroke="var(--blue-2)" stroke-width=".9"/>
+        <rect x="84" y="54" width="44" height="112" fill="var(--wash)" stroke="var(--blue-2)" stroke-width=".9"/>
+        <rect x="134" y="54" width="34" height="112" fill="var(--wash)" stroke="var(--blue-2)" stroke-width=".9"/>
+        <text class="lbl-s" x="14" y="14">Thing</text>
+        <text class="lbl-s" x="22" y="27">Organism</text>
+        <text class="lbl" x="30" y="40">Animal</text>
+        <text class="lbl" x="252" y="43">Plant</text>
+        <text class="lbl-s" x="30" y="52">Mammal</text>
+        <text class="lbl-s" x="188" y="52">Bird</text>
+        <text class="lbl-s" x="38" y="68">Dog</text>
+        <text class="lbl-s" x="88" y="68">Cat</text>
+        <text class="lbl-s" x="138" y="68">Person</text>
+        <text class="lbl-r" x="252" y="176">no edges here</text>
+      </svg>
+      <figcaption>Plate 04 &#183; treemap. Area encodes weight, so you see where the mass of the ontology actually sits.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 04 <span class="dim">/ 2D / space-filling</span></p>
+    <h3>Treemaps and nested containment</h3>
+    <p>Zero wasted pixels. Every pixel of the canvas belongs to some class, and the area of a rectangle is proportional to the weight of its subtree &#8212; number of subclasses, number of instances, number of annotations, whatever you choose to map.</p>
+    <p>This is the family that answers a question node-link cannot: <em>where is this ontology actually dense?</em> Which branch has 4,000 classes and which has nine.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Relative magnitude across an entire large hierarchy, on one screen, with no scrolling and no layout instability.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Depth is hard to count past three or four levels. Strict hierarchy only. Relations vanish entirely &#8212; a treemap has no edges to draw them on.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>Jambalaya / SHriMP (Prot&#233;g&#233;) &#183; CropCircles &#183; every disk-usage tool you have ever used</p>
+  </div>
+</section>
+
+<!-- 05 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 210" role="img" aria-label="Adjacency matrix of the ontology, with subclass cells filled dark and object-property cells filled blue.">
+        <g stroke="var(--hair)" stroke-width=".7" fill="none">
+          <path d="M100 60 h135 M100 75 h135 M100 90 h135 M100 105 h135 M100 120 h135 M100 135 h135 M100 150 h135 M100 165 h135 M100 180 h135 M100 195 h135"/>
+          <path d="M100 60 v135 M115 60 v135 M130 60 v135 M145 60 v135 M160 60 v135 M175 60 v135 M190 60 v135 M205 60 v135 M220 60 v135 M235 60 v135"/>
+        </g>
+        <rect x="100" y="75" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="115" y="90" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="115" y="105" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="130" y="120" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="130" y="135" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="160" y="150" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="160" y="165" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="160" y="180" width="15" height="15" fill="var(--ink-2)"/>
+        <rect x="205" y="150" width="15" height="15" fill="var(--blue)"/>
+        <rect x="190" y="180" width="15" height="15" fill="var(--blue)"/>
+        <g class="lbl-s" text-anchor="end">
+          <text x="96" y="70">Thing</text><text x="96" y="85">Organism</text><text x="96" y="100">Animal</text>
+          <text x="96" y="115">Plant</text><text x="96" y="130">Mammal</text><text x="96" y="145">Bird</text>
+          <text x="96" y="160">Dog</text><text x="96" y="175">Cat</text><text x="96" y="190">Person</text>
+        </g>
+        <g class="lbl-s">
+          <text transform="rotate(-52 107 56)" x="107" y="56">Thing</text>
+          <text transform="rotate(-52 122 56)" x="122" y="56">Organism</text>
+          <text transform="rotate(-52 137 56)" x="137" y="56">Animal</text>
+          <text transform="rotate(-52 152 56)" x="152" y="56">Plant</text>
+          <text transform="rotate(-52 167 56)" x="167" y="56">Mammal</text>
+          <text transform="rotate(-52 182 56)" x="182" y="56">Bird</text>
+          <text transform="rotate(-52 197 56)" x="197" y="56">Dog</text>
+          <text transform="rotate(-52 212 56)" x="212" y="56">Cat</text>
+          <text transform="rotate(-52 227 56)" x="227" y="56">Person</text>
+        </g>
+        <rect x="252" y="72" width="9" height="9" fill="var(--ink-2)"/>
+        <text class="lbl-s" x="266" y="80">subClassOf</text>
+        <rect x="252" y="92" width="9" height="9" fill="var(--blue)"/>
+        <text class="lbl-s" x="266" y="100">chases / owns</text>
+        <text class="lbl-s" x="252" y="126">no edge ever</text>
+        <text class="lbl-s" x="252" y="138">crosses another</text>
+        <text class="lbl-s" x="252" y="164">block structure</text>
+        <text class="lbl-s" x="252" y="176">= modularity</text>
+      </svg>
+      <figcaption>Plate 05 &#183; adjacency matrix. Every relation gets its own cell, so density never becomes clutter.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 05 <span class="dim">/ 2D / the road not taken</span></p>
+    <h3>The matrix</h3>
+    <p>A cell per ordered pair. Nothing overlaps, nothing crosses, and density &#8212; the exact thing that kills node-link &#8212; is what a matrix is <em>best</em> at. Reorder the rows and columns by community and modular structure appears as visible blocks.</p>
+    <p>The 2018 survey explicitly flagged this as an opportunity: promising information-visualization methods, matrices and parallel coordinates among them, that ontology tooling has simply never picked up.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Dense relation sets, presence/absence at a glance, modular decomposition, symmetry and asymmetry of properties.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Path-following is genuinely hard &#8212; you cannot trace a chain of subsumption by eye. Ordering is everything: a badly ordered matrix shows nothing at all.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>Almost no ontology tool &#183; but standard in network analysis, and in <a href="https://arxiv.org/pdf/2306.07588">3D matrix-extension research</a></p>
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Contour landscape where elevation encodes concept density.">
+        <g fill="none" stroke="var(--blue-2)" stroke-width=".8">
+          <ellipse cx="108" cy="112" rx="96" ry="56"/><ellipse cx="108" cy="110" rx="74" ry="43"/>
+          <ellipse cx="108" cy="108" rx="53" ry="31"/><ellipse cx="108" cy="106" rx="33" ry="19"/>
+        </g>
+        <ellipse cx="108" cy="105" rx="15" ry="9" fill="var(--wash)" stroke="var(--blue)" stroke-width="1"/>
+        <g fill="none" stroke="var(--blue-2)" stroke-width=".8">
+          <ellipse cx="262" cy="66" rx="52" ry="34"/><ellipse cx="262" cy="64" rx="36" ry="23"/><ellipse cx="262" cy="62" rx="20" ry="13"/>
+        </g>
+        <ellipse cx="262" cy="61" rx="8" ry="5" fill="var(--wash)" stroke="var(--blue)" stroke-width="1"/>
+        <g fill="none" stroke="var(--blue-2)" stroke-width=".8">
+          <ellipse cx="272" cy="160" rx="34" ry="24"/><ellipse cx="272" cy="159" rx="19" ry="13"/>
+        </g>
+        <ellipse cx="272" cy="158" rx="7" ry="4.5" fill="var(--wash)" stroke="var(--blue)" stroke-width="1"/>
+        <g fill="var(--ink-3)">
+          <circle cx="92" cy="100" r="1.6"/><circle cx="118" cy="112" r="1.6"/><circle cx="104" cy="122" r="1.6"/>
+          <circle cx="128" cy="96" r="1.6"/><circle cx="80" cy="118" r="1.6"/><circle cx="140" cy="120" r="1.6"/>
+          <circle cx="66" cy="98" r="1.6"/><circle cx="152" cy="104" r="1.6"/>
+          <circle cx="258" cy="56" r="1.6"/><circle cx="272" cy="70" r="1.6"/><circle cx="248" cy="74" r="1.6"/>
+          <circle cx="268" cy="152" r="1.6"/><circle cx="280" cy="164" r="1.6"/>
+        </g>
+        <text class="lbl" x="82" y="86">Mammalia</text>
+        <text class="lbl" x="240" y="46">Plantae</text>
+        <text class="lbl" x="252" y="142">Aves</text>
+        <text class="lbl-s" x="14" y="188">elevation = concept density &#183; distance = relatedness &#183; no edges drawn</text>
+      </svg>
+      <figcaption>Plate 06 &#183; 2.5D landscape. Terrain, not diagram: height carries a quantity, position carries similarity.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 06 <span class="dim">/ 2.5D / terrain</span></p>
+    <h3>The landscape</h3>
+    <p>A 2D surface with a height field on it. Instead of drawing entities and relations, you draw a continuous terrain whose elevation encodes concentration and whose horizontal distance encodes similarity &#8212; the ThemeScape idea, applied to ontologies by exactly one experimental tool (Ontoviewer).</p>
+    <p>It is a near-empty rung on the ladder in the ontology literature, and it turns out to be the direct ancestor of the embedding maps in Plate 09 &#8212; which is the same idea, executed at a million points with learned coordinates.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Gestalt shape of a whole corpus. Where the mass is, where the empty regions are, which topics sit adjacent.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Individual entities disappear into the surface. No relations, no logic, no drilling down without a second view.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>Ontoviewer (experimental) &#183; ThemeScape / IN-SPIRE lineage &#183; reborn as embedding cartography</p>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Three-dimensional sphere layout with concentric shells, showing occlusion of rear nodes.">
+        <circle cx="112" cy="100" r="82" fill="none" stroke="var(--blue-2)" stroke-width="1"/>
+        <ellipse cx="112" cy="100" rx="82" ry="27" fill="none" stroke="var(--hair)" stroke-width=".9"/>
+        <ellipse cx="112" cy="100" rx="28" ry="82" fill="none" stroke="var(--hair)" stroke-width=".9"/>
+        <circle cx="112" cy="100" r="40" fill="none" stroke="var(--blue-2)" stroke-width=".8" stroke-dasharray="3 3"/>
+        <line class="ed" x1="112" y1="100" x2="60" y2="70"/>
+        <line class="ed" x1="112" y1="100" x2="150" y2="58"/>
+        <line class="ed" x1="112" y1="100" x2="86" y2="152"/>
+        <line class="ed" x1="112" y1="100" x2="164" y2="132"/>
+        <circle class="nd-f" cx="112" cy="100" r="5"/>
+        <circle class="nd" cx="60" cy="70" r="4.4"/>
+        <circle class="nd" cx="150" cy="58" r="4.4"/>
+        <circle class="nd" cx="86" cy="152" r="4.4"/>
+        <circle class="nd" cx="164" cy="132" r="4.4"/>
+        <g opacity=".32">
+          <circle class="nd" cx="74" cy="118" r="3.4"/>
+          <circle class="nd" cx="136" cy="86" r="3.4"/>
+          <circle class="nd" cx="100" cy="76" r="3.4"/>
+        </g>
+        <text class="lbl-s" x="98" y="94">Thing</text>
+        <text class="lbl-s" x="26" y="66">Animal</text>
+        <text class="lbl-s" x="158" y="54">Plant</text>
+        <text class="lbl-s" x="60" y="166">Mammal</text>
+        <text class="lbl-s" x="172" y="136">Bird</text>
+        <text class="lbl-r" x="212" y="60">3 nodes sit behind</text>
+        <text class="lbl-r" x="212" y="72">the sphere &#8212; occluded</text>
+        <text class="lbl-s" x="212" y="98">shell radius = depth</text>
+        <text class="lbl-s" x="212" y="110">in the hierarchy</text>
+        <text class="lbl-s" x="212" y="136">rotation recovers</text>
+        <text class="lbl-s" x="212" y="148">what projection hides</text>
+        <line class="hair" x1="204" y1="40" x2="204" y2="162"/>
+      </svg>
+      <figcaption>Plate 07 &#183; 3D. More room to place things, at the cost of a projection that hides some of them.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 07 <span class="dim">/ 3D / volumetric</span></p>
+    <h3>Spheres, shells and volumes</h3>
+    <p>Only two experimental tools in the survey &#8212; OntoSphere and OntoSELF. The pitch is more room: concentric shells give you a third channel for depth, and rotation lets you attack a cluster from an angle that untangles it.</p>
+    <p>The counter-argument is blunt: screens are 2D, so 3D always arrives via a projection, and projections both occlude and distort. The survey files this under <em>visual lies</em> &#8212; the class of misreadings that perspective makes easy and that flat diagrams make hard.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>An extra encoding channel; local structure from a chosen viewpoint; genuinely more surface area for large graphs. Controlled studies find 3D more accurate for interpreting network structure.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Occlusion, perspective distortion, navigation cost, no stable reference frame. The same studies find 2D <em>better</em> for spatial-memory tasks &#8212; you remember where things were on a flat map.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>OntoSphere &#183; OntoSELF &#183; Onto3DViz &#183; <a href="https://github.com/vasturiano/3d-force-graph">3d-force-graph</a> &#183; <a href="https://github.com/xyjigsaw/Knowledge-Graph-And-Visualization-Demo">2D-search + 3D-view demos</a></p>
+  </div>
+</section>
+
+<!-- 08 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Three versions of the ontology laid out along a timeline, with added and removed classes marked.">
+        <g>
+          <line class="ed" x1="46" y1="34" x2="28" y2="62"/><line class="ed" x1="46" y1="34" x2="64" y2="62"/>
+          <line class="ed" x1="28" y1="62" x2="20" y2="90"/><line class="ed" x1="28" y1="62" x2="42" y2="90"/>
+          <circle class="nd" cx="46" cy="34" r="4"/><circle class="nd" cx="28" cy="62" r="4"/><circle class="nd" cx="64" cy="62" r="4"/>
+          <circle class="nd-f" cx="20" cy="90" r="3.4"/><circle class="nd-f" cx="42" cy="90" r="3.4"/>
+          <text class="lbl-s" x="18" y="120">v1 &#183; 5 classes</text>
+        </g>
+        <g>
+          <line class="ed" x1="164" y1="34" x2="146" y2="62"/><line class="ed" x1="164" y1="34" x2="182" y2="62"/>
+          <line class="ed" x1="146" y1="62" x2="134" y2="90"/><line class="ed" x1="146" y1="62" x2="156" y2="90"/>
+          <line class="ed" x1="146" y1="62" x2="178" y2="90"/>
+          <circle class="nd" cx="164" cy="34" r="4"/><circle class="nd" cx="146" cy="62" r="4"/><circle class="nd" cx="182" cy="62" r="4"/>
+          <circle class="nd-f" cx="134" cy="90" r="3.4"/><circle class="nd-f" cx="156" cy="90" r="3.4"/>
+          <circle cx="178" cy="90" r="4.6" fill="none" stroke="var(--red)" stroke-width="1.4"/>
+          <text class="lbl-r" x="170" y="108">+ Person</text>
+          <text class="lbl-s" x="136" y="120">v2 &#183; 6 classes</text>
+        </g>
+        <g>
+          <line class="ed" x1="282" y1="34" x2="264" y2="62"/><line class="ed" x1="282" y1="34" x2="300" y2="62"/>
+          <line class="ed" x1="264" y1="62" x2="252" y2="90"/><line class="ed" x1="264" y1="62" x2="296" y2="90"/>
+          <line class="ed" x1="300" y1="62" x2="316" y2="90"/>
+          <circle class="nd" cx="282" cy="34" r="4"/><circle class="nd" cx="264" cy="62" r="4"/><circle class="nd" cx="300" cy="62" r="4"/>
+          <circle class="nd-f" cx="252" cy="90" r="3.4"/><circle class="nd-f" cx="296" cy="90" r="3.4"/>
+          <circle class="nd-f" cx="316" cy="90" r="3.4"/>
+          <line x1="268" y1="84" x2="282" y2="98" stroke="var(--red)" stroke-width="1.4"/>
+          <line x1="282" y1="84" x2="268" y2="98" stroke="var(--red)" stroke-width="1.4"/>
+          <text class="lbl-r" x="262" y="112">&#8722; Cat</text>
+          <text class="lbl-s" x="254" y="120">v3 &#183; 6 classes</text>
+        </g>
+        <line x1="14" y1="150" x2="322" y2="150" stroke="var(--ink-2)" stroke-width="1"/>
+        <path d="M322 150 l-7 -3.5 v7 z" fill="var(--ink-2)"/>
+        <g fill="var(--ink-2)"><circle cx="46" cy="150" r="2.6"/><circle cx="164" cy="150" r="2.6"/><circle cx="282" cy="150" r="2.6"/></g>
+        <text class="lbl-s" x="14" y="170">2023-04</text><text class="lbl-s" x="140" y="170">2024-11</text><text class="lbl-s" x="256" y="170">2026-03</text>
+        <text class="lbl-s" x="14" y="192">time mapped to space &#8212; every version stays on screen and stays comparable</text>
+      </svg>
+      <figcaption>Plate 08 &#183; 4D. Time-to-space, not time-to-time: three versions side by side rather than one animating.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 08 <span class="dim">/ 4D / evolution</span></p>
+    <h3>Ontology in time</h3>
+    <p>The least-explored rung on the whole ladder. Ontologies are not static &#8212; classes get added, split, merged, deprecated &#8212; and almost no tool draws that.</p>
+    <p>There are two mappings, and they are not equivalent. <em>Time-to-time</em> is animation: play the versions as frames. It is intuitive but it wrecks the mental map, because an independently laid-out snapshot looks nothing like the previous one and the eye cannot match structures across frames. <em>Time-to-space</em> lays the versions out side by side, connected by linking and brushing &#8212; less immediate, far more reliable.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>What changed, when, and by whose hand. Change as a first-class object rather than a diff you have to compute yourself.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Animation destroys the mental map. Side-by-side eats screen. Both need a stable layout across versions, which force-directed layouts refuse to provide.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>CODEX &#183; <a href="https://ceur-ws.org/Vol-1456/paper7.pdf">Burch &amp; Lohmann, &#8220;Visualizing the Evolution of Ontologies&#8221;</a> &#183; <a href="https://arxiv.org/pdf/1908.05976">HOTVis</a> for time-aware dynamic graphs</p>
+  </div>
+</section>
+
+<section class="part">
+  <p class="eyebrow">Part two</p>
+  <h2>What escaped the lab</h2>
+  <p>The interesting work of the last decade mostly did not happen inside ontology engineering. It happened in embeddings, in GPU rendering, in personal knowledge tools and in physics &#8212; and it produced idioms the OWL literature has not absorbed.</p>
+</section>
+
+<!-- 09 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Embedding map: thousands of points positioned by semantic similarity, clustered into labelled regions with no edges drawn.">
+        <g id="scatter"></g>
+        <text class="lbl" x="46" y="42">mammals</text>
+        <text class="lbl" x="232" y="52">plants</text>
+        <text class="lbl" x="60" y="182">birds</text>
+        <text class="lbl" x="228" y="176">people</text>
+        <line class="hair" x1="14" y1="190" x2="326" y2="190"/>
+        <text class="lbl-s" x="14" y="199">proximity = similarity &#183; axes mean nothing &#183; no relation is named</text>
+      </svg>
+      <figcaption>Plate 09 &#183; embedding cartography. Coordinates are learned, not authored; structure is inferred, not asserted.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 09 <span class="dim">/ learned coordinates / cartographic</span></p>
+    <h3>The semantic map</h3>
+    <p>Embed everything, project to two dimensions with UMAP or t-SNE, and render the result as terrain you can pan and zoom like a map. Position carries meaning, distance reads as similarity, density reads as popularity, and you can browse by wandering rather than by querying.</p>
+    <p>The exemplary hobby project is Anvaka's <a href="https://github.com/anvaka/map-of-reddit">Map of Reddit</a>: 176 million comments, Jaccard similarity between subreddits, clustered as a graph problem, then laid out as a map problem and served as tiles. The commercial version is <a href="https://docs.nomic.ai/atlas/embeddings-and-retrieval/guides/how-to-visualize-embeddings">Nomic Atlas</a>, which does this at millions of points with automatic topic labels at several zoom levels.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Whole-corpus shape at a scale no node-link diagram reaches. Neighbourhoods, gaps, outliers, and topics you did not know you had.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>This is not an ontology, it is a similarity field. There are no typed edges, no axioms, no inheritance. Axes are meaningless, distances are not metric-faithful, and clusters can be artifacts of the projection rather than facts about the data.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b><a href="https://anvaka.org/tools/">anvaka's map tools</a> (Reddit, GitHub, cities) &#183; <a href="https://docs.nomic.ai/atlas/">Nomic Atlas</a> &#183; UMAP / t-SNE / PCA</p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="Poincare disk: hierarchy embedded in hyperbolic space with the root at the centre and depth crowding towards the rim.">
+        <g id="poincare"></g>
+        <text class="lbl-s" x="14" y="24">root at the origin</text>
+        <text class="lbl-s" x="14" y="180">depth &#8594; the rim &#183; infinite room, finite screen</text>
+      </svg>
+      <figcaption>Plate 10 &#183; Poincar&#233; disk. Space grows exponentially outward, which is exactly how a taxonomy grows.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 10 <span class="dim">/ non-Euclidean / focus + context</span></p>
+    <h3>Hyperbolic space</h3>
+    <p>The insight is geometric rather than graphical. A tree's node count grows exponentially with depth, and hyperbolic space's volume also grows exponentially with radius &#8212; so a hierarchy fits into hyperbolic space with far less distortion than into a flat plane. Put the root at the origin, and each level outward gets exponentially more room while occupying the same screen.</p>
+    <p>Focus-and-context comes free: drag any node to the centre and its neighbourhood expands while the rest of the ontology compresses toward the rim but never disappears. Nickel and Kiela's <a href="https://arxiv.org/pdf/1705.08039">Poincar&#233; embeddings</a> made this a learning method too &#8212; they embedded the WordNet noun hierarchy this way &#8212; and it is now standard practice to optimise in the Lorentz model and visualise in the Poincar&#233; ball.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Deep, wide hierarchies in constant screen space with the global context always present. Generality is literally centrality.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>It is a geometry people have to learn. Sibling distance is misleading to the untrained eye, and the rim is unreadable without navigating there.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b>H3 / hyperbolic browsers &#183; <a href="https://arxiv.org/pdf/1705.08039">Poincar&#233; embeddings</a> &#183; <a href="https://arxiv.org/pdf/2111.15037">CO-SNE</a> for hyperbolic dimensionality reduction</p>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="A dense hairball of hundreds of thousands of nodes rendered on the GPU, where individual entities are no longer distinguishable.">
+        <g id="hairball"></g>
+        <text class="lbl-s" x="14" y="188">240,000 nodes &#183; 60fps &#183; not one label legible</text>
+      </svg>
+      <figcaption>Plate 11 &#183; GPU mega-graph. The whole corpus at interactive framerates, and no individual concept in sight.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 11 <span class="dim">/ 2D / brute force</span></p>
+    <h3>The million-node hairball</h3>
+    <p>The engineering answer to scale. <a href="https://cosmograph.app/">Cosmograph</a> runs the entire force simulation on the GPU &#8212; not just the rendering &#8212; which is what makes million-node layouts interactive in a browser tab. <a href="https://www.sigmajs.org/">Sigma.js</a> takes the other route: WebGL rendering on top of graphology's algorithm library, so layout, metrics and community detection all live in the same stack.</p>
+    <p>The honest framing is that this is an <em>aggregate</em> view, not a reading view. It answers "how many communities, how connected, where are the bridges" and refuses to answer "what is this node." It needs a second, coordinated view to be useful &#8212; which is precisely the multiple-coordinated-views move the ontology surveys keep recommending and the tools keep not implementing.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Global topology at 10<sup>5</sup>&#8211;10<sup>6</sup> nodes: community count, bridge structure, degree distribution, isolated components.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Labels are impossible. Overplotting means visual density is not data density. Every question about a specific entity has to be answered somewhere else.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b><a href="https://cosmograph.app/">Cosmograph</a> &#183; <a href="https://github.com/jacomyal/sigma.js/">sigma.js + graphology</a> &#183; Gephi &#183; <a href="https://arxiv.org/pdf/1702.07099">Carina</a> &#183; Neo4j Bloom for the property-graph side</p>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="A graph floating above a perspective floor grid, viewed from inside, with a viewer frustum at the bottom.">
+        <g class="hair">
+          <path d="M-90 200 L170 58 M-10 200 L170 58 M60 200 L170 58 M120 200 L170 58 M170 200 L170 58 M220 200 L170 58 M280 200 L170 58 M350 200 L170 58 M430 200 L170 58"/>
+          <path d="M0 200 h340 M0 172 h340 M0 149 h340 M0 131 h340 M0 117 h340 M0 106 h340 M0 97 h340 M0 90 h340 M0 84 h340 M0 79 h340"/>
+        </g>
+        <g class="hair" stroke-dasharray="2 3">
+          <path d="M64 66 v54 M118 46 v87 M196 40 v88 M262 74 v56 M154 84 v56 M228 96 v42"/>
+        </g>
+        <g class="ed">
+          <path d="M64 66 L118 46 M118 46 L196 40 M196 40 L262 74 M118 46 L154 84 M154 84 L228 96 M196 40 L228 96 M64 66 L154 84"/>
+        </g>
+        <circle class="nd" cx="118" cy="46" r="7"/>
+        <circle class="nd" cx="196" cy="40" r="6.4"/>
+        <circle class="nd" cx="64" cy="66" r="5.4"/>
+        <circle class="nd" cx="262" cy="74" r="4.6"/>
+        <circle class="nd" cx="154" cy="84" r="4"/>
+        <circle class="nd" cx="228" cy="96" r="3.4"/>
+        <path d="M158 196 L120 168 M158 196 L206 168" stroke="var(--blue)" stroke-width="1" fill="none" stroke-dasharray="3 3"/>
+        <circle cx="158" cy="196" r="4" fill="var(--blue)"/>
+        <text class="lbl-s" x="172" y="192">viewer, inside the graph</text>
+        <text class="lbl-s" x="14" y="22">size and drop-lines carry depth; the head does the rest</text>
+      </svg>
+      <figcaption>Plate 12 &#183; immersive. The graph stops being a picture you look at and becomes a space you stand in.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 12 <span class="dim">/ 3D / embodied</span></p>
+    <h3>Immersive and VR</h3>
+    <p>Mostly built in Unity on top of SPARQL endpoints, and mostly research prototypes: VRige for social graphs, VR browsers for RDF and linked data, VR access to knowledge graphs for history research. The interaction gains are real &#8212; gesture-driven query and exploration lowers the technical bar compared to writing SPARQL.</p>
+    <p>The evidence is split in a useful way. 3D lets people interpret network <em>structure</em> more accurately; 2D wins on <em>spatial memory</em>, meaning people remember where things were on a flat map better than in a room. The consistently replicated finding is engagement, which matters for exploration and matters much less for analysis.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Large graph structure with head-tracked parallax doing the depth work no static projection can do. Scale and physicality.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Headset friction, session length, no shared reference frame for collaboration, and worse spatial recall than a plain 2D map.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b><a href="https://academic.oup.com/database/article/doi/10.1093/database/baae008/7613396">Linked-data exploration in VR</a> &#183; VRige &#183; <a href="https://vasturiano.github.io/3d-force-graph-vr/">3d-force-graph-vr</a> &#183; <a href="https://arxiv.org/pdf/1910.06825">immersive overview+detail navigation</a></p>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="A floor plan where wings are domains, rooms are topics and dashed tunnels are cross-domain links.">
+        <rect x="10" y="14" width="320" height="172" fill="none" stroke="var(--ink)" stroke-width="1.4"/>
+        <rect x="18" y="24" width="126" height="50" fill="var(--wash)" fill-opacity=".5" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="18" y="82" width="126" height="38" fill="var(--wash)" fill-opacity=".5" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="18" y="128" width="126" height="48" fill="var(--wash)" fill-opacity=".5" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="196" y="24" width="126" height="58" fill="var(--wash)" fill-opacity=".5" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="196" y="90" width="126" height="42" fill="var(--wash)" fill-opacity=".5" stroke="var(--blue)" stroke-width="1"/>
+        <rect x="196" y="140" width="126" height="36" fill="var(--card)" stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="3 2"/>
+        <rect x="152" y="24" width="36" height="152" fill="none" stroke="var(--hair)" stroke-width="1"/>
+        <g stroke="var(--blue)" stroke-width="2">
+          <path d="M144 44 h8"/><path d="M144 98 h8"/><path d="M144 150 h8"/>
+          <path d="M188 50 h8"/><path d="M188 108 h8"/><path d="M188 156 h8"/>
+        </g>
+        <path d="M60 60 Q 170 200 250 66" fill="none" stroke="var(--red)" stroke-width="1.1" stroke-dasharray="4 3"/>
+        <text class="lbl" x="26" y="40">Mammalia</text>
+        <text class="lbl" x="26" y="98">Aves</text>
+        <text class="lbl" x="26" y="144">Reptilia</text>
+        <text class="lbl" x="204" y="40">Plantae</text>
+        <text class="lbl" x="204" y="106">Fungi</text>
+        <text class="lbl-s" x="204" y="156">archive &#183; deprecated</text>
+        <text class="lbl-s" x="158" y="112" transform="rotate(-90 158 112)">central hall</text>
+        <text class="lbl-r" x="122" y="192">tunnel: symbiosis &#8212; a cross-wing relation</text>
+        <text class="lbl-s" x="14" y="10">wing = domain &#183; room = topic &#183; door = typed edge</text>
+      </svg>
+      <figcaption>Plate 13 &#183; architectural. The ontology is not declared in a schema &#8212; it is laid out as a place you can walk.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 13 <span class="dim">/ 2D / spatial metaphor</span></p>
+    <h3>Ontology as architecture</h3>
+    <p>Give up the abstract graph and commit to a building. Wings are domains, halls are edge types, rooms are topics, tunnels are cross-domain links. The structure is expressed as architecture instead of asserted in a schema file, which means retrieval becomes navigation and recall borrows the human spatial memory that the method of loci has exploited for two thousand years.</p>
+    <p>This has become an active idea in LLM memory design, where the appeal is that both the model and the user can hold a floor plan in their head in a way that neither holds a 40,000-triple store. It is also the family with the most obvious catch.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Location, adjacency, and route. Excellent recall and orientation; a shared vocabulary &#8212; "the Plantae wing" &#8212; that non-technical collaborators use without training.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>The metaphor constrains the topology. Buildings are trees with a few tunnels; ontologies are not. Multiple inheritance has no architectural analogue, and once the plan and the graph disagree, the plan quietly wins.</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b><a href="https://arxiv.org/html/2604.21284v1">Spatial metaphors for LLM memory</a> &#183; memory-palace systems &#183; game-world knowledge bases &#183; Obsidian Canvas used as a plan</p>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="plate">
+  <div class="plate-figs">
+    <figure>
+      <svg viewBox="0 0 340 200" role="img" aria-label="A hypergraph rewriting rule and three successive generations produced by applying it.">
+        <rect x="14" y="16" width="104" height="66" fill="var(--card)" stroke="var(--hair)" stroke-width="1"/>
+        <rect x="184" y="16" width="140" height="66" fill="var(--card)" stroke="var(--hair)" stroke-width="1"/>
+        <path d="M126 49 h48" stroke="var(--blue)" stroke-width="1.2" fill="none"/>
+        <path d="M174 49 l-7 -3.5 v7 z" fill="var(--blue)"/>
+        <g>
+          <path d="M44 40 L84 40 L64 68 Z" fill="var(--wash)" fill-opacity=".7" stroke="var(--blue-2)" stroke-width="1"/>
+          <circle class="nd-f" cx="44" cy="40" r="3.6"/><circle class="nd-f" cx="84" cy="40" r="3.6"/><circle class="nd-f" cx="64" cy="68" r="3.6"/>
+        </g>
+        <g>
+          <path d="M212 34 L252 30 L236 58 Z" fill="var(--wash)" fill-opacity=".7" stroke="var(--blue-2)" stroke-width="1"/>
+          <path d="M252 30 L292 40 L276 66 Z" fill="var(--wash)" fill-opacity=".7" stroke="var(--blue-2)" stroke-width="1"/>
+          <path d="M236 58 L276 66 L246 72 Z" fill="var(--wash)" fill-opacity=".5" stroke="var(--blue-2)" stroke-width="1"/>
+          <circle class="nd-f" cx="212" cy="34" r="3.6"/><circle class="nd-f" cx="252" cy="30" r="3.6"/><circle class="nd-f" cx="236" cy="58" r="3.6"/>
+          <circle class="nd-f" cx="292" cy="40" r="3.6"/><circle class="nd-f" cx="276" cy="66" r="3.6"/><circle class="nd-f" cx="246" cy="72" r="3.6"/>
+        </g>
+        <text class="lbl-s" x="14" y="12">rule &#183; left-hand side</text>
+        <text class="lbl-s" x="184" y="12">right-hand side</text>
+        <line class="hair" x1="14" y1="96" x2="326" y2="96"/>
+        <g id="rewrite"></g>
+        <text class="lbl-s" x="14" y="192">the picture is not a rendering of a state &#8212; it is the state, after running the rule</text>
+      </svg>
+      <figcaption>Plate 14 &#183; rewriting. An ontology written as a production rule, and the structure it grows when you run it.</figcaption>
+    </figure>
+  </div>
+  <div class="plate-body">
+    <p class="plate-num">Plate 14 <span class="dim">/ generative / process</span></p>
+    <h3>Rewriting systems and simulation</h3>
+    <p>The genuinely different one. In every other plate the ontology is a fixed thing and the visualization is a rendering of it. Here the ontology is a <em>rule</em>, and the picture is the structure that emerges from applying that rule repeatedly &#8212; you do not draw the ontology, you run it and look at what it grows.</p>
+    <p>The most developed version is <a href="https://wolframinstitute.org/research/hypergraph-rewriting">Wolfram model hypergraph rewriting</a>: repeatedly replace any subhypergraph matching the left-hand side with the right-hand side. The associated views are worth stealing even if you never touch the physics &#8212; the <em>causal graph</em> (what event enabled what), the <em>branchial graph</em> (which alternative histories are near each other), and the multiway graph of all possible rewrite orders at once.</p>
+    <dl class="note">
+      <dt>Reads</dt>
+      <dd>Ontology as process. What a small set of rules implies at scale, which structures are reachable, and where different orderings converge or diverge.</dd>
+      <dt class="b">Breaks</dt>
+      <dd>Almost nothing about it is standard, tooling is mostly Wolfram-bound, and it answers a different question than "what does my domain model contain."</dd>
+    </dl>
+    <p class="wild"><b>In the wild</b><a href="https://wolframinstitute.org/research/hypergraph-rewriting">Wolfram Institute hypergraph rewriting</a> &#183; <a href="https://resources.wolframcloud.com/PacletRepository/resources/WolframInstitute/Hypergraph/tutorial/HypergraphRewriting.html">the Hypergraph paclet</a> &#183; <a href="https://arxiv.org/pdf/2112.08272">metagraph rewriting for AGI knowledge</a></p>
+  </div>
+</section>
+
+<style>
+#scatter ~ text, #hairball ~ text, #poincare ~ text{
+  paint-order:stroke;stroke:var(--plate);stroke-width:3px;stroke-linejoin:round
+}
+</style>
+
+<section class="close">
+  <p class="eyebrow">Part three</p>
+  <h2>What the field still has not solved</h2>
+  <p>These are not opinions &#8212; they are the findings the 37-tool survey landed on, and they have barely moved since.</p>
+  <div class="gaps">
+    <div class="gap">
+      <h4>Overview versus detail</h4>
+      <p>The oldest unsolved problem: give an overview of a large ontology while still showing detail on demand. Most tools pick one and abandon the other.</p>
+    </div>
+    <div class="gap">
+      <h4>Unused retinal channels</h4>
+      <p><em>Color, size and shape are used with little variation.</em> Diagrams throw away the encoding channels that information visualization has spent forty years validating.</p>
+    </div>
+    <div class="gap">
+      <h4>OWL 2 coverage</h4>
+      <p>Of 37 tools tested against a coverage benchmark, <em>two</em> implemented every construct &#8212; OWLGrEd and TopBraid. Most visualize a subset and silently drop the rest.</p>
+    </div>
+    <div class="gap">
+      <h4>Anything large</h4>
+      <p>Only <em>five</em> tools could load a large ontology at all &#8212; Ontodia, OntoGraf, Prot&#233;g&#233;'s Entity Browser, TGViz and TopBraid. The rest choke or produce clutter.</p>
+    </div>
+    <div class="gap">
+      <h4>Nobody evaluates</h4>
+      <p>Very few empirical studies of whether any of these methods actually make people faster or more accurate. Tools are research prototypes; funding runs out before the user study.</p>
+    </div>
+    <div class="gap">
+      <h4>Coordinated views</h4>
+      <p>The obvious move nobody ships: a treemap for weight beside a node-link for structure beside an indented list for lookup, all linked and brushed. Every survey recommends it.</p>
+    </div>
+  </div>
+
+  <h2 style="margin-top:2.8rem">A reading path</h2>
+  <ol class="path">
+    <li><a href="https://service.tib.eu/webvowl/">Open WebVOWL</a> and drop in an OWL file. This is the default the whole field converged on &#8212; see it before you argue with it.</li>
+    <li>Read the <a href="https://www.cambridge.org/core/journals/knowledge-engineering-review/article/abs/ontology-visualization-methods-and-tools-a-survey-of-the-state-of-the-art/5EA8C64D7DF60A84F6D2B7B9A09B6E6A">Dud&#225;&#353;&#8211;Lohmann&#8211;Sv&#225;tek&#8211;Pavlov survey</a>. It is the map of Part One, with the tool-by-tool coverage tables.</li>
+    <li>Go to the opposite pole: browse <a href="https://anvaka.org/tools/">anvaka's maps</a> or a <a href="https://docs.nomic.ai/atlas/">Nomic Atlas</a> dataset. Learned coordinates, no schema, a million points.</li>
+    <li>Read <a href="https://arxiv.org/pdf/1705.08039">Poincar&#233; Embeddings</a> for the one genuinely different geometric idea &#8212; that the space should match the shape of the data.</li>
+    <li>Run the <a href="https://resources.wolframcloud.com/PacletRepository/resources/WolframInstitute/Hypergraph/tutorial/HypergraphRewriting.html">Hypergraph rewriting paclet</a> to see the only family where the picture is a simulation rather than a rendering.</li>
+  </ol>
+
+  <p style="max-width:62ch;margin-top:2.4rem">The through-line: <strong>every one of these idioms is a projection, and each one drops something.</strong> Indented lists drop relations. Node-link drops scale. Treemaps drop edges. Embedding maps drop the axioms. Floor plans drop multiple inheritance. Hairballs drop identity. The question is never which representation is best &#8212; it is which loss you can afford for the question you are asking, and whether you have a second view that recovers it.</p>
+
+  <footer>
+    <p>Sources consulted</p>
+    <ul>
+      <li><a href="https://pdfs.semanticscholar.org/6fdb/89abab6174afaf1cc8171ad44305440038b1.pdf">Dud&#225;&#353;, Lohmann, Sv&#225;tek &amp; Pavlov &#8212; Ontology Visualization Methods &amp; Tools: A Survey of the State of the Art</a> (Knowledge Engineering Review)</li>
+      <li><a href="https://drops.dagstuhl.de/entities/document/10.4230/OASIcs.SLATE.2024.3">Marques, Ara&#250;jo &amp; Henriques &#8212; Ontology Visualization Tools: A Bibliographic Review and a Proposal</a> (SLATE 2024)</li>
+      <li><a href="https://www.semantic-web-journal.net/system/files/swj1114.pdf">Lohmann et al. &#8212; Visualizing Ontologies with VOWL</a> &#183; <a href="https://www.mdpi.com/2078-2489/16/10/915">Foundations for a Generic Ontology for Visualization</a> (2025)</li>
+      <li><a href="https://chisel.cs.uvic.ca/pubs/fu-ISWC2013.pdf">Fu et al. &#8212; Indented Tree or Graph?</a> &#183; <a href="https://ceur-ws.org/Vol-1456/paper7.pdf">Burch &amp; Lohmann &#8212; Visualizing the Evolution of Ontologies</a></li>
+      <li><a href="https://arxiv.org/pdf/1705.08039">Nickel &amp; Kiela &#8212; Poincar&#233; Embeddings</a> &#183; <a href="https://arxiv.org/pdf/2111.15037">CO-SNE</a> &#183; <a href="https://arxiv.org/pdf/2412.01023">Learning Structured Representations with Hyperbolic Embeddings</a></li>
+      <li><a href="https://academic.oup.com/database/article/doi/10.1093/database/baae008/7613396">Visualization and exploration of linked data using virtual reality</a> &#183; <a href="https://arxiv.org/pdf/1910.06825">Immersive Analytics of Large Dynamic Networks</a></li>
+      <li><a href="https://arxiv.org/pdf/2304.01311">Knowledge Graphs in Practice: Users, Challenges, and Visualization Opportunities</a> &#183; <a href="https://www.nbikakis.com/papers/A_Comparative_Study_of_State-of-The-Art_Linked_Data_Visualization_Tools.pdf">Comparative Study of Linked Data Visualization Tools</a></li>
+      <li><a href="https://wolframinstitute.org/research/hypergraph-rewriting">Wolfram Institute &#8212; Hypergraph Rewriting</a> &#183; <a href="https://arxiv.org/pdf/2308.16068">Ruliology</a> &#183; <a href="https://arxiv.org/html/2604.21284v1">Spatial Metaphors for LLM Memory</a></li>
+      <li>Tools: <a href="https://service.tib.eu/webvowl/">WebVOWL</a> &#183; <a href="https://cosmograph.app/">Cosmograph</a> &#183; <a href="https://github.com/jacomyal/sigma.js/">sigma.js</a> &#183; <a href="https://js.cytoscape.org/">Cytoscape.js</a> &#183; <a href="https://github.com/vasturiano/3d-force-graph">3d-force-graph</a> &#183; <a href="https://docs.nomic.ai/atlas/">Nomic Atlas</a> &#183; <a href="https://github.com/anvaka/map-of-reddit">map-of-reddit</a> &#183; <a href="https://infranodus.com/">InfraNodus</a> &#183; <a href="https://github.com/WSE-research/KinGVisher-Knowledge-Graph-Visualizer">KinGVisher</a> &#183; <a href="https://neo4j.com/labs/genai-ecosystem/llm-graph-builder/">Neo4j LLM Graph Builder</a></li>
+    </ul>
+  </footer>
+</section>
+</div>
+
+<script>
+(function(){
+  var S=20260816;
+  function rnd(){S=(S*1664525+1013904223)%4294967296;return S/4294967296;}
+  function gauss(){return (rnd()+rnd()+rnd()+rnd()-2)/2;}
+  function ns(t,a){var e=document.createElementNS('http://www.w3.org/2000/svg',t);for(var k in a){e.setAttribute(k,a[k]);}return e;}
+  function f(n){return (+n).toFixed(1);}
+
+  var sc=document.getElementById('scatter');
+  if(sc){
+    var cl=[[86,74,36,22,130],[248,86,30,20,95],[92,146,26,15,72],[246,140,24,15,62]];
+    cl.forEach(function(c){
+      sc.appendChild(ns('ellipse',{cx:c[0],cy:c[1],rx:c[2]*1.6,ry:c[3]*1.8,'class':'hull','fill-opacity':'.4'}));
+    });
+    cl.forEach(function(c){
+      for(var i=0;i<c[4];i++){
+        sc.appendChild(ns('circle',{cx:f(c[0]+gauss()*c[2]),cy:f(c[1]+gauss()*c[3]),r:1.5,fill:'var(--blue)','fill-opacity':(0.3+rnd()*0.55).toFixed(2)}));
+      }
+    });
+  }
+
+  var pc=document.getElementById('poincare');
+  if(pc){
+    var CX=170,CY=100,R=88;
+    pc.appendChild(ns('circle',{cx:CX,cy:CY,r:R,fill:'none',stroke:'var(--ink-3)','stroke-width':1}));
+    pc.appendChild(ns('circle',{cx:CX,cy:CY,r:R-6,fill:'none',stroke:'var(--hair)','stroke-width':.7}));
+    var rings=[{r:0,n:1,s:5},{r:30,n:3,s:4.2},{r:55,n:6,s:3.4},{r:73,n:12,s:2.5},{r:83,n:24,s:1.6}];
+    var pts=rings.map(function(rg,li){
+      var a=[],i;
+      for(i=0;i<rg.n;i++){
+        var th=-Math.PI/2+(i+(li%2?0.5:0))*2*Math.PI/rg.n;
+        a.push([CX+rg.r*Math.cos(th),CY+rg.r*Math.sin(th),rg.s]);
+      }
+      return a;
+    });
+    for(var i=0;i<pts.length-1;i++){
+      for(var j=0;j<pts[i+1].length;j++){
+        var p=pts[i][Math.floor(j*pts[i].length/pts[i+1].length)],c=pts[i+1][j];
+        var mx=(p[0]+c[0])/2,my=(p[1]+c[1])/2;
+        pc.appendChild(ns('path',{d:'M'+f(p[0])+' '+f(p[1])+' Q'+f(mx+(CX-mx)*0.34)+' '+f(my+(CY-my)*0.34)+' '+f(c[0])+' '+f(c[1]),fill:'none',stroke:'var(--ink-3)','stroke-width':.7}));
+      }
+    }
+    pts.forEach(function(rg){rg.forEach(function(p){pc.appendChild(ns('circle',{cx:f(p[0]),cy:f(p[1]),r:p[2],'class':'nd','stroke-width':1}));});});
+  }
+
+  var hb=document.getElementById('hairball');
+  if(hb){
+    var blobs=[[100,84,44,28],[232,70,36,24],[180,142,42,22]],P=[[],[],[]];
+    blobs.forEach(function(b,bi){
+      for(var i=0;i<95;i++){P[bi].push([b[0]+gauss()*b[2],b[1]+gauss()*b[3]]);}
+    });
+    for(var k=0;k<300;k++){
+      var bi=Math.floor(rnd()*3), a=P[bi][Math.floor(rnd()*P[bi].length)];
+      var bj=rnd()<0.86?bi:Math.floor(rnd()*3), b2=P[bj][Math.floor(rnd()*P[bj].length)];
+      hb.appendChild(ns('line',{x1:f(a[0]),y1:f(a[1]),x2:f(b2[0]),y2:f(b2[1]),stroke:'var(--blue-2)','stroke-width':.35,'stroke-opacity':.4}));
+    }
+    P.forEach(function(g2){g2.forEach(function(p){hb.appendChild(ns('circle',{cx:f(p[0]),cy:f(p[1]),r:1.1,fill:'var(--ink-2)','fill-opacity':.7}));});});
+  }
+
+  var rw=document.getElementById('rewrite');
+  if(rw){
+    [{x:58,n:6,r:15},{x:170,n:14,r:25},{x:286,n:30,r:34}].forEach(function(gn,k){
+      var cy=138,p=[],i;
+      for(i=0;i<gn.n;i++){
+        var rr=gn.r*Math.sqrt((i+0.5)/gn.n),th=i*2.399963;
+        p.push([gn.x+rr*Math.cos(th),cy+rr*Math.sin(th)*0.8]);
+      }
+      for(i=1;i<p.length;i++){
+        var q=p[Math.floor((i-1)/2)];
+        rw.appendChild(ns('line',{x1:f(q[0]),y1:f(q[1]),x2:f(p[i][0]),y2:f(p[i][1]),stroke:'var(--ink-3)','stroke-width':.7}));
+      }
+      p.forEach(function(pt){rw.appendChild(ns('circle',{cx:f(pt[0]),cy:f(pt[1]),r:2.2,fill:'var(--blue)'}));});
+      var t=ns('text',{x:gn.x-24,y:178,'class':'lbl-s'});
+      t.textContent='gen '+(k+1)+' &#183; '+gn.n+' nodes';
+      rw.appendChild(t);
+    });
+  }
+})();
+</script>

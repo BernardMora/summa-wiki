@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { postJSON, TimeoutError } from "./net";
 import AgentSession from "./AgentSession";
+import { useT } from "./I18n";
+import { bold } from "./markup";
 
 /**
  * Traer carpetas del disco al vault.
@@ -43,6 +45,7 @@ interface Done {
 const mb = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 
 export default function Ingest() {
+  const t = useT();
   const [folders, setFolders] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [desktop, setDesktop] = useState(false);
@@ -68,7 +71,7 @@ export default function Ingest() {
   const chosen = desktop ? folders : text.split("\n").map((s) => s.trim()).filter(Boolean);
 
   async function addFolder() {
-    const p = await window.summa?.chooseFolder("Carpeta que quieres traer al vault");
+    const p = await window.summa?.chooseFolder(t("ingest.pickTitle"));
     if (p) setFolders((f) => (f.includes(p) ? f : [...f, p]));
     setPreview(null);
   }
@@ -79,12 +82,12 @@ export default function Ingest() {
     try {
       const { ok, data } = await postJSON<Preview & { error?: string }>(
         "/api/ingest?dry=1", { folders: chosen });
-      if (!ok) { setErr(data.error ?? "no se pudo analizar"); return; }
+      if (!ok) { setErr(data.error ?? t("setup.analyseFailed")); return; }
       setPreview(data);
     } catch (e) {
       setErr(e instanceof TimeoutError
-        ? `El análisis no respondió en ${e.seconds} s. Suele pasar con carpetas en la nube (Drive, iCloud): prueba con una carpeta más concreta.`
-        : "no se pudo analizar");
+        ? t("setup.analyseTimeout", { n: e.seconds })
+        : t("setup.analyseFailed"));
     } finally { setBusy(""); }
   }
 
@@ -93,49 +96,44 @@ export default function Ingest() {
     try {
       const { ok, data } = await postJSON<Done & { error?: string }>(
         "/api/ingest", { folders: chosen }, { timeoutMs: 300_000 });
-      if (!ok) { setErr(data.error ?? "no se pudo copiar"); return; }
+      if (!ok) { setErr(data.error ?? t("setup.copyFailed")); return; }
       setDone(data);
     } catch (e) {
-      setErr(e instanceof TimeoutError ? `La copia no terminó en ${e.seconds} s.` : "no se pudo copiar");
+      setErr(e instanceof TimeoutError ? t("setup.copyTimeout", { n: e.seconds }) : t("setup.copyFailed"));
     } finally { setBusy(""); }
   }
 
   if (done) {
     return (
       <div className="welcome setupcreate">
-        <h1>Copiado</h1>
+        <h1>{t("ingest.copied")}</h1>
         <p>
-          {done.copied} archivos entraron a <code>{preview?.inbox}</code>
-          {done.companions > 0 && <>, con {done.companions} {done.companions === 1 ? "nota compañera" : "notas compañeras"}</>}.
-          {done.skipped > 0 && <> Se saltaron {done.skipped}.</>}
+          {t("ingest.filesEntered", { n: done.copied, inbox: preview?.inbox ?? "" })}
+          {done.companions > 0 && t("ingest.withCompanions", {
+            n: done.companions,
+            noun: t(done.companions === 1 ? "ingest.companionNote" : "ingest.companionNotes"),
+          })}.
+          {done.skipped > 0 && t("ingest.skippedN", { n: done.skipped })}
         </p>
-        <p className="cfghint">
-          Los originales siguen donde estaban — esto copió, no movió. El registro
-          de qué salió de dónde está en <code>{done.ledger}</code>.
-        </p>
+        <p className="cfghint">{t("ingest.originalsStay", { ledger: done.ledger })}</p>
 
         {done.errors.length > 0 && (
           <div className="err">
-            {done.errors.length} archivos no se pudieron copiar: {done.errors.slice(0, 3).map((e) => e.error).join(" · ")}
+            {t("ingest.copyErrors", {
+              n: done.errors.length,
+              detail: done.errors.slice(0, 3).map((e) => e.error).join(" · "),
+            })}
           </div>
         )}
 
-        <h2 style={{ marginTop: 26 }}>Ahora el reparto</h2>
-        <p>
-          Todo está en la bandeja, con la estructura de carpetas que traía. Para
-          decidir en qué parte del vault va cada nota hay que leerla, y de eso se
-          encarga el agente con la skill <code>/vault-ingest</code> que se acaba
-          de escribir en tu vault.
-        </p>
+        <h2 style={{ marginTop: 26 }}>{t("ingest.nowSorting")}</h2>
+        <p>{t("ingest.sortedBySkill", { skill: "/vault-ingest" })}</p>
 
         {done.claude ? (
           <AgentSession cwd={done.vault} />
         ) : (
           <div className="warnbox">
-            <strong>No se encontró <code>claude</code>.</strong> El reparto
-            automático necesita Claude Code instalado. <strong>Tus archivos ya
-            están dentro del vault</strong> y se pueden mover a mano; o instálalo
-            y corre <code>claude &apos;/vault-ingest&apos;</code> desde el vault.
+            {bold(t("ingest.noClaude", { cmd: "claude", skill: "claude '/vault-ingest'" }))}
           </div>
         )}
       </div>
@@ -144,19 +142,19 @@ export default function Ingest() {
 
   return (
     <div className="welcome setupcreate">
-      <h1>Traer carpetas al vault</h1>
+      <h1>{t("ingest.title")}</h1>
       <p>
         Copia archivos de tu computadora al vault. Los originales no se tocan:
         esto <strong>copia</strong>, nunca mueve ni borra.
       </p>
 
       <div className="setupfield">
-        <label>Qué carpetas</label>
+        <label>{t("setup.fieldSources")}</label>
         {desktop ? (
           <>
             <div className="cfgrow">
               <button className="newbtn" style={{ margin: 0, width: "auto", padding: "4px 12px" }}
-                      onClick={addFolder}>Agregar carpeta…</button>
+                      onClick={addFolder}>{t("setup.addFolder")}</button>
             </div>
             {folders.map((f) => (
               <div key={f} className="cfgrow">
@@ -170,13 +168,11 @@ export default function Ingest() {
         ) : (
           <textarea rows={4} value={text}
                     onChange={(e) => { setText(e.target.value); setPreview(null); }}
-                    placeholder={"~/Documents/notas-viejas\n~/Desktop/pendientes"}
+                    placeholder={t("setup.sourcesPlaceholder")}
                     spellCheck={false} />
         )}
         <p className="cfghint">
-          Se saltan <code>node_modules</code>, <code>.git</code>, archivos
-          ocultos, ejecutables y todo lo que pese más de 100 MB. Los duplicados
-          exactos entran una sola vez.
+          {t("ingest.skipsHint", { nodeModules: "node_modules", git: ".git" })}
         </p>
       </div>
 
@@ -185,11 +181,11 @@ export default function Ingest() {
       <div className="cfgrow" style={{ marginTop: 14 }}>
         <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
                 disabled={!chosen.length || !!busy} onClick={analyse}>
-          {busy === "analizando" ? `Analizando… ${elapsed}s` : "Analizar"}
+          {busy === "analizando" ? t("setup.analysing", { n: elapsed }) : t("setup.analyse")}
         </button>
         {claude === null && (
           <span className="dim" style={{ fontSize: 11.5 }}>
-            sin <code>claude</code> en el PATH — se podrá copiar, pero no repartir
+            {t("ingest.noClaudeWarn", { cmd: "claude" })}
           </span>
         )}
       </div>
@@ -197,24 +193,25 @@ export default function Ingest() {
       {preview && (
         <div className="archpreview" style={{ marginTop: 18 }}>
           <p>
-            <strong>{preview.willCopy}</strong> archivos entrarían a{" "}
-            <code>{preview.inbox}</code> — {mb(preview.bytes)}.
+            {bold(t("setup.wouldEnter", {
+              n: preview.willCopy, inbox: preview.inbox, size: mb(preview.bytes),
+            }))}
           </p>
           <table className="structtable">
             <tbody>
-              <tr><td><code>{preview.counts.note}</code></td><td>notas y texto</td></tr>
-              <tr><td><code>{preview.counts.source}</code></td><td>documentos (PDF, docx…) — cada uno con su nota compañera</td></tr>
-              <tr><td><code>{preview.counts.image}</code></td><td>imágenes</td></tr>
-              <tr><td><code>{preview.willSkip}</code></td><td>se saltan{preview.duplicates > 0 && `, de los cuales ${preview.duplicates} son duplicados exactos`}</td></tr>
+              <tr><td><code>{preview.counts.note}</code></td><td>{t("setup.rowNotes")}</td></tr>
+              <tr><td><code>{preview.counts.source}</code></td><td>{t("ingest.rowSourcesLong")}</td></tr>
+              <tr><td><code>{preview.counts.image}</code></td><td>{t("setup.rowImages")}</td></tr>
+              <tr><td><code>{preview.willSkip}</code></td><td>{t("setup.rowSkipped")}{preview.duplicates > 0 && t("ingest.skippedExactDup", { n: preview.duplicates })}</td></tr>
             </tbody>
           </table>
 
           {preview.truncated && (
             <p className="err">
               {preview.truncatedBy === "time"
-                ? "El escaneo tardó demasiado y se cortó — típico de carpetas sincronizadas en la nube."
-                : "Se alcanzó el tope de 20,000 archivos."}
-              {" "}Esta vista no está completa: elige carpetas más concretas.
+                ? t("setup.truncatedTime")
+                : t("setup.truncatedFiles")}
+              {" "}{t("setup.truncatedTail")}
             </p>
           )}
           {preview.unreadable.length > 0 && (
@@ -223,7 +220,7 @@ export default function Ingest() {
 
           {preview.sample.length > 0 && (
             <>
-              <p className="cfghint">Los primeros, para que veas la forma:</p>
+              <p className="cfghint">{t("ingest.firstFew")}</p>
               <ul className="catlist">
                 {preview.sample.slice(0, 8).map((a) => (
                   <li key={a.to}><code>{a.to}</code></li>

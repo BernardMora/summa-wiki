@@ -2,27 +2,38 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import VaultPicker from "./VaultPicker";
+import { useT, useLocale } from "./I18n";
+import { LOCALES, type Locale } from "@/lib/i18n.ts";
+import AppearanceDesigner from "./AppearanceDesigner.tsx";
 
 /**
  * Panel de configuración, en el sitio donde antes estaba el botón de tema.
  *
- * El tema vive en localStorage (es preferencia del dispositivo: la misma wiki
- * abierta en dos máquinas puede querer claro en una y oscuro en otra). El
- * nombre y la bajada viven en `04-Sistema/wiki-config.json`, dentro del vault,
- * porque son identidad de la wiki y tienen que viajar con ella.
+ * La apariencia y la identidad viven dentro del vault: la primera en
+ * `.summa/appearance.json` y la segunda en `.summa/config.json`. Ambas viajan
+ * con la wiki; el diseñador previsualiza en el cliente y solo escribe al
+ * pulsar Aplicar.
  *
- * Ese reparto no es cosmético: por eso el tema se aplica al instante sin tocar
- * el servidor, y el nombre necesita un POST y un refresh.
+ * El IDIOMA es el tercer caso y no encaja en ninguno de los dos anteriores. Es
+ * preferencia del dispositivo —el mismo vault se puede leer en dos idiomas en
+ * dos máquinas— pero no puede vivir en localStorage, porque media
+ * interfaz la pinta el servidor. Va en `settings.json` de la máquina, y por eso
+ * necesita POST + refresh aunque no sea identidad de la wiki.
  */
 
-type Mode = "system" | "light" | "dark";
-const KEY = "wiki.theme";
-
-const MODES: { id: Mode; icon: string; label: string }[] = [
-  { id: "system", icon: "◐", label: "Auto" },
-  { id: "light", icon: "☀", label: "Claro" },
-  { id: "dark", icon: "☾", label: "Oscuro" },
-];
+/**
+ * El nombre de cada idioma, EN ese idioma.
+ *
+ * No se traduce y no debe traducirse: quien tiene la app en un idioma que no
+ * entiende necesita reconocer el suyo en la lista, y «Spanish» no le sirve de
+ * nada a quien solo lee español. Es la convención de cualquier selector de
+ * idioma serio, y la razón por la que estas dos cadenas no están en el
+ * diccionario.
+ */
+const LOCALE_NAMES: Record<Locale, string> = {
+  en: "English",
+  es: "Español",
+};
 
 interface VaultInfo {
   vault: string | null;
@@ -33,16 +44,15 @@ interface VaultInfo {
 }
 
 /** Por qué la app está mirando ESA carpeta. Ver el CLI, que imprime lo mismo. */
-const SOURCE_HINT: Record<VaultInfo["source"], string> = {
-  env: "Fijado por la variable WIKI_VAULT: manda sobre lo que se elija aquí.",
-  settings: "Elegido en la app.",
-  legacy: "La ruta histórica. Elige una carpeta para fijarla y dejar de depender del default.",
-  none: "Sin vault configurado.",
-};
+const SOURCE_HINT = {
+  env: "vault.sourceEnv",
+  settings: "vault.sourceSettings",
+  legacy: "vault.sourceLegacy",
+  none: "vault.sourceNone",
+} as const;
 
 export default function Settings({ name, tagline }: { name: string; tagline: string }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("system");
   const [draftName, setDraftName] = useState(name);
   const [draftTag, setDraftTag] = useState(tagline);
   const [saving, setSaving] = useState(false);
@@ -51,6 +61,9 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
   const [vault, setVault] = useState<VaultInfo | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const t = useT();
+  const locale = useLocale();
+  const [switching, setSwitching] = useState<Locale | null>(null);
 
   // Se pide al abrir, no al montar: el panel vive en el masthead de cada
   // página y la ruta del vault no cambia sola. Pedirla en cada carga sería una
@@ -59,18 +72,6 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
     if (!open || vault) return;
     fetch("/api/vault").then((r) => r.json()).then(setVault).catch(() => {});
   }, [open, vault]);
-
-  useEffect(() => {
-    const s = localStorage.getItem(KEY) as Mode | null;
-    if (s === "light" || s === "dark" || s === "system") setMode(s);
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (mode === "system") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", mode);
-    localStorage.setItem(KEY, mode);
-  }, [mode]);
 
   // El servidor manda: si el nombre cambia por fuera (editando el JSON a mano,
   // o un agente), el borrador se re-sincroniza en vez de quedarse viejo.
@@ -90,6 +91,39 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
     };
   }, [open]);
 
+  /**
+   * Cambia el idioma de la interfaz.
+   *
+   * Optimista sería un error aquí: el texto que hay que repintar lo produce el
+   * servidor, así que hasta que `router.refresh()` no vuelve no hay nada nuevo
+   * que mostrar. El estado `switching` marca cuál se está aplicando para que el
+   * botón no parezca muerto durante ese viaje.
+   *
+   * No reinicia el servidor —el idioma se resuelve por petición— pero el menú
+   * nativo de Electron sí vive en otro proceso y se entera por su cuenta: main
+   * vigila `settings.json`. Ver `electron/main.js`.
+   */
+  async function switchLocale(next: Locale) {
+    if (next === locale || switching) return;
+    setSwitching(next); setErr("");
+    try {
+      const r = await fetch("/api/locale", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale: next }),
+      });
+      if (!r.ok) { setErr(t("settings.saveFailed")); return; }
+      // El menú nativo lo pinta el proceso principal de Electron, que no ve
+      // este POST. En el navegador `window.summa` no existe y no hay menú que
+      // arreglar, así que el encadenamiento opcional es la comprobación entera.
+      window.summa?.localeChanged().catch(() => {});
+      router.refresh();
+    } catch {
+      setErr(t("settings.saveFailed"));
+    } finally {
+      setSwitching(null);
+    }
+  }
+
   const dirty = draftName.trim() !== name || draftTag.trim() !== tagline;
 
   async function save() {
@@ -101,14 +135,14 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
         body: JSON.stringify({ name: draftName, tagline: draftTag }),
       });
       const d = await r.json();
-      if (!r.ok) { setErr(d.error ?? "no se pudo guardar"); return; }
+      if (!r.ok) { setErr(d.error ?? t("settings.saveFailed")); return; }
       setSaved(true);
       setTimeout(() => setSaved(false), 1600);
       // El nombre lo pintan componentes de servidor (masthead, barra lateral,
       // <title>): hay que pedirle a Next que los vuelva a renderizar.
       router.refresh();
     } catch {
-      setErr("no se pudo guardar");
+      setErr(t("settings.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -119,8 +153,8 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
       <button
         className="themebtn"
         onClick={() => setOpen((v) => !v)}
-        title="Configuración"
-        aria-label="Configuración"
+        title={t("settings.title")}
+        aria-label={t("settings.title")}
         aria-expanded={open}
       >
         {/*
@@ -141,44 +175,53 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
 
       {open && (
         <div className="cfgpanel">
-          <div className="cfgsec">Tema</div>
+          <div className="cfgsec">{t("settings.appearance")}</div>
+          <AppearanceDesigner />
+
+          {/*
+            El idioma va junto al tema y no abajo con el vault: los dos son
+            preferencias de quien mira la pantalla y ninguno destruye nada. El
+            vault está abajo porque es el único ajuste del panel que tira todo
+            lo que hay en pantalla.
+          */}
+          <div className="cfgsec">{t("settings.language")}</div>
           <div className="cfgmodes">
-            {MODES.map((m) => (
+            {LOCALES.map((l) => (
               <button
-                key={m.id}
-                className={mode === m.id ? "on" : ""}
-                onClick={() => setMode(m.id)}
-              >{m.icon} {m.label}</button>
+                key={l}
+                className={locale === l ? "on" : ""}
+                disabled={!!switching}
+                onClick={() => switchLocale(l)}
+                lang={l}
+              >{switching === l ? "…" : LOCALE_NAMES[l]}</button>
             ))}
           </div>
+          <p className="cfghint">{t("settings.languageHint")}</p>
 
-          <div className="cfgsec">Nombre de la wiki</div>
+          <div className="cfgsec">{t("settings.wikiName")}</div>
           <input
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
-            placeholder="Wiki"
+            placeholder={t("settings.wikiNamePlaceholder")}
             maxLength={60}
           />
           <input
             value={draftTag}
             onChange={(e) => setDraftTag(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") save(); }}
-            placeholder="Bajada (opcional)"
+            placeholder={t("settings.taglinePlaceholder")}
             maxLength={80}
           />
           {err && <div className="err">{err}</div>}
           <div className="cfgrow">
             <button className="newbtn" style={{ margin: 0, width: "auto", padding: "4px 12px" }}
                     disabled={!dirty || saving} onClick={save}>
-              {saving ? "Guardando…" : "Guardar"}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
-            {saved && <span className="dim">guardado</span>}
+            {saved && <span className="dim">{t("common.saved")}</span>}
           </div>
-          <p className="cfghint">
-            Se guarda en <code>.summa/config.json</code>, dentro del vault.
-            El icono del Dock y el nombre de la ventana se actualizan al reiniciar la app.
-          </p>
+          <p className="cfghint">{t("settings.configHint", { file: ".summa/config.json" })}</p>
 
           {/*
             El vault va ABAJO y separado del resto: es la única opción del
@@ -186,23 +229,23 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
             el servidor. Mezclarla con el nombre y el tema —que se aplican al
             instante— invitaría a tocarla sin querer.
           */}
-          <div className="cfgsec">Vault</div>
+          <div className="cfgsec">{t("settings.vault")}</div>
           {vault ? (
             <>
               <code className="cfgpath">{vault.display}</code>
-              <p className="cfghint">{SOURCE_HINT[vault.source]}</p>
+              <p className="cfghint">{t(SOURCE_HINT[vault.source])}</p>
             </>
           ) : (
-            <p className="cfghint">Sin vault configurado.</p>
+            <p className="cfghint">{t("settings.noVault")}</p>
           )}
           <VaultPicker current={vault?.vault ?? null} />
           {/* Cambiar y crear son cosas distintas: la de arriba abre una carpeta
               que ya existe, esta monta una estructura nueva. Sin esta entrada,
               el asistente de creación solo se alcanzaba en el primer arranque. */}
-          <a className="cfglink" href="/setup?new=1">Crear un vault nuevo…</a>
+          <a className="cfglink" href="/setup?new=1">{t("settings.newVault")}</a>
 
-          <div className="cfgsec">Contenido</div>
-          <a className="cfglink" href="/ingest">Traer carpetas al vault…</a>
+          <div className="cfgsec">{t("settings.content")}</div>
+          <a className="cfglink" href="/ingest">{t("settings.ingest")}</a>
         </div>
       )}
     </div>

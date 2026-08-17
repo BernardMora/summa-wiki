@@ -3,8 +3,46 @@ import { useEffect, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { search, searchKeymap, openSearchPanel, highlightSelectionMatches } from "@codemirror/search";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
+
+/**
+ * El último editor que tuvo el foco, y el atajo global de búsqueda.
+ *
+ * `searchKeymap` ya ata ⌘F, pero solo dispara con el editor enfocado, y ese no
+ * es el estado en el que uno suele pulsarlo: se viene de hacer clic en una
+ * pestaña, en el índice lateral o en un botón de la barra, y entonces el foco
+ * está en el `<body>` y la tecla no llega a CodeMirror. Sin esto, ⌘F "a veces
+ * no hace nada", que es peor que no tenerlo.
+ *
+ * El módulo recuerda cuál fue el último editor tocado, así que en vista
+ * dividida la búsqueda se abre en el panel en el que estabas y no en los dos.
+ * El listener se instala una sola vez y se cuenta por instancias vivas.
+ */
+let lastFocused: EditorView | null = null;
+let listeners = 0;
+
+function onGlobalFind(e: KeyboardEvent) {
+  if (e.defaultPrevented) return;      // el editor enfocado ya lo atendió
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+  if (e.key.toLowerCase() !== "f") return;
+  // Una terminal se queda con lo suyo: ahí ⌘F no busca en una nota.
+  if ((document.activeElement as HTMLElement | null)?.closest(".termhost")) return;
+  const v = lastFocused;
+  if (!v || !v.dom.isConnected) return;
+  e.preventDefault();
+  openSearchPanel(v);
+}
+
+function trackFind(v: EditorView) {
+  lastFocused = v;
+  if (listeners++ === 0) window.addEventListener("keydown", onGlobalFind);
+  return () => {
+    if (lastFocused === v) lastFocused = null;
+    if (--listeners === 0) window.removeEventListener("keydown", onGlobalFind);
+  };
+}
 
 /**
  * Envuelve o desenvuelve la selección con un marcador de énfasis.
@@ -196,6 +234,13 @@ export default function Editor({
             { key: "Mod-b", preventDefault: true, run: (v) => toggleWrap(v, "**") },
             { key: "Mod-i", preventDefault: true, run: (v) => toggleWrap(v, "*") },
           ]),
+          // `top: true` — el panel va arriba. Abajo lo tapaba la barra de
+          // estado del panel en notas cortas.
+          search({ top: true }),
+          highlightSelectionMatches(),
+          // Antes de defaultKeymap: Mod-d es «seleccionar la siguiente
+          // aparición» en searchKeymap y «borrar línea» en el de por defecto.
+          keymap.of(searchKeymap),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),   // GFM: task lists, tables, strikethrough
           livePreview,
@@ -257,6 +302,13 @@ export default function Editor({
     });
     view.current = v;
     onReady?.(v);
+
+    // `focusin` y no `focus`: el foco real lo tiene el contenido editable de
+    // CodeMirror o, con el panel de búsqueda abierto, uno de sus inputs.
+    // `focus` no burbujea y no llegaría desde ninguno de los dos.
+    const untrackFind = trackFind(v);
+    const onFocusIn = () => { lastFocused = v; };
+    v.dom.addEventListener("focusin", onFocusIn);
 
     /*
      * Arrastrar desde el Finder se escucha sobre el panel entero, no sobre el
@@ -331,6 +383,8 @@ export default function Editor({
       zone.removeEventListener("dragleave", onLeave);
       zone.removeEventListener("drop", onDrop);
       zone.classList.remove("dropping");
+      v.dom.removeEventListener("focusin", onFocusIn);
+      untrackFind();
       v.destroy();
       view.current = null;
     };

@@ -1,0 +1,225 @@
+# Publicar una versión para las tres plataformas.
+#
+# Por qué existe: node-pty es un módulo nativo y Electron trae su propio Node,
+# así que un paquete de Windows hecho desde un Mac es un paquete que nadie
+# probó en Windows. Compilar cada plataforma EN esa plataforma no es una
+# preferencia de estilo: es la única forma de que el binario que se descarga
+# alguien sea el mismo que pasó las pruebas.
+#
+# Sustituye a `package:linux:docker`, que existía porque no había otra manera
+# de tocar Linux desde un portátil de Apple, y que nunca pudo producir el
+# paquete de mac x64 — los Intel siguen siendo la mitad de los Macs en uso.
+#
+# El disparador es el tag. Empujar `v0.3.0` construye, prueba y publica; no
+# hay ningún paso manual entre el tag y el Release, que es justamente lo que
+# evita la versión "la subí desde mi máquina y no me acuerdo con qué".
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # Para ensayar el pipeline entero sin crear una versión: construye y prueba,
+  # pero no publica nada (ver el `if` del paso de electron-builder).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # Next se compila UNA vez, aquí, y las cuatro plataformas empaquetan lo
+  # mismo. No es un ahorro de minutos: es que compilarlo en Windows fallaba
+  # con un EPERM al hacer glob sobre `C:\Users\<user>\Application Data`, un
+  # junction heredado que no se deja leer, y perseguir ese glob dentro de Next
+  # desde otra plataforma es adivinar.
+  #
+  # Compilarlo cuatro veces nunca tuvo sentido: la salida de `next build` es
+  # JavaScript independiente de plataforma. Lo que sí es específico de cada SO
+  # —el binario de Electron y node-pty— lo resuelve electron-builder, no Next.
+  #
+  # El supuesto que queda por confirmar es que esa salida cruza de SO, no solo
+  # de ruta. Cruzar de ruta ya está probado: el build graba su ruta absoluta en
+  # 83 archivos de `server/` y la app instalada corre desde otro sitio sin
+  # inmutarse. De cruzar de SO responde la prueba de humo de cada plataforma,
+  # que levanta el servidor empaquetado y falla si una ruta no resuelve.
+  web:
+    name: Compilar la web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # El tag manda sobre package.json, no al revés: electron-builder sube los
+      # artefactos al Release del tag `v${version}`, así que un tag v0.3.0 con
+      # un package.json en 0.2.0 publica en un Release que nadie pidió. Aquí,
+      # en el primer job, para romper antes de encender la matriz.
+      - name: El tag coincide con la versión
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::El tag es v$tag y package.json dice $pkg."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # 182 MB de caché incremental que no tiene por qué viajar: se regenera
+      # sola y electron-builder la excluye del paquete de todas formas. Se
+      # BORRA en vez de excluirla en el upload para que el patrón del artefacto
+      # sea una sola cosa, y no dos que además interactúan con la regla de
+      # archivos ocultos de aquí abajo.
+      - run: rm -rf .next-build/cache
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: .next-build
+          # `.next-build` empieza por punto, y upload-artifact trata como
+          # oculto todo lo que cuelgue de un directorio con punto. Sin esto no
+          # sube NADA y falla con "no files were found" — señalando una ruta
+          # que existe y está llena, que es lo que hace el fallo difícil de
+          # leer.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: ${{ matrix.name }}
+    needs: web
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Sin esto, el primer fallo cancela las otras tres y te quedas sin saber
+      # si el problema era de una plataforma o de todas. Enterarse de los
+      # cuatro resultados a la vez ahorra una vuelta entera de CI.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-14
+            args: --mac --arm64
+          # Un runner Intel de verdad, no una compilación cruzada. Universal
+          # queda descartado a propósito: duplicaría el peso del .dmg para dar
+          # a cada usuario una arquitectura que no usa.
+          #
+          # `macos-15-intel`, no `macos-13`: la imagen de macOS 13 se retiró el
+          # 4 de diciembre de 2025 y un job que la pide no falla — se queda en
+          # cola indefinidamente, que es peor, porque el run entero parece
+          # "en progreso" mientras no avanza nada.
+          #
+          # Esta etiqueta es la ÚLTIMA imagen x86_64 de Actions y muere en
+          # otoño de 2027, cuando habrá que decidir si se sigue publicando para
+          # Intel o se deja ir. Apple ya lo dejó ir.
+          - name: macOS (Intel)
+            os: macos-15-intel
+            args: --mac --x64
+          - name: Windows
+            os: windows-latest
+            args: --win --x64
+          - name: Linux
+            os: ubuntu-latest
+            args: --linux --x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # electron-builder invoca estas herramientas para armar el .deb y el
+      # AppImage. No vienen todas en el runner y el fallo que dan cuando faltan
+      # ocurre al final de la build, después de diez minutos de trabajo.
+      - name: Dependencias de empaquetado de Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg squashfs-tools
+
+      - run: npm ci
+
+      # La build de Next viene del job `web`, no se rehace aquí. Es lo que
+      # electron-builder empaqueta como `.next-build/`.
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next-build
+
+      - name: Firma de macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            echo "::notice::Certificado presente: se firmará el paquete."
+            for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+              [ -n "${!v}" ] && echo "$v=${!v}" >> "$GITHUB_ENV"
+            done
+          else
+            # La forma documentada de decirle a electron-builder que NO busque
+            # identidades en el llavero. Sin esto encuentra las que haya en el
+            # runner y falla a medias.
+            echo "::warning::Sin certificado de Apple: el paquete sale sin firmar."
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Empaquetar
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # `--publish always` sube al Release en borrador declarado en
+        # electron-builder.yml; el primer job de la matriz lo crea y los otros
+        # tres lo reutilizan. En borrador para que nadie descargue un .dmg
+        # mientras el .exe todavía se está compilando.
+        run: npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+
+      # Después de empaquetar y en cada plataforma, porque el fallo que busca
+      # solo existe en el paquete: otro cwd, otro node, otro conjunto de
+      # archivos. Es lo que sostiene las exclusiones de electron-builder.yml —
+      # quitar 400 MB del paquete es seguro solo si algo comprueba que el
+      # servidor sigue arrancando en las tres.
+      - name: Prueba de humo del paquete
+        run: npm run smoke
+
+      # Solo cuando no hay tag: si no se publicó, esta es la única forma de
+      # bajarse lo que se construyó y probarlo a mano.
+      - name: Guardar los artefactos
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
+
+  publish:
+    name: Publicar el Release
+    needs: [web, build]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      # `needs: build` es la puerta: este job no corre si alguna de las cuatro
+      # plataformas falló al construir O al pasar la prueba de humo. El
+      # borrador se queda ahí, con sus artefactos, para poder mirar qué pasó,
+      # pero nadie lo ve en la página de releases.
+      #
+      # Quitar el borrador es lo último que ocurre, y es lo que hace que
+      # "empujar un tag" sea una decisión y no un riesgo.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest

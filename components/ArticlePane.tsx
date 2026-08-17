@@ -8,6 +8,7 @@ import Toc, { parseHeads, type Head } from "./Toc.tsx";
 import Crumb from "./Crumb.tsx";
 import { useTabs } from "./Tabs.tsx";
 import LinkPicker, { type LinkQuery, type LinkTarget } from "./LinkPicker.tsx";
+import { useT } from "./I18n";
 
 export interface Ref { id: string; title: string; path: string; }
 export interface Meta {
@@ -54,6 +55,7 @@ export default function ArticlePane({
   onEditorReady?: (v: EditorView) => void;
   showToc?: boolean;
 }) {
+  const t = useT();
   const [data, setData] = useState<Payload | null>(initial ?? null);
   const [tab, setTab] = useState<Tab>("article");
   const [hideProv, setHideProv] = useState(false);
@@ -88,7 +90,7 @@ export default function ArticlePane({
     (async () => {
       await inFlight.get(nid)?.catch(() => {});
       const r = await fetch(`/api/note-full?id=${encodeURIComponent(nid)}`, { cache: "no-store" });
-      if (!r.ok) { if (!initial) setErr("no se pudo abrir la nota"); return; }
+      if (!r.ok) { if (!initial) setErr(t("pane.openFailed")); return; }
       const d: Payload = await r.json();
       if (dead) return;
       const changed = d.content !== savedRef.current;
@@ -106,7 +108,7 @@ export default function ArticlePane({
   const save = useCallback(async (force = false) => {
     const body = viewRef.current?.state.doc.toString();
     if (body === undefined || (body === savedRef.current && !force)) return;
-    setStatus("guardando…");
+    setStatus(t("pane.saving"));
     const req = fetch("/api/note", {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: noteId, content: body, mtimeMs: force ? undefined : mtimeRef.current }),
@@ -114,7 +116,7 @@ export default function ArticlePane({
     inFlight.set(noteId, req);
     const r = await req.finally(() => { if (inFlight.get(noteId) === req) inFlight.delete(noteId); });
     if (r.status === 409) { setConflict((await r.json()).currentContent); setStatus(""); return; }
-    if (!r.ok) { setStatus("error al guardar"); return; }
+    if (!r.ok) { setStatus(t("pane.saveFailed")); return; }
     const d = await r.json();
     mtimeRef.current = d.mtimeMs; savedRef.current = body; setStatus("guardado");
     setTimeout(() => setStatus((s) => (s === "guardado" ? "" : s)), 1400);
@@ -123,7 +125,7 @@ export default function ArticlePane({
   const onChange = useCallback(() => {
     const doc = viewRef.current?.state.doc.toString();
     if (doc !== undefined) setHeads(parseHeads(doc));
-    setStatus("sin guardar");
+    setStatus(t("pane.unsaved"));
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => save(), AUTOSAVE_MS);
   }, [save]);
@@ -194,7 +196,7 @@ export default function ArticlePane({
   }, [data]);
 
   if (err) return <section className="pane"><p className="warn">{err}</p></section>;
-  if (!data) return <section className="pane"><p className="dim">Cargando…</p></section>;
+  if (!data) return <section className="pane"><p className="dim">{t("common.loading")}</p></section>;
 
   const m = data.meta;
   const total = m.humanWords + m.agentWords;
@@ -209,15 +211,15 @@ export default function ArticlePane({
         <header className="panehead">
           <span className="panetitle" title={m.vaultPath}>{m.title}</span>
           <span className="dim">{status}</span>
-          <button onClick={onClose} title="Cerrar panel">×</button>
+          <button onClick={onClose} title={t("pane.close")}>×</button>
         </header>
       )}
 
       {/* Chrome: never scrolls. Sticky positioning inside the scroller kept
           leaving this row stranded mid-article, so it now sits outside it. */}
       <div className="tabs panechrome">
-        <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>Artículo</button>
-        <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>Datos</button>
+        <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>{t("pane.tabArticle")}</button>
+        <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>{t("pane.tabData")}</button>
         <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
           Enlaces ({data.backlinks.length + data.outbound.length})
         </button>
@@ -229,7 +231,7 @@ export default function ArticlePane({
         <div className="artrow">
           <article>
             <p className="infoline">
-              {m.core && <span className="corebadge" style={{ marginLeft: 0, marginRight: 8 }} title="Uno de los seis artículos del núcleo">Núcleo</span>}
+              {m.core && <span className="corebadge" style={{ marginLeft: 0, marginRight: 8 }} title={t("pane.coreArticle")}>{t("pane.core")}</span>}
               <span>{m.type}</span><span>{m.bundle}</span>
               {m.pillar && <span>{m.pillar}</span>}
               <span>creada {m.created || "—"}</span>
@@ -239,7 +241,7 @@ export default function ArticlePane({
             </p>
             {(m.categories?.length ?? 0) > 0 && (
               <p className="catline">
-                <span className="catlinelabel">Categorías</span>
+                <span className="catlinelabel">{t("pane.categories")}</span>
                 {m.categories!.map((c) => (
                   <Link key={c.id} href={`/#cat-${c.id}`}>{c.label}</Link>
                 ))}
@@ -278,7 +280,7 @@ export default function ArticlePane({
                   const fd = new FormData();
                   fd.append("id", noteId); fd.append("file", file);
                   const r = await fetch("/api/upload", { method: "POST", body: fd });
-                  if (!r.ok) { setStatus("no se pudo subir la imagen"); return null; }
+                  if (!r.ok) { setStatus(t("pane.uploadFailed")); return null; }
                   return (await r.json()).href as string;
                 }}
               />
@@ -289,29 +291,29 @@ export default function ArticlePane({
                 <tbody>
                   <tr><th>type</th><td>{m.type}</td></tr>
                   <tr><th>title</th><td>{m.title}</td></tr>
-                  <tr><th>created</th><td>{m.created || <em className="dim">vacío — no derivable</em>}</td></tr>
+                  <tr><th>created</th><td>{m.created || <em className="dim">{t("pane.emptyNotDerivable")}</em>}</td></tr>
                   <tr><th>updated</th><td>{m.updated}</td></tr>
                   <tr><th>author</th><td>{m.author}</td></tr>
                   {m.pillar && <tr><th>pillar</th><td>{m.pillar}</td></tr>}
                   {m.status && <tr><th>status</th><td>{m.status}</td></tr>}
                   {m.resource && <tr><th>resource</th><td>{m.resource}</td></tr>}
                   <tr><th>tags</th><td>{m.tags.join(", ") || "—"}</td></tr>
-                  <tr><th>ruta</th><td><code>{m.vaultPath}</code></td></tr>
-                  <tr><th>autoría</th><td>{m.humanWords} humano / {m.agentWords} agente</td></tr>
+                  <tr><th>{t("pane.fieldPath")}</th><td><code>{m.vaultPath}</code></td></tr>
+                  <tr><th>{t("pane.fieldAuthorship")}</th><td>{t("pane.humanAgent", { human: m.humanWords, agent: m.agentWords })}</td></tr>
                 </tbody>
               </table>
             )}
 
             {tab === "links" && (
               <>
-                <h2>Enlaces salientes ({data.outbound.length})</h2>
-                {data.outbound.length === 0 ? <p className="dim">Ninguno.</p> : (
+                <h2>{t("pane.outbound", { n: data.outbound.length })}</h2>
+                {data.outbound.length === 0 ? <p className="dim">{t("pane.none")}</p> : (
                   <ul>{data.outbound.map((r) => (
                     <li key={r.id}><Link href={`/note/${encodeURIComponent(r.id)}`}>{r.title}</Link></li>
                   ))}</ul>
                 )}
-                <h2>Enlaces entrantes ({data.backlinks.length})</h2>
-                {data.backlinks.length === 0 ? <p className="dim">Ninguno — huérfana.</p> : (
+                <h2>{t("pane.inbound", { n: data.backlinks.length })}</h2>
+                {data.backlinks.length === 0 ? <p className="dim">{t("pane.noneOrphan")}</p> : (
                   <ul>{data.backlinks.map((r) => (
                     <li key={r.id}><Link href={`/note/${encodeURIComponent(r.id)}`}>{r.title}</Link></li>
                   ))}</ul>
@@ -324,9 +326,9 @@ export default function ArticlePane({
 
         {conflict !== null && (
           <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--link-red)" }}>
-            <p className="warn" style={{ margin: "0 0 6px" }}>El archivo cambió en disco.</p>
-            <button onClick={() => location.reload()}>Recargar</button>{" "}
-            <button className="primary" onClick={() => { setConflict(null); save(true); }}>Sobrescribir</button>
+            <p className="warn" style={{ margin: "0 0 6px" }}>{t("pane.changedOnDisk")}</p>
+            <button onClick={() => location.reload()}>{t("pane.reload")}</button>{" "}
+            <button className="primary" onClick={() => { setConflict(null); save(true); }}>{t("pane.overwrite")}</button>
           </div>
         )}
       </div>
@@ -335,10 +337,10 @@ export default function ArticlePane({
 
       {(
         <div className="panebar">
-          <button onClick={() => doMark("human")} disabled={!hasSel}>Marcar como mío</button>
-          <button onClick={() => doMark("ai")} disabled={!hasSel}>Marcar como IA</button>
-          <button onClick={() => { const v = viewRef.current; if (v && unmarkSelection(v)) onChange(); }}>Quitar marca</button>
-          <button onClick={() => setHideProv((v) => !v)}>{hideProv ? "Mostrar autoría" : "Ocultar autoría"}</button>
+          <button onClick={() => doMark("human")} disabled={!hasSel}>{t("pane.markMine")}</button>
+          <button onClick={() => doMark("ai")} disabled={!hasSel}>{t("pane.markAi")}</button>
+          <button onClick={() => { const v = viewRef.current; if (v && unmarkSelection(v)) onChange(); }}>{t("pane.unmark")}</button>
+          <button onClick={() => setHideProv((v) => !v)}>{hideProv ? t("pane.showAuthorship") : t("pane.hideAuthorship")}</button>
           <span className="dim">{status}</span>
           <span style={{ marginLeft: "auto" }} className="dim">⌘S · ⌘clic</span>
         </div>

@@ -4,7 +4,8 @@ import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveVault, rememberVault, readSettings, inspectVault } from "../src/appdata.mjs";
+import { resolveVault, rememberVault, readSettings, inspectVault, resolveLocale, seedLocale } from "../src/appdata.mjs";
+import { menuT } from "./menu-messages.mjs";
 import { serverEnv, SERVER_ARGV } from "./server-env.mjs";
 
 /**
@@ -61,7 +62,7 @@ app.setName("Summa Wiki");
  */
 function vaultConfig() {
   const { path: vault } = resolveVault();
-  const fallback = { name: "Wiki", icon: null };
+  const fallback = { name: "Summa Wiki", icon: null };
   if (!vault) return fallback;
 
   // `.summa/` primero, `04-Sistema/` después. En el PRIMER arranque tras la
@@ -129,7 +130,25 @@ let server = null;
 let quitting = false;
 
 function startServer() {
-  const isPackaged = app.isPackaged;
+  /*
+   * `app.isPackaged` NO sirve aquí, y el motivo es una trampa propia.
+   *
+   * Ese getter decide mirando el nombre del ejecutable: si no se llama
+   * `electron`, se da por empaquetado. Pero `scripts/dev-brand.mjs` —que corre
+   * solo en el postinstall— renombra `Electron.app` a `Summa Wiki.app` para que
+   * la barra de menús diga la marca durante el desarrollo. Desde ese renombrado,
+   * `npm run desktop` se declaraba empaquetado: serverEnv le ponía
+   * NODE_ENV=production y NEXT_BUILD_DIR=.next-build, y el servidor servía la
+   * build vieja de `.next-build` en vez de compilar las fuentes. Editar CSS o
+   * componentes no cambiaba nada en pantalla y no había ningún error que lo
+   * delatara — la app arrancaba perfecta, sirviendo un bundle congelado.
+   *
+   * `process.defaultApp` no se puede confundir: Electron lo define cuando se
+   * lanza con la ruta de un script (`electron electron/main.js`), que es
+   * exactamente el caso de desarrollo, y lo deja sin definir en un paquete de
+   * verdad. Es independiente de cómo se llame el binario.
+   */
+  const isPackaged = app.isPackaged && !process.defaultApp;
   const node = process.env.WIKI_NODE || (isPackaged ? process.execPath : "node");
 
   // El entorno se arma en server-env.mjs, no aquí: la prueba de humo del
@@ -158,10 +177,8 @@ function startServer() {
   });
   server.on("error", (e) => {
     dialog.showErrorBox(
-      "No se pudo arrancar el servidor",
-      `No se encontró \`${node}\`.\n\n${e.message}\n\n` +
-      `Lanza la app desde una terminal (npm run desktop) o exporta WIKI_NODE ` +
-      `con la ruta absoluta a node.`,
+      t("serverFailedTitle"),
+      t("serverFailedBody", { node: `\`${node}\``, message: e.message }),
     );
     app.quit();
   });
@@ -172,8 +189,8 @@ function startServer() {
   server.on("exit", (code, signal) => {
     if (quitting || signal) return;
     dialog.showErrorBox(
-      "El servidor se detuvo",
-      `\`server.ts\` terminó con código ${code}.\n\nLog de error:\n${lastStderr}`,
+      t("serverStoppedTitle"),
+      t("serverStoppedBody", { code, log: lastStderr }),
     );
   });
 }
@@ -223,8 +240,8 @@ async function restartServer() {
     // `npm run dev` aparte, por ejemplo). Arrancar otro solo produciría un
     // EADDRINUSE ilegible.
     dialog.showErrorBox(
-      "No se pudo reiniciar",
-      `El puerto ${PORT} sigue ocupado por otro proceso. Ciérralo y vuelve a intentarlo.`,
+      t("restartFailedTitle"),
+      t("restartFailedBody", { port: PORT }),
     );
     return false;
   }
@@ -261,6 +278,7 @@ async function createWindow() {
     x: s.x, y: s.y,
     minWidth: 900,
     minHeight: 560,
+    icon: windowIcon(),
     // Sin barra de título: el masthead ocupa el borde superior. La sangría
     // para los semáforos y la región arrastrable las pone globals.css bajo
     // [data-desktop] — ver preload.cjs.
@@ -350,10 +368,10 @@ async function openVault(dir = null) {
   let target = dir;
   if (!target) {
     const r = await dialog.showOpenDialog(win ?? undefined, {
-      title: "Elegir vault",
-      message: "La carpeta donde vive tu base de conocimiento",
+      title: t("pickVaultTitle"),
+      message: t("pickVaultMessage"),
       properties: ["openDirectory", "createDirectory"],
-      buttonLabel: "Abrir",
+      buttonLabel: t("pickVaultButton"),
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false, reason: "cancelled" };
     target = r.filePaths[0];
@@ -369,11 +387,11 @@ async function openVault(dir = null) {
   if (kind === "empty") {
     const { response } = await dialog.showMessageBox(win ?? undefined, {
       type: "question",
-      buttons: ["Usarla igual", "Cancelar"],
+      buttons: [t("emptyVaultUseAnyway"), t("emptyVaultCancel")],
       defaultId: 1,
       cancelId: 1,
-      message: "Esa carpeta está vacía",
-      detail: "No se encontró ningún archivo .md adentro. Puedes usarla como vault nuevo, pero al abrirla no habrá nada que leer.",
+      message: t("emptyVaultMessage"),
+      detail: t("emptyVaultDetail"),
     });
     if (response !== 0) return { ok: false, reason: "cancelled" };
   }
@@ -386,6 +404,18 @@ async function openVault(dir = null) {
   return { ok, vault: target };
 }
 
+/**
+ * El traductor del menú, releído en cada uso.
+ *
+ * Una función y no una constante porque el idioma cambia en caliente desde el
+ * panel de la página: la renderer avisa por IPC, se vuelve a construir el menú,
+ * y esta llamada tiene que devolver ya la tabla nueva. Una constante resuelta al
+ * cargar el módulo dejaría el menú en el idioma del arranque hasta reiniciar.
+ */
+function t(key, vars) {
+  return menuT(resolveLocale())(key, vars);
+}
+
 /** Los últimos vaults abiertos, para el submenú. Se reconstruye al cambiar. */
 function recentsSubmenu() {
   const { recents } = readSettings();
@@ -394,7 +424,7 @@ function recentsSubmenu() {
     .filter((r) => r !== current)
     .slice(0, 8)
     .map((r) => ({ label: r.replace(process.env.HOME ?? process.env.USERPROFILE ?? "~", "~"), click: () => openVault(r) }));
-  return items.length ? items : [{ label: "Sin vaults recientes", enabled: false }];
+  return items.length ? items : [{ label: t("noRecents"), enabled: false }];
 }
 
 function buildMenu() {
@@ -403,27 +433,27 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(mac ? [{ role: "appMenu" }] : []),
     {
-      label: "Archivo",
+      label: t("file"),
       submenu: [
-        { label: "Abrir nota…", accelerator: "CmdOrCtrl+O", click: () => press("o") },
-        { label: "Nueva terminal", accelerator: "CmdOrCtrl+T", click: newTerminal },
+        { label: t("openNote"), accelerator: "CmdOrCtrl+O", click: () => press("o") },
+        { label: t("newTerminal"), accelerator: "CmdOrCtrl+T", click: newTerminal },
         { type: "separator" },
-        { label: "Abrir vault…", accelerator: "CmdOrCtrl+Shift+O", click: () => openVault() },
+        { label: t("openVault"), accelerator: "CmdOrCtrl+Shift+O", click: () => openVault() },
         {
-          label: "Nuevo vault…",
+          label: t("newVault"),
           accelerator: "CmdOrCtrl+Shift+N",
           click: () => win?.loadURL(`${ORIGIN}/setup?new=1`).catch(() => {}),
         },
-        { label: "Vaults recientes", submenu: recentsSubmenu() },
+        { label: t("recentVaults"), submenu: recentsSubmenu() },
         { type: "separator" },
-        { label: "Guardar", accelerator: "CmdOrCtrl+S", click: () => press("s") },
+        { label: t("save"), accelerator: "CmdOrCtrl+S", click: () => press("s") },
         { type: "separator" },
         mac ? { role: "close" } : { role: "quit" },
       ],
     },
     { role: "editMenu" },
     {
-      label: "Ver",
+      label: t("view"),
       submenu: [
         { role: "reload" },
         { role: "forceReload" },
@@ -441,7 +471,7 @@ function buildMenu() {
 // ─── Ciclo de vida ──────────────────────────────────────────────────────────
 
 /** Identidad leída una vez al arrancar; el splash y el Dock la usan. */
-let brand = { name: "Wiki", icon: null };
+let brand = { name: "Summa Wiki", icon: null };
 
 /*
  * Icono del Dock, en caliente. Es la mitad de la identidad que NO está
@@ -468,7 +498,44 @@ function applyDockIcon() {
   }
 }
 
+/**
+ * Icono de la VENTANA, que en Windows y Linux es otra cosa que el del Dock.
+ *
+ * Fuera de macOS no hay `app.dock`, así que applyDockIcon() se iba de vacío y
+ * la ventana se quedaba con el átomo de Electron. En la app instalada da igual
+ * —Windows saca el icono de la ventana del propio .exe, que ya lo lleva
+ * incrustado desde build/icon.ico— pero en `npm run desktop` no hay .exe del
+ * que sacarlo y hay que dárselo explícitamente.
+ *
+ * Mismo orden de preferencia que el Dock: primero el icono que el usuario haya
+ * configurado en su vault, después el de la app. Devuelve `undefined` si no
+ * hay ninguno, que es justo lo que BrowserWindow espera para "usa el de serie".
+ */
+function windowIcon() {
+  if (process.platform === "darwin") return undefined;
+  // El .ico primero: trae los seis tamaños y Windows elige el que toca en cada
+  // sitio. Un PNG suelto obliga al sistema a escalar desde uno solo.
+  for (const candidate of [brand.icon, path.join(ROOT, "build", "icon.ico"), path.join(ROOT, "build", "icon.png")]) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+    const img = nativeImage.createFromPath(candidate);
+    if (!img.isEmpty()) return img;
+  }
+  return undefined;
+}
+
 app.whenReady().then(() => {
+  /*
+    El idioma del sistema entra al proyecto AQUÍ y en ningún otro sitio.
+    `app.getLocale()` es lo único que sabe qué idioma tiene el sistema
+    operativo: el servidor de Next corre sin cabeza y `process.env.LANG` no es
+    fiable dentro de un `.app` empaquetado.
+
+    Solo siembra: si ya hay una elección guardada, `seedLocale` no la toca. Un
+    usuario que puso inglés en un Mac en español lo puso a propósito, y volver a
+    preguntarle al sistema en cada arranque le desharía la elección.
+  */
+  seedLocale(app.getLocale());
+
   brand = vaultConfig();
   applyDockIcon();
   buildMenu();
@@ -484,11 +551,22 @@ app.whenReady().then(() => {
     if (typeof dir !== "string" || !dir.trim()) return { ok: false, reason: "missing" };
     return openVault(dir);
   });
+  /*
+    La página cambió el idioma y el menú nativo no se entera solo.
+
+    Un aviso explícito y no vigilar `settings.json`: `writeSettings` escribe con
+    rename atómico, que reemplaza el inodo y deja sordo a `fs.watch` en macOS,
+    y la alternativa (`fs.watchFile`) es un sondeo permanente para un evento que
+    ocurre dos veces en la vida de la app. La única vía por la que el idioma
+    cambia es este panel, así que que avise él es exacto y gratis.
+  */
+  ipcMain.handle("locale:changed", () => { buildMenu(); return true; });
+
   ipcMain.handle("dialog:folder", async (_e, title) => {
     const r = await dialog.showOpenDialog(win ?? undefined, {
-      title: typeof title === "string" && title ? title : "Elegir carpeta",
+      title: typeof title === "string" && title ? title : t("chooseFolder"),
       properties: ["openDirectory", "createDirectory"],
-      buttonLabel: "Elegir",
+      buttonLabel: t("choose"),
     });
     return r.canceled ? null : (r.filePaths[0] ?? null);
   });

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "./I18n";
 
 interface Sel { page: number; text: string; coords: string; }
 interface Highlight {
@@ -31,6 +32,7 @@ export default function PdfViewer({
   /** Present only when a note pane is open to receive the quote. */
   onQuote?: (md: string) => void;
 }) {
+  const t = useT();
   const host = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   /** Bumped on every render; stale runs bail out instead of appending pages. */
@@ -129,7 +131,7 @@ export default function PdfViewer({
 
       drawNearby(mine);
     } catch (e: any) {
-      if (mine === gen.current) setErr(e?.message ?? "no se pudo abrir el PDF");
+      if (mine === gen.current) setErr(e?.message ?? t("pdf.openFailed"));
     } finally {
       clearTimeout(stall);
       // Always release the tracker. If the document never resolves, leaving
@@ -215,7 +217,7 @@ export default function PdfViewer({
             link.title = a.url;
           } else if (a.dest) {
             // Destino interno: se salta a su página dentro del propio visor.
-            el.title = "Ir a la sección";
+            el.title = t("pdf.goToSection");
             el.addEventListener("click", async (ev) => {
               ev.preventDefault();
               try {
@@ -272,7 +274,7 @@ export default function PdfViewer({
       mk.dataset.page = String(h.page);
       mk.dataset.coords = h.coords.join(",");
       mk.dataset.note = h.noteId;
-      mk.title = "Clic para quitar el resaltado";
+      mk.title = t("pdf.clickToUnhighlight");
       span.textContent = "";
       if (a > 0) span.appendChild(document.createTextNode(text.slice(0, a)));
       span.appendChild(mk);
@@ -302,7 +304,7 @@ export default function PdfViewer({
       const mk = (e.target as HTMLElement).closest("mark.hl") as HTMLElement | null;
       if (!mk) return;
       e.preventDefault(); e.stopPropagation();
-      if (!confirm("¿Quitar este resaltado? Se borra también la cita de la nota.")) return;
+      if (!confirm(t("pdf.confirmUnhighlight"))) return;
       const noteId = mk.dataset.note;
       if (noteId) {
         await fetch("/api/pdf-highlights", {
@@ -417,7 +419,7 @@ export default function PdfViewer({
       }]);
     } else {
       navigator.clipboard.writeText(md);
-      setCopied("cita copiada");
+      setCopied(t("pdf.quoteCopied"));
       setTimeout(() => setCopied(""), 1600);
     }
     window.getSelection()?.removeAllRanges();
@@ -427,9 +429,9 @@ export default function PdfViewer({
   return (
     <div className="pdfwrap">
       <div className="pdfbar">
-        <button onClick={() => setScale((v) => Math.max(0.5, +(v - 0.25).toFixed(2)))} title="Alejar">−</button>
+        <button onClick={() => setScale((v) => Math.max(0.5, +(v - 0.25).toFixed(2)))} title={t("pdf.zoomOut")}>−</button>
         <span className="dim">{Math.round(scale * 100)}%</span>
-        <button onClick={() => setScale((v) => Math.min(3, +(v + 0.25).toFixed(2)))} title="Acercar">+</button>
+        <button onClick={() => setScale((v) => Math.min(3, +(v + 0.25).toFixed(2)))} title={t("pdf.zoomIn")}>+</button>
 
         <span className="pdfpageno">
           <input
@@ -437,7 +439,7 @@ export default function PdfViewer({
             onChange={(e) => setPageInput(e.target.value.replace(/\D/g, ""))}
             onKeyDown={(e) => { if (e.key === "Enter") goToPage(Number(pageInput)); }}
             onBlur={() => goToPage(Number(pageInput))}
-            aria-label="Página"
+            aria-label={t("pdf.page")}
           />
           <span className="dim"> de {pages || "…"}</span>
         </span>
@@ -449,14 +451,14 @@ export default function PdfViewer({
               className="swatch"
               style={{ background: c.css }}
               disabled={!sel}
-              title={sel ? `Resaltar en ${c.id}` : "Selecciona texto primero"}
+              title={sel ? `Resaltar en ${c.id}` : t("pdf.selectTextFirst")}
               onClick={() => highlight(c.id)}
             />
           ))}
         </span>
 
         <span className="dim">{copied}</span>
-        <a href={src} download className="dim" style={{ marginLeft: "auto" }}>Descargar</a>
+        <a href={src} download className="dim" style={{ marginLeft: "auto" }}>{t("chrome.download")}</a>
       </div>
 
       <div
@@ -471,10 +473,10 @@ export default function PdfViewer({
         }}
       >
         {err && <p className="warn">Error: {err}</p>}
-        {!err && pages === 0 && !slow && <p className="dim">Cargando PDF…</p>}
+        {!err && pages === 0 && !slow && <p className="dim">{t("pdf.loading")}</p>}
         {!err && pages === 0 && slow && (
           <div style={{ border: "1px solid var(--link-red)", padding: 10, fontSize: 13 }}>
-            <p className="warn" style={{ margin: "0 0 4px" }}>El visor no arrancó.</p>
+            <p className="warn" style={{ margin: "0 0 4px" }}>{t("pdf.viewerFailed")}</p>
             <a href={src} download>Descargar {name}</a>
           </div>
         )}
@@ -494,7 +496,7 @@ export default function PdfViewer({
               Copiar cita
             </button>
             {onQuote && (
-              <button className="primary" onClick={() => highlight("yellow")}>Añadir a la nota</button>
+              <button className="primary" onClick={() => highlight("yellow")}>{t("pdf.addToNote")}</button>
             )}
           </div>
         </div>

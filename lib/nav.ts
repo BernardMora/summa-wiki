@@ -4,6 +4,7 @@ import { isCore, isArticle, vaultPath } from "./identity.ts";
 import { ARCH, PRIMARY_BUNDLE } from "@/src/config.ts";
 import { underAny } from "@/src/architecture.ts";
 import type { Note } from "@/src/types.ts";
+import { getT, getCollator } from "./i18n.server.ts";
 
 export interface NavItem { id: string; title: string; pinned?: boolean; rank?: number; }
 export interface NavGroup {
@@ -50,6 +51,7 @@ function matches(c: Category, n: Note, p: string): boolean {
  * them, and it keeps the article page independent of the sidebar's limits.
  */
 export function categoriesOf(id: string): { id: string; label: string }[] {
+  const cmp = getCollator();
   const idx = getIndex();
   const root = idx.bundles.find((b) => b.id === PRIMARY_BUNDLE)?.root ?? "";
   const n = idx.notes.find((x) => x.id === id);
@@ -58,7 +60,7 @@ export function categoriesOf(id: string): { id: string; label: string }[] {
   return readCategories()
     .filter((c) => !c.exclude?.includes(id) && (c.notes.includes(id) || matches(c, n, p)))
     .map((c) => ({ id: c.id, label: c.label }))
-    .sort((a, b) => a.label.localeCompare(b.label, "es"));
+    .sort((a, b) => cmp.compare(a.label, b.label));
 }
 
 /**
@@ -67,6 +69,8 @@ export function categoriesOf(id: string): { id: string; label: string }[] {
  * `limit` caps the items returned per group; `total` always reports the truth.
  */
 export function navGroups(limit = 10): NavGroup[] {
+  const t = getT();
+  const cmp = getCollator();
   const idx = getIndex();
   const root = idx.bundles.find((b) => b.id === PRIMARY_BUNDLE)?.root ?? "";
   const cats = readCategories();
@@ -88,7 +92,7 @@ export function navGroups(limit = 10): NavGroup[] {
     items.sort((a, b) =>
       Number(b.pinned ?? false) - Number(a.pinned ?? false) ||
       (b.rank ?? 0) - (a.rank ?? 0) ||
-      a.title.localeCompare(b.title, "es"));
+      cmp.compare(a.title, b.title));
 
     return {
       id: c.id, label: c.label, blurb: c.blurb,
@@ -100,11 +104,11 @@ export function navGroups(limit = 10): NavGroup[] {
   if (rest.length) {
     groups.push({
       id: "__uncategorised",
-      label: "Sin categoría",
-      blurb: "Todavía sin regla que las recoja — candidatas a categoría nueva.",
+      label: t("nav.uncategorised"),
+      blurb: t("nav.uncategorisedBlurb"),
       total: rest.length,
       items: rest
-        .sort((a, b) => b.backlinks.length - a.backlinks.length || a.title.localeCompare(b.title, "es"))
+        .sort((a, b) => b.backlinks.length - a.backlinks.length || cmp.compare(a.title, b.title))
         .slice(0, limit)
         .map((n) => ({ id: n.id, title: n.title })),
     });
@@ -114,5 +118,5 @@ export function navGroups(limit = 10): NavGroup[] {
   // a category, and sorting it under S would hide that.
   return groups.sort((a, b) =>
     Number(a.id === "__uncategorised") - Number(b.id === "__uncategorised") ||
-    a.label.localeCompare(b.label, "es"));
+    cmp.compare(a.label, b.label));
 }

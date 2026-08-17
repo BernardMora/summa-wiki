@@ -2,6 +2,7 @@
 import { isArticlePath } from "@/src/match.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fuzzy, markHits } from "@/lib/fuzzy.ts";
+import { useT, useCollator } from "./I18n";
 
 export interface LinkTarget { id: string; title: string; path: string; bundle: string; type: string }
 export interface LinkQuery { query: string; from: number; to: number; x: number; y: number }
@@ -19,6 +20,8 @@ export default function LinkPicker({
   onPick: (t: LinkTarget) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const cmp = useCollator();
   const [items, setItems] = useState<LinkTarget[]>([]);
   const [primary, setPrimary] = useState("");
   const [sel, setSel] = useState(0);
@@ -48,7 +51,7 @@ export default function LinkPicker({
       if (!t && !p) continue;
       out.push({ it, score: Math.max((t?.score ?? -1e9) * 2, p?.score ?? -1e9), hits: t?.hits ?? [] });
     }
-    out.sort((a, b) => b.score - a.score || a.it.title.localeCompare(b.it.title, "es"));
+    out.sort((a, b) => b.score - a.score || cmp.compare(a.it.title, b.it.title));
     return out.slice(0, 12);
   }, [items, q.query]);
 
@@ -105,7 +108,7 @@ export default function LinkPicker({
           </li>
         ))}
       </ul>
-      <div className="lpfoot"><span>↑↓</span><span>↵ insertar</span><span>esc cancelar</span></div>
+      <div className="lpfoot"><span>↑↓</span><span>{t("lp.insert")}</span><span>{t("lp.escCancel")}</span></div>
     </div>
   );
 }

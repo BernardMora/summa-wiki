@@ -4,6 +4,7 @@ import path from "node:path";
 import { VAULT, invalidate } from "@/lib/server.ts";
 import { bundleOf } from "@/src/config.ts";
 import { relink } from "@/lib/relink.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -38,21 +39,21 @@ function countInside(dir: string): number {
 export async function POST(req: Request) {
   const { action, rel, name, confirm } = await req.json();
   const abs = safe(rel ?? "");
-  if (!abs) return NextResponse.json({ error: "ruta inválida" }, { status: 400 });
-  if (!fs.existsSync(abs)) return NextResponse.json({ error: "no existe" }, { status: 404 });
+  if (!abs) return NextResponse.json({ error: getT()("err.invalidPath") }, { status: 400 });
+  if (!fs.existsSync(abs)) return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 });
 
   const isDir = fs.statSync(abs).isDirectory();
 
   if (action === "mkdir") {
-    if (!isDir) return NextResponse.json({ error: "solo dentro de una carpeta" }, { status: 400 });
+    if (!isDir) return NextResponse.json({ error: getT()("err.onlyInsideFolder") }, { status: 400 });
     // Las carpetas conservan la forma del nombre, igual que en rename, pero se
     // rechaza lo que rompería rutas: separadores, `..` y caracteres hostiles
     // para URLs. Es la misma clase de problema que causó el bug NFD.
     const base = (name ?? "").trim().replace(/[\/\\:*?"<>|]/g, "").replace(/^\.+/, "").trim();
-    if (!base) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
+    if (!base) return NextResponse.json({ error: getT()("err.nameRequired") }, { status: 400 });
     const dst = path.join(abs, base);
-    if (!safe(path.relative(VAULT, dst))) return NextResponse.json({ error: "ruta inválida" }, { status: 400 });
-    if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe" }, { status: 409 });
+    if (!safe(path.relative(VAULT, dst))) return NextResponse.json({ error: getT()("err.invalidPath") }, { status: 400 });
+    if (fs.existsSync(dst)) return NextResponse.json({ error: getT()("err.alreadyExists") }, { status: 409 });
     fs.mkdirSync(dst);
     return NextResponse.json({ ok: true, rel: path.relative(VAULT, dst).split(path.sep).join("/") });
   }
@@ -60,13 +61,13 @@ export async function POST(req: Request) {
   if (action === "move") {
     const destAbs = safe(name ?? "");                    // `name` lleva la carpeta destino
     if (!destAbs || !fs.existsSync(destAbs) || !fs.statSync(destAbs).isDirectory())
-      return NextResponse.json({ error: "destino inválido" }, { status: 400 });
+      return NextResponse.json({ error: getT()("err.invalidTarget") }, { status: 400 });
     const dst = path.join(destAbs, path.basename(abs));
     if (dst === abs) return NextResponse.json({ ok: true, unchanged: true });
     // Mover una carpeta dentro de sí misma la borraría del árbol.
     if (isDir && (destAbs === abs || destAbs.startsWith(abs + path.sep)))
-      return NextResponse.json({ error: "no se puede mover una carpeta dentro de sí misma" }, { status: 400 });
-    if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe algo con ese nombre ahí" }, { status: 409 });
+      return NextResponse.json({ error: getT()("err.folderIntoItself") }, { status: 400 });
+    if (fs.existsSync(dst)) return NextResponse.json({ error: getT()("err.alreadyExistsThere") }, { status: 409 });
 
     // El mapa de movimientos se arma ANTES de mover: hay que saber a qué
     // apuntaba cada ruta vieja para poder recalcular las relativas.
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
   }
 
   if (action === "rename") {
-    if (!name?.trim()) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
+    if (!name?.trim()) return NextResponse.json({ error: getT()("err.nameRequired") }, { status: 400 });
 
     /*
      * La regla de slug de la spec (sección 3) es para NOTAS. Aplicarla a todo
@@ -126,7 +127,7 @@ export async function POST(req: Request) {
       // punto inicial: `.DS_Store` y `.gitignore` son nombres legítimos.
       const clean = name.trim().replace(/[\/\\:*?"<>|]/g, "").trim();
       if (!clean || clean === "." || clean === "..") {
-        return NextResponse.json({ error: "nombre inválido" }, { status: 400 });
+        return NextResponse.json({ error: getT()("err.invalidName") }, { status: 400 });
       }
       // extname(".DS_Store") es "" — Node no trata el punto inicial como
       // extensión, que es justo lo que hace falta aquí.
@@ -134,7 +135,7 @@ export async function POST(req: Request) {
     }
     const dst = path.join(path.dirname(abs), base);
     if (dst === abs) return NextResponse.json({ ok: true, rel, id: isDir ? undefined : idOf(abs) });
-    if (fs.existsSync(dst)) return NextResponse.json({ error: "ya existe" }, { status: 409 });
+    if (fs.existsSync(dst)) return NextResponse.json({ error: getT()("err.alreadyExists") }, { status: 409 });
     // Two-step: a case-only rename is a no-op on this filesystem otherwise.
     const tmp = `${abs}.__rename__`;
     fs.renameSync(abs, tmp);
@@ -160,5 +161,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ error: "acción desconocida" }, { status: 400 });
+  return NextResponse.json({ error: getT()("err.unknownAction") }, { status: 400 });
 }

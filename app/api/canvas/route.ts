@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveAsset, VAULT } from "@/lib/server.ts";
+import { getT } from "@/lib/i18n.server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const { p, nodes, edges, mtimeMs } = (await req.json()) ?? {};
   if (!p || !Array.isArray(nodes) || !Array.isArray(edges))
-    return NextResponse.json({ error: "p, nodes y edges requeridos" }, { status: 400 });
+    return NextResponse.json({ error: getT()("err.canvasFieldsRequired") }, { status: 400 });
   const abs = safePath(p);
   if (!abs || !fs.existsSync(abs)) return NextResponse.json({ error: "not found" }, { status: 404 });
 

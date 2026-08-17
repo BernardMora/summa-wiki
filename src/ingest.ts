@@ -284,7 +284,14 @@ export function planIngest(scan: ScanResult, arch: Architecture): Plan {
 
     const dir = path.dirname(f.rel);
     const parts = dir === "." ? [] : dir.split(path.sep).map((d) => slugify(d));
-    let to = [inbox, ...parts, slugify(path.basename(f.rel))].join("/");
+    // Las imágenes van a `assets/` de su carpeta, no sueltas junto a las notas
+    // (spec §7). No es cosmético: una carpeta de origen con doscientas fotos y
+    // tres notas deja la bandeja ilegible justo cuando hay que decidir qué es
+    // cada cosa, y el agente pierde de vista las notas entre las fotos. Ahí
+    // dentro, además, ya están en el sitio que la nota destino va a necesitar:
+    // moverlas es cambiar de carpeta, no inventarse una convención.
+    const bucket = f.kind === "image" ? [...parts, "assets"] : parts;
+    let to = [inbox, ...bucket, slugify(path.basename(f.rel))].join("/");
 
     // Dos archivos distintos con el mismo nombre en la misma carpeta destino:
     // se numera en vez de pisar. Pasa en cuanto dos carpetas de origen tienen
