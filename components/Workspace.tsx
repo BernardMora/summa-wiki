@@ -1,5 +1,6 @@
 "use client";
 import { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
 import ArticlePane, { type Payload } from "./ArticlePane.tsx";
@@ -11,9 +12,15 @@ import TerminalPane from "./TerminalPane.tsx";
 import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isTermId, isFileId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 import { useT } from "./I18n";
+import SidebarToggle from "./SidebarToggle.tsx";
+import { queueTerminalInput, registerTerminalWorkspace, terminalTargets } from "./terminalBridge.ts";
 
 export interface Tab { id: string; title: string; }
-export interface Pane { key: string; tabs: Tab[]; activeId: string | null; }
+export interface Pane {
+  key: string; tabs: Tab[]; activeId: string | null;
+  /** Any number of columns; each column has at most one top and one bottom pane. */
+  column: string; slot: "top" | "bottom";
+}
 
 // Definidos una sola vez en Tabs.tsx: la copia que vivía aquí no conocía el
 // grafo y habría producido /note/graph%3A al sincronizar la URL.
@@ -29,9 +36,16 @@ export const useWorkspace = () => useContext(WsCtx);
 
 const KEY = "wiki.workspace";
 const newKey = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+const newColumn = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+const normalizePanes = (input: Pane[]) => {
+  const panes = input.filter((pane) => pane.tabs.length > 0);
+  return panes.map((pane) => panes.filter((candidate) => candidate.column === pane.column).length === 1
+    ? { ...pane, slot: "top" as const } : pane);
+};
 
 /** "tabs" = sobre la barra de pestañas: reordenar en vez de dividir. */
-type Zone = "left" | "right" | "center" | "tabs";
+type Zone = "left" | "right" | "top" | "bottom" | "center" | "tabs";
+type LayoutDirection = "columns" | "rows";
 interface DragState {
   tab: Tab; fromPane: string; x: number; y: number;
   overPane: string | null; zone: Zone;
@@ -60,14 +74,15 @@ export default function Workspace({ initial, seed }: {
   const t = useT();
   const [panes, setPanes] = useState<Pane[]>([
     initial
-      ? { key: "p0", tabs: [{ id: initial.id, title: initial.meta.title }], activeId: initial.id }
-      : { key: "p0", tabs: [], activeId: null },
+      ? { key: "p0", column: "c0", slot: "top", tabs: [{ id: initial.id, title: initial.meta.title }], activeId: initial.id }
+      : { key: "p0", column: "c0", slot: "top", tabs: [], activeId: null },
   ]);
   const [activePane, setActivePane] = useState("p0");
   const [ratio, setRatio] = useState(0.5);
+  const [rowRatios, setRowRatios] = useState<Record<string, number>>({});
   const [drag, setDrag] = useState<DragState | null>(null);
   const tabBars = useRef(new Map<string, HTMLElement>());
-  const [barDrag, setBarDrag] = useState(false);
+  const [barDrag, setBarDrag] = useState<{ axis: LayoutDirection; column?: string } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const paneEls = useRef(new Map<string, HTMLElement>());
   // Every note pane registers its editor; a quote goes to the most recently
@@ -77,6 +92,8 @@ export default function Workspace({ initial, seed }: {
   const [hasNotePane, setHasNotePane] = useState(false);
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; paneKey: string; tab: Tab } | null>(null);
+  const [terminalMenuOpen, setTerminalMenuOpen] = useState(false);
 
   // ---------------------------------------------------------------- persistence
   useEffect(() => {
@@ -89,6 +106,14 @@ export default function Workspace({ initial, seed }: {
           // la URL (/workspace) se restaura el layout tal cual: no hay nada
           // que forzar al frente, y la pestaña que se pidió por `?open=` la
           // añade el efecto de más abajo.
+          // Migration: the previous model stored one global orientation. Turn
+          // horizontal panes into columns and at most the first two vertical
+          // panes into the top/bottom pair of a column.
+          s.panes = s.panes.map((pane: Partial<Pane>, index: number) => ({
+            ...pane,
+            column: pane.column ?? (s.layout === "rows" && index < 2 ? "c0" : `c${index}`),
+            slot: pane.slot ?? (s.layout === "rows" && index === 1 ? "bottom" : "top"),
+          }));
           if (initial) {
             const has = s.panes.some((p: Pane) => p.tabs.some((t) => t.id === initial.id));
             if (!has) {
@@ -103,6 +128,7 @@ export default function Workspace({ initial, seed }: {
             (initial && s.panes.find((p: Pane) => p.activeId === initial.id)?.key) ?? s.panes[0].key,
           );
           if (typeof s.ratio === "number") setRatio(s.ratio);
+          if (s.rowRatios && typeof s.rowRatios === "object") setRowRatios(s.rowRatios);
         }
       }
     } catch { /* corrupt layout: start fresh */ }
@@ -110,8 +136,8 @@ export default function Workspace({ initial, seed }: {
   }, []);
 
   useEffect(() => {
-    if (hydrated) localStorage.setItem(KEY, JSON.stringify({ panes, ratio }));
-  }, [panes, ratio, hydrated]);
+    if (hydrated) localStorage.setItem(KEY, JSON.stringify({ panes, ratio, rowRatios }));
+  }, [panes, ratio, rowRatios, hydrated]);
 
   // ---------------------------------------------------------------- actions
   const open = useCallback((id: string, title: string, newTab = false) => {
@@ -160,8 +186,41 @@ export default function Workspace({ initial, seed }: {
         const tabs = p.tabs.filter((t) => t.id !== id);
         const wasActive = p.activeId === id;
         return { ...p, tabs, activeId: wasActive ? (tabs[tabs.length - 1]?.id ?? null) : p.activeId };
-      }).filter((p) => p.tabs.length > 0);          // an empty pane disappears
-      return next.length ? next : [{ key: "p0", tabs: [], activeId: null }];
+      });
+      const normalized = normalizePanes(next);      // an empty pane disappears
+      if (!normalized.length) return [{ key: "p0", column: "c0", slot: "top", tabs: [], activeId: null }];
+      return normalized;
+    });
+  }, []);
+
+  const splitTab = useCallback((paneKey: string, tab: Tab, direction: LayoutDirection) => {
+    setPanes((current) => {
+      const sourceIndex = current.findIndex((pane) => pane.key === paneKey);
+      if (sourceIndex < 0) return current;
+      const source = current[sourceIndex];
+      if (direction === "rows" && current.some((pane) => pane.column === source.column && pane.slot === "bottom")) return current;
+      const keepOriginal = source.tabs.length === 1;
+      const remaining = keepOriginal ? source.tabs : source.tabs.filter((item) => item.id !== tab.id);
+      const updatedSource = {
+        ...source,
+        slot: direction === "rows" ? "top" as const : source.slot,
+        tabs: remaining,
+        activeId: source.activeId === tab.id && !keepOriginal ? (remaining.at(-1)?.id ?? null) : source.activeId,
+      };
+      const fresh: Pane = {
+        key: newKey(), tabs: [tab], activeId: tab.id,
+        column: direction === "rows" ? source.column : newColumn(),
+        slot: direction === "rows" ? "bottom" : "top",
+      };
+      const next = [...current];
+      next[sourceIndex] = updatedSource;
+      if (direction === "rows") next.splice(sourceIndex + 1, 0, fresh);
+      else {
+        const lastInColumn = next.reduce((last, pane, index) => pane.column === source.column ? index : last, sourceIndex);
+        next.splice(lastInColumn + 1, 0, fresh);
+      }
+      setActivePane(fresh.key);
+      return next;
     });
   }, []);
 
@@ -187,7 +246,7 @@ export default function Workspace({ initial, seed }: {
           tabs.splice(to, 0, d.tab);
           return ps.map((p) => (p.key === d.fromPane ? { ...p, tabs, activeId: d.tab.id } : p));
         }
-        return ps.map((p) => {
+        const moved = ps.map((p) => {
           if (p.key === d.fromPane) {
             const tabs = p.tabs.filter((t) => t.id !== d.tab.id);
             return { ...p, tabs, activeId: p.activeId === d.tab.id ? (tabs.slice(-1)[0]?.id ?? null) : p.activeId };
@@ -198,11 +257,16 @@ export default function Workspace({ initial, seed }: {
             return { ...p, tabs, activeId: d.tab.id };
           }
           return p;
-        }).filter((p) => p.tabs.length > 0);
+        });
+        return normalizePanes(moved);
       }
 
       if (d.zone === "center" && d.fromPane === d.overPane) return ps;
       if (sameSolo && d.zone !== "center") return ps;    // nothing to split off
+      const targetPane = ps.find((pane) => pane.key === d.overPane);
+      if (!targetPane) return ps;
+      if ((d.zone === "top" || d.zone === "bottom")
+          && ps.some((pane) => pane.column === targetPane.column && pane.key !== targetPane.key)) return ps;
 
       let next = ps.map((p) =>
         p.key === d.fromPane
@@ -216,12 +280,23 @@ export default function Workspace({ initial, seed }: {
           p.key === d.overPane ? { ...p, tabs: [...p.tabs, d.tab], activeId: d.tab.id } : p,
         );
       } else {
-        const fresh: Pane = { key: newKey(), tabs: [d.tab], activeId: d.tab.id };
+        const vertical = d.zone === "top" || d.zone === "bottom";
+        const fresh: Pane = {
+          key: newKey(), tabs: [d.tab], activeId: d.tab.id,
+          column: vertical ? targetPane.column : newColumn(),
+          slot: vertical ? (d.zone === "top" ? "top" : "bottom") : "top",
+        };
         const at = next.findIndex((p) => p.key === d.overPane);
-        next.splice(d.zone === "left" ? at : at + 1, 0, fresh);
+        if (vertical) {
+          next[at] = { ...next[at], slot: d.zone === "top" ? "bottom" : "top" };
+          next.splice(d.zone === "top" ? at : at + 1, 0, fresh);
+        } else {
+          const targetColumnEnd = next.reduce((last, pane, index) => pane.column === targetPane.column ? index : last, at);
+          next.splice(d.zone === "left" ? at : targetColumnEnd + 1, 0, fresh);
+        }
         setActivePane(fresh.key);
       }
-      return next.filter((p) => p.tabs.length > 0);
+      return normalizePanes(next);
     });
   }, []);
 
@@ -245,6 +320,39 @@ export default function Workspace({ initial, seed }: {
     (window as any).__wikiOpen = open;
     return () => { delete (window as any).__wikiOpen; };
   }, [open]);
+
+  useEffect(() => registerTerminalWorkspace({
+    targets: () => panes.flatMap((pane) => pane.tabs.filter((tab) => isTermId(tab.id)).map((tab) => ({ id: tab.id.slice(5), title: tab.title }))),
+    activate: (terminalId) => {
+      const fullId = `term:${terminalId}`;
+      const pane = panes.find((candidate) => candidate.tabs.some((tab) => tab.id === fullId));
+      if (!pane) return;
+      setPanes((current) => current.map((candidate) => candidate.key === pane.key ? { ...candidate, activeId: fullId } : candidate));
+      setActivePane(pane.key);
+    },
+  }), [panes]);
+
+  useEffect(() => {
+    if (!tabMenu) return;
+    const close = () => { setTabMenu(null); setTerminalMenuOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [tabMenu]);
+
+  const pathForTab = useCallback(async (tab: Tab) => {
+    if (isRawId(tab.id) || isPdfId(tab.id) || isImgId(tab.id)) return tab.id.slice(4);
+    if (isCanvasId(tab.id)) return tab.id.slice(7);
+    if (isTermId(tab.id) || isGraphId(tab.id)) return null;
+    const response = await fetch(`/api/note-full?id=${encodeURIComponent(tab.id)}`, { cache: "no-store" });
+    if (!response.ok) return null;
+    return ((await response.json()) as Payload).meta.vaultPath;
+  }, []);
+
+  const addTabToTerminal = useCallback(async (tab: Tab, terminalId?: string) => {
+    const path = await pathForTab(tab);
+    if (!path) return false;
+    return queueTerminalInput(`${path} `, terminalId);
+  }, [pathForTab]);
 
   useEffect(() => {
     document.body.classList.add("workspace");
@@ -292,8 +400,10 @@ export default function Workspace({ initial, seed }: {
           const r = el.getBoundingClientRect();
           if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
             overPane = k;
-            const rel = (e.clientX - r.left) / r.width;
-            zone = rel < 0.28 ? "left" : rel > 0.72 ? "right" : "center";
+            const relX = (e.clientX - r.left) / r.width;
+            const relY = (e.clientY - r.top) / r.height;
+            zone = relY < 0.22 ? "top" : relY > 0.78 ? "bottom"
+              : relX < 0.28 ? "left" : relX > 0.72 ? "right" : "center";
           }
         }
       }
@@ -318,12 +428,22 @@ export default function Workspace({ initial, seed }: {
     if (!barDrag) return;
     const move = (e: MouseEvent) => {
       const b = wrap.current?.getBoundingClientRect();
-      if (b) setRatio(Math.min(0.8, Math.max(0.2, (e.clientX - b.left) / b.width)));
+      if (!b || !barDrag) return;
+      if (barDrag.axis === "columns") {
+        setRatio(Math.min(0.8, Math.max(0.2, (e.clientX - b.left) / b.width)));
+      } else if (barDrag.column) {
+        const column = wrap.current?.querySelector<HTMLElement>(`[data-column="${barDrag.column}"]`);
+        const bounds = column?.getBoundingClientRect();
+        if (bounds) setRowRatios((current) => ({ ...current, [barDrag.column!]: Math.min(0.8, Math.max(0.2, (e.clientY - bounds.top) / bounds.height)) }));
+      }
     };
-    const up = () => { setBarDrag(false); document.body.classList.remove("resizing"); };
+    const up = () => { setBarDrag(null); document.body.classList.remove("resizing", "resizing-rows", "resizing-columns"); };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
-    return () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+    return () => {
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      document.body.classList.remove("resizing", "resizing-rows", "resizing-columns");
+    };
   }, [barDrag]);
 
   const overlayFor = (paneKey: string) => {
@@ -331,44 +451,64 @@ export default function Workspace({ initial, seed }: {
     return <div className={`dropzone ${drag.zone}`} />;
   };
 
-  const cols = panes.length === 2
+  const columns = [...new Set(panes.map((pane) => pane.column))];
+  const tracks = columns.length === 2
     ? `${ratio}fr 7px ${1 - ratio}fr`
-    : panes.map(() => "1fr").join(" 7px ");
+    : columns.map(() => "1fr").join(" 7px ");
 
   return (
     <WsCtx.Provider value={{ open, panes, activePane }}>
       <QuickSwitcher onOpen={open} />
-      <div className="wsgrid" ref={wrap} style={{ gridTemplateColumns: cols }}>
-        {panes.map((p, i) => (
-          <Fragment key={p.key}>
-            {i > 0 && (
+      <div className="wsgrid columns" ref={wrap} style={{ gridTemplateColumns: tracks, gridTemplateRows: "minmax(0, 1fr)" }}>
+        {columns.map((column, columnIndex) => {
+          const columnPanes = panes.filter((pane) => pane.column === column)
+            .sort((a, b) => a.slot === b.slot ? 0 : a.slot === "top" ? -1 : 1);
+          const rowRatio = rowRatios[column] ?? 0.5;
+          return <Fragment key={column}>
+            {columnIndex > 0 && (
               <div
-                key={`bar${p.key}`}
-                className={`splitbar${barDrag ? " dragging" : ""}`}
-                onMouseDown={(e) => { e.preventDefault(); setBarDrag(true); document.body.classList.add("resizing"); }}
+                className={`splitbar columns${barDrag?.axis === "columns" ? " dragging" : ""}`}
+                onMouseDown={(e) => {
+                  e.preventDefault(); setBarDrag({ axis: "columns" });
+                  document.body.classList.add("resizing", "resizing-columns");
+                }}
                 onDoubleClick={() => setRatio(0.5)}
                 title={t("chrome.dragResizeHalf")}
               />
             )}
+            <div className="wscolumn" data-column={column} style={{ gridTemplateRows: columnPanes.length === 2
+              ? `${rowRatio}fr 7px ${1 - rowRatio}fr` : "minmax(0, 1fr)" }}>
+            {columnPanes.map((p, rowIndex) => <Fragment key={p.key}>
+            {rowIndex > 0 && <div
+              className={`splitbar rows${barDrag?.axis === "rows" && barDrag.column === column ? " dragging" : ""}`}
+              onMouseDown={(e) => {
+                e.preventDefault(); setBarDrag({ axis: "rows", column });
+                document.body.classList.add("resizing", "resizing-rows");
+              }}
+              onDoubleClick={() => setRowRatios((current) => ({ ...current, [column]: 0.5 }))}
+              title={t("chrome.dragResizeHalf")}
+            />}
             <div
               key={p.key}
               className={`wspane${activePane === p.key ? " active" : ""}`}
               ref={(el) => { if (el) paneEls.current.set(p.key, el); else paneEls.current.delete(p.key); }}
               onMouseDown={() => setActivePane(p.key)}
             >
-              <div
-                className="panetabs"
-                ref={(el) => { if (el) tabBars.current.set(p.key, el); else tabBars.current.delete(p.key); }}
-              >
-                {p.tabs.map((t, ti) => (
+              <div className="panetabrow">
+                {columnIndex === 0 && rowIndex === 0 && <SidebarToggle />}
+                <div
+                  className="panetabs"
+                  ref={(el) => { if (el) tabBars.current.set(p.key, el); else tabBars.current.delete(p.key); }}
+                >
+                {p.tabs.map((tab, ti) => (
                   <div
-                    key={t.id}
-                    className={`otab${t.id === p.activeId ? " on" : ""}${drag?.tab.id === t.id ? " ghosted" : ""}`
+                    key={tab.id}
+                    className={`otab${tab.id === p.activeId ? " on" : ""}${drag?.tab.id === tab.id ? " ghosted" : ""}`
                       + (drag?.zone === "tabs" && drag.overPane === p.key && drag.index === ti ? " insbefore" : "")}
                     onPointerDown={(e) => {
                       if (e.button !== 0) return;
                       setActivePane(p.key);
-                      setPanes((ps) => ps.map((q) => (q.key === p.key ? { ...q, activeId: t.id } : q)));
+                      setPanes((ps) => ps.map((q) => (q.key === p.key ? { ...q, activeId: tab.id } : q)));
                       const startX = e.clientX, startY = e.clientY;
                       const el = e.currentTarget;
                       // Sin capturar el puntero, un movimiento rápido lo saca de
@@ -379,7 +519,7 @@ export default function Workspace({ initial, seed }: {
                         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 5) {
                           el.removeEventListener("pointermove", onMove as any);
                           document.body.classList.add("dragging-tab");
-                          setDrag({ tab: t, fromPane: p.key, x: ev.clientX, y: ev.clientY, overPane: null, zone: "center", index: null });
+                          setDrag({ tab, fromPane: p.key, x: ev.clientX, y: ev.clientY, overPane: null, zone: "center", index: null });
                         }
                       };
                       el.addEventListener("pointermove", onMove as any);
@@ -389,26 +529,32 @@ export default function Workspace({ initial, seed }: {
                       }, { once: true });
 
                     }}
-                    title={t.id}
+                    onContextMenu={(e) => {
+                      e.preventDefault(); e.stopPropagation();
+                      setTabMenu({ x: e.clientX, y: e.clientY, paneKey: p.key, tab });
+                      setTerminalMenuOpen(false);
+                    }}
+                    title={tab.id}
                   >
                     <span className="otab-title">
-                      {isPdfId(t.id) && <span className="otab-kind">PDF</span>}
-                      {isImgId(t.id) && <span className="otab-kind">IMG</span>}
-                      {isCanvasId(t.id) && <span className="otab-kind">CANVAS</span>}
-                      {isTermId(t.id) && <span className="otab-kind">TERM</span>}
-                      {t.title}
+                      {isPdfId(tab.id) && <span className="otab-kind">PDF</span>}
+                      {isImgId(tab.id) && <span className="otab-kind">IMG</span>}
+                      {isCanvasId(tab.id) && <span className="otab-kind">CANVAS</span>}
+                      {isTermId(tab.id) && <span className="otab-kind">TERM</span>}
+                      {tab.title}
                     </span>
                     <button
                       className="otab-x"
                       onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); closeTab(p.key, t.id); }}
-                      aria-label={`Cerrar ${t.title}`}
+                      onClick={(e) => { e.stopPropagation(); closeTab(p.key, tab.id); }}
+                      aria-label={`Cerrar ${tab.title}`}
                     >×</button>
                   </div>
                 ))}
                 {drag?.zone === "tabs" && drag.overPane === p.key && drag.index === p.tabs.length && (
                   <span className="insend" aria-hidden />
                 )}
+                </div>
               </div>
 
               <div className="panecontent">
@@ -475,9 +621,38 @@ export default function Workspace({ initial, seed }: {
 
               {overlayFor(p.key)}
             </div>
-          </Fragment>
-        ))}
+            </Fragment>)}
+            </div>
+          </Fragment>;
+        })}
       </div>
+
+      {tabMenu && createPortal(
+        <div className="ctxmenu" style={{ left: tabMenu.x, top: tabMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          <div className="ctxhead">{tabMenu.tab.title}</div>
+          {!isTermId(tabMenu.tab.id) && !isGraphId(tabMenu.tab.id) && <>
+            <button onClick={async () => {
+              const ok = await addTabToTerminal(tabMenu.tab);
+              setTabMenu(null);
+              if (!ok) alert(t("terminal.chooseFirst"));
+            }}>{t("terminal.addToChat")}</button>
+            <div className="ctxsub">
+              <button onClick={() => setTerminalMenuOpen((value) => !value)}>{t("terminal.addTo")}</button>
+              {terminalMenuOpen && <div className="ctxsubmenu">
+                {terminalTargets().length === 0 && <div className="ctxhead">{t("terminal.noneOpen")}</div>}
+                {terminalTargets().map((target) => <button key={target.id} onClick={async () => {
+                  await addTabToTerminal(tabMenu.tab, target.id); setTabMenu(null);
+                }}>{target.title}</button>)}
+              </div>}
+            </div>
+          </>}
+          <button onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "columns"); setTabMenu(null); }}>{t("workspace.splitRight")}</button>
+          <button disabled={panes.some((pane) => pane.column === panes.find((candidate) => candidate.key === tabMenu.paneKey)?.column && pane.key !== tabMenu.paneKey)}
+            onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "rows"); setTabMenu(null); }}>{t("workspace.splitDown")}</button>
+          <button onClick={() => { closeTab(tabMenu.paneKey, tabMenu.tab.id); setTabMenu(null); }}>{t("common.close")}</button>
+        </div>, document.body,
+      )}
 
       {drag && (
         <div className="dragghost" style={{ left: drag.x + 12, top: drag.y + 10 }}>

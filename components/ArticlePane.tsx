@@ -9,6 +9,10 @@ import Crumb from "./Crumb.tsx";
 import { useTabs } from "./Tabs.tsx";
 import LinkPicker, { type LinkQuery, type LinkTarget } from "./LinkPicker.tsx";
 import { useT } from "./I18n";
+import EditorToolbar from "./EditorToolbar.tsx";
+import ImageDialog from "./ImageDialog.tsx";
+import VideoDialog from "./VideoDialog.tsx";
+import { insertText } from "./editorCommands.ts";
 
 export interface Ref { id: string; title: string; path: string; }
 export interface Meta {
@@ -64,9 +68,16 @@ export default function ArticlePane({
   const [hasSel, setHasSel] = useState(false);
   const [heads, setHeads] = useState<Head[]>(() => (initial ? parseHeads(initial.content) : []));
   const [view, setView] = useState<EditorView | null>(null);
+  const [videoDialog, setVideoDialog] = useState(false);
   const [err, setErr] = useState("");
   const [docVersion, setDocVersion] = useState(0);
   const [linkQ, setLinkQ] = useState<LinkQuery | null>(null);
+  const [selectionRevision, setSelectionRevision] = useState(0);
+  const [imageDialog, setImageDialog] = useState(false);
+  const [showNavigation, setShowNavigation] = useState(false);
+  const [showFrontmatter, setShowFrontmatter] = useState(false);
+  const [rawMarkdown, setRawMarkdown] = useState(false);
+  const [toolbarVisible, setToolbarVisible] = useState(true);
 
   const viewRef = useRef<EditorView | null>(null);
   const savedRef = useRef(initial?.content ?? "");
@@ -74,6 +85,13 @@ export default function ArticlePane({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const tabs = useTabs();
+
+  useEffect(() => {
+    setShowNavigation(localStorage.getItem("wiki.articleNavigation") === "1");
+    setShowFrontmatter(localStorage.getItem("wiki.frontmatter") === "1");
+    setRawMarkdown(localStorage.getItem("wiki.rawMarkdown") === "1");
+    setToolbarVisible(localStorage.getItem("wiki.editorToolbar") !== "0");
+  }, []);
 
   const noteId = data?.id ?? id ?? "";
 
@@ -217,14 +235,14 @@ export default function ArticlePane({
 
       {/* Chrome: never scrolls. Sticky positioning inside the scroller kept
           leaving this row stranded mid-article, so it now sits outside it. */}
-      <div className="tabs panechrome">
+      {showNavigation && <div className="tabs panechrome">
         <button className={tab === "article" ? "on" : ""} onClick={() => setTab("article")}>{t("pane.tabArticle")}</button>
         <button className={tab === "data" ? "on" : ""} onClick={() => setTab("data")}>{t("pane.tabData")}</button>
         <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>
           Enlaces ({data.backlinks.length + data.outbound.length})
         </button>
         <Crumb vaultPath={m.vaultPath} />
-      </div>
+      </div>}
 
       <div className="panescroll">
 
@@ -252,13 +270,46 @@ export default function ArticlePane({
                 seleccionar con shift+flechas nunca disparaba ese evento y los
                 botones de procedencia se quedaban apagados. */}
             <div style={{ display: tab === "article" ? "block" : "none" }}>
+              {toolbarVisible ? <EditorToolbar view={view} revision={selectionRevision} onImage={() => setImageDialog(true)} onVideo={() => setVideoDialog(true)}
+                showNavigation={showNavigation} showFrontmatter={showFrontmatter}
+                rawMarkdown={rawMarkdown} hasSelection={hasSel} hideAuthorship={hideProv}
+                onMarkHuman={() => doMark("human")} onMarkAi={() => doMark("ai")}
+                onUnmark={() => { const current = viewRef.current; if (current && unmarkSelection(current)) onChange(); }}
+                onToggleAuthorship={() => setHideProv((current) => !current)}
+                onToggleNavigation={() => setShowNavigation((current) => {
+                  const next = !current;
+                  if (!next) setTab("article");
+                  localStorage.setItem("wiki.articleNavigation", next ? "1" : "0");
+                  return next;
+                })}
+                onToggleFrontmatter={() => setShowFrontmatter((current) => {
+                  const next = !current;
+                  localStorage.setItem("wiki.frontmatter", next ? "1" : "0");
+                  return next;
+                })}
+                onToggleMarkdown={() => setRawMarkdown((current) => {
+                  const next = !current;
+                  localStorage.setItem("wiki.rawMarkdown", next ? "1" : "0");
+                  return next;
+                })}
+                onHide={() => {
+                  setToolbarVisible(false);
+                  localStorage.setItem("wiki.editorToolbar", "0");
+                }} /> : (
+                <button className="editor-toolbar-restore" type="button" title={t("editor.showToolbar")} onClick={() => {
+                  setToolbarVisible(true);
+                  localStorage.setItem("wiki.editorToolbar", "1");
+                }}><span aria-hidden>⌄</span> {t("editor.showToolbar")}</button>
+              )}
               <Editor
                 key={docVersion}
                 value={data.content}
                 onChange={onChange}
                 resolve={resolveHref}
                 onLinkQuery={setLinkQ}
-                onSelectionChange={setHasSel}
+                onSelectionChange={(selected) => { setHasSel(selected); setSelectionRevision((n) => n + 1); }}
+                showFrontmatter={showFrontmatter}
+                rawMarkdown={rawMarkdown}
                 onNavigate={(url, text) => {
                   // ⌘clic abre en pestaña nueva. Antes hacía router.push, que
                   // remonta el workspace entero y cierra los paneles divididos.
@@ -334,17 +385,37 @@ export default function ArticlePane({
       </div>
 
       {linkQ && <LinkPicker q={linkQ} onPick={insertLink} onClose={() => setLinkQ(null)} />}
+      {imageDialog && <ImageDialog
+        onClose={() => setImageDialog(false)}
+        onUpload={async (file) => {
+          const fd = new FormData();
+          fd.append("id", noteId); fd.append("file", file);
+          const r = await fetch("/api/upload", { method: "POST", body: fd });
+          if (!r.ok) { setStatus(t("pane.uploadFailed")); return null; }
+          return (await r.json()).href as string;
+        }}
+        onInsert={(markdown) => {
+          const v = viewRef.current;
+          if (v) { insertText(v, markdown); onChange(); }
+          setImageDialog(false);
+        }}
+      />}
+      {videoDialog && <VideoDialog
+        onClose={() => setVideoDialog(false)}
+        onUpload={async (file) => {
+          const fd = new FormData();
+          fd.append("id", noteId); fd.append("file", file);
+          const r = await fetch("/api/upload", { method: "POST", body: fd });
+          if (!r.ok) { setStatus(t("pane.videoUploadFailed")); return null; }
+          return (await r.json()).href as string;
+        }}
+        onInsert={(html) => {
+          const v = viewRef.current;
+          if (v) { insertText(v, `\n${html}\n`); onChange(); }
+          setVideoDialog(false);
+        }}
+      />}
 
-      {(
-        <div className="panebar">
-          <button onClick={() => doMark("human")} disabled={!hasSel}>{t("pane.markMine")}</button>
-          <button onClick={() => doMark("ai")} disabled={!hasSel}>{t("pane.markAi")}</button>
-          <button onClick={() => { const v = viewRef.current; if (v && unmarkSelection(v)) onChange(); }}>{t("pane.unmark")}</button>
-          <button onClick={() => setHideProv((v) => !v)}>{hideProv ? t("pane.showAuthorship") : t("pane.hideAuthorship")}</button>
-          <span className="dim">{status}</span>
-          <span style={{ marginLeft: "auto" }} className="dim">⌘S · ⌘clic</span>
-        </div>
-      )}
     </section>
   );
 }

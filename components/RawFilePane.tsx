@@ -27,6 +27,7 @@ const NOTA: Record<string, MessageKey> = {
   xlsx: "raw.xlsx",
   pptx: "raw.pptx",
 };
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "ogv", "mov"]);
 
 const kb = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -111,6 +112,30 @@ export default function RawFilePane({ rel }: { rel: string }) {
   }
   if (!data) {
     return <div className="panescroll"><p className="dim" style={{ padding: 20 }}>Abriendo {name}…</p></div>;
+  }
+
+  // Videos are binary, but unlike an office archive they have a useful native
+  // preview. Keeping it inside the pane lets users verify an asset without
+  // leaving the vault or opening a second application.
+  if ((data.binary || data.tooBig) && VIDEO_EXTENSIONS.has(ext)) {
+    return (
+      <div className="imgview">
+        <div className="imgbar">
+          <FileIcon name={name} />
+          <span className="imgname">{name}</span>
+          <span className="dim" style={{ fontSize: 11.5 }}>{kb(data.size)}</span>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+            <a className="dim" href={href} download>{t("chrome.download")}</a>
+            <a className="dim" href={href} target="_blank" rel="noreferrer">{t("raw.openInBrowser")}</a>
+          </span>
+        </div>
+        <div className="videopreview">
+          <video key={rel} src={href} controls preload="metadata" playsInline>
+            {t("raw.videoUnsupported")}
+          </video>
+        </div>
+      </div>
+    );
   }
 
   // Binario o demasiado grande: la ficha de siempre.

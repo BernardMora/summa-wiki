@@ -139,13 +139,26 @@ export const PERMS: Record<string, { id: string; flag: string; label: MessageKey
   opencode: [
     {
       id: "acceptEdits",
+      // OJO: `--yes` NO existe en opencode 1.18.18. Su parser (yargs sin
+      // `.strict()`) acepta cualquier bandera desconocida y la ignora, así que
+      // esto no falla — simplemente no hace nada, y la tarjeta promete algo que
+      // no ocurre. La única bandera real de auto-aprobación es `--auto`, que es
+      // la de abajo; opencode no tiene el punto intermedio que este id nombra.
+      // Sin arreglar a propósito: elegir entre dejar la tarjeta sin efecto o
+      // darle el mismo `--auto` que a «no preguntar» —y quedarse con dos
+      // etiquetas distintas para el mismo comportamiento— es una decisión de
+      // producto, no un typo que se corrija de paso.
       flag: "--yes",
       label: "agent.acceptEdits",
       hint: "agent.yesHint",
     },
     {
       id: "bypass",
-      flag: "--dangerously-skip-permissions",
+      // `--dangerously-skip-permissions` es de Claude Code y de `agy`, no de
+      // opencode: aquí se ignoraba en silencio y «no preguntar» seguía
+      // preguntando. Verificado contra `opencode --help` (1.18.18): la bandera
+      // es `--auto`, «auto-approve permissions that are not explicitly denied».
+      flag: "--auto",
       label: "agent.askNothing",
       hint: "agent.askNothingHint",
     },
@@ -165,11 +178,19 @@ export const PERMS: Record<string, { id: string; flag: string; label: MessageKey
  */
 const shellArg = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
+/**
+ * El ejecutable de cada agente.
+ *
+ * Sale de `INSTALL`, que ya lo tenía para poder nombrar lo que falta («falta
+ * `agy`») con el nombre correcto. Una segunda tabla escrita aquí se
+ * desincronizaría el día que un CLI se renombre, y el síntoma sería el peor
+ * posible: el sondeo de instalación mirando un binario y el comando lanzando
+ * otro, o sea un botón habilitado que no puede funcionar.
+ */
+const agentBinary = (agent: string) => INSTALL[agent]?.binary ?? "claude";
+
 export function agentCommand(agent: string, model: string, perm: string, skill = "/vault-ingest"): string {
-  const binary = agent === "antigravity" ? "agy"
-    : agent === "opencode" ? "opencode"
-    : agent === "codex" ? "codex"
-    : "claude";
+  const binary = agentBinary(agent);
   const perms = PERMS[agent] || PERMS.claude;
   const prompt = agent === "codex" && skill.startsWith("/") ? `$${skill.slice(1)}` : skill;
   return [
@@ -178,6 +199,114 @@ export function agentCommand(agent: string, model: string, perm: string, skill =
     perms.find((p) => p.id === perm)?.flag,
     agent === "antigravity" ? `-p ${shellArg(prompt)}` : shellArg(prompt),
   ].filter(Boolean).join(" ");
+}
+
+/**
+ * Los dos niveles de permiso del menú de «iniciar conversación».
+ *
+ * Tabla aparte de `PERMS` y no dos renglones más dentro de ella, porque
+ * describen situaciones distintas. `PERMS` son los permisos de una TAREA que la
+ * app manda a hacer —repartir cientos de archivos— y por eso su piso es
+ * `acceptEdits`: preguntar por cada movimiento haría inviable la función. Aquí
+ * no hay tarea. El usuario abre una conversación y decide él qué pedir, así que
+ * el piso correcto es el contrario, el del CLI sin tocar, que pregunta.
+ *
+ * **Cada bandera está verificada contra el `--help` del binario instalado**
+ * (2026-08-16: claude, agy, codex 0.147.0, opencode 1.18.18). Ninguna se dedujo
+ * por analogía con otro CLI, y esa disciplina no es celo: `opencode` ignora en
+ * SILENCIO las banderas que no conoce —no falla, no avisa— así que una copiada
+ * de Claude Code produce un botón que promete no preguntar y pregunta igual.
+ * Es justo el bug que había en `PERMS.opencode`.
+ *
+ * Por qué «preguntando» va vacío en dos de los cuatro: ni `opencode` ni `agy`
+ * tienen bandera para exigir que pregunte, porque preguntar ya es lo que hacen
+ * sin argumentos. Escribir algo ahí sería inventarlo. En `claude` y `codex` sí
+ * la hay y sí se pone, y la diferencia importa: el rótulo promete que va a
+ * preguntar, y sin bandera lo que manda es lo que el usuario tenga configurado
+ * en su CLI — que puede ser justo lo contrario.
+ */
+export const CONVERSATION_PERMS: Record<string, { id: string; flag: string; label: MessageKey; hint: MessageKey }[]> = {
+  claude: [
+    // `manual` de entre los seis valores de `--permission-mode` (acceptEdits,
+    // auto, bypassPermissions, manual, dontAsk, plan): el único que garantiza
+    // lo que dice la etiqueta pase lo que pase en la config del usuario.
+    { id: "ask", flag: "--permission-mode manual", label: "agent.askAlways", hint: "agent.askAlwaysHint" },
+    { id: "bypass", flag: "--dangerously-skip-permissions", label: "agent.askNothing", hint: "agent.askNothingHint" },
+  ],
+  antigravity: [
+    // `--mode` solo acepta `accept-edits` y `plan`; no hay un modo «pregunta
+    // por todo» que pedir, porque es el de por defecto.
+    { id: "ask", flag: "", label: "agent.askAlways", hint: "agent.askAlwaysDefault" },
+    { id: "bypass", flag: "--dangerously-skip-permissions", label: "agent.askNothing", hint: "agent.askNothingHint" },
+  ],
+  codex: [
+    // `untrusted` es, textualmente, «only run trusted commands (ls, cat, sed)
+    // without asking». De los tres valores de `-a` es el que corresponde a
+    // preguntar; `on-request` deja que decida el modelo y `never` no pregunta.
+    { id: "ask", flag: "--ask-for-approval untrusted", label: "agent.askAlways", hint: "agent.askAlwaysHint" },
+    { id: "bypass", flag: "--dangerously-bypass-approvals-and-sandbox", label: "agent.askNothing", hint: "agent.askNothingHint" },
+  ],
+  opencode: [
+    { id: "ask", flag: "", label: "agent.askAlways", hint: "agent.askAlwaysDefault" },
+    { id: "bypass", flag: "--auto", label: "agent.askNothing", hint: "agent.askNothingHint" },
+  ],
+};
+
+/**
+ * El comando que abre una conversación: el binario, el nivel de permiso, y
+ * nada más.
+ *
+ * **Sin prompt, y ahí está toda la diferencia con `agentCommand`.** Aquel manda
+ * una tarea concreta (`/vault-ingest`) y por eso tiene que lidiar con que cada
+ * CLI reciba el texto a su manera — el `-p` de `agy`, el `$skill` de Codex.
+ * Aquí no hay texto que entregar: se abre la TUI y el usuario escribe. Eso
+ * también es lo que hace que `agy` encaje sin caso especial, porque el `-p` que
+ * necesitaba era precisamente para el prompt que aquí no existe.
+ */
+export function conversationCommand(agent: string, perm: string): string {
+  const perms = CONVERSATION_PERMS[agent] || CONVERSATION_PERMS.claude;
+  return [agentBinary(agent), perms.find((p) => p.id === perm)?.flag]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * Reanudar una conversación que ya existe.
+ *
+ * **Sin nivel de permiso, y es una decisión, no un olvido.** Reanudar admite
+ * cualquiera —el CLI acepta las mismas banderas que al arrancar—, pero
+ * cualquier bandera que pusiéramos aquí PISARÍA la del hilo que se retoma. No
+ * ponerla es lo que deja que la conversación siga con los permisos que ya
+ * traía, que es justo lo que uno espera al reanudar; imponer un nivel sería
+ * cambiarle las reglas a una conversación a medio camino, y encima sin decirlo.
+ *
+ * (Que hay estado que conservar está comprobado: los transcripts de Claude
+ * guardan un `permissionMode` por mensaje. Lo que NO se comprobó es que
+ * `--resume` lo reaplique — y esa duda es un argumento más para no meter
+ * bandera: sea lo que sea que haga el CLI con ese dato, es asunto suyo, y lo
+ * único seguro es que una bandera nuestra lo anularía.)
+ *
+ * Los cuatro CLIs no ofrecen lo mismo y el rótulo lo dice en vez de disimularlo:
+ * `claude --resume` y `codex resume` abren su propio selector de conversaciones;
+ * `agy` y `opencode` solo saben seguir la última (`--continue`) — sus subcomandos
+ * de sesión listan y borran, no eligen. Un botón que dijera «Reanudar» en los
+ * cuatro sería mentira en dos: quien lo pulsa en OpenCode esperaría escoger y se
+ * encontraría ya dentro de la última conversación.
+ *
+ * `arg` y no `flag` porque en Codex es un SUBCOMANDO (`codex resume`), no una
+ * bandera. Verificado con `codex resume --help`, que además documenta el
+ * `--last` para saltarse el selector.
+ */
+export const RESUME: Record<string, { arg: string; label: MessageKey; hint: MessageKey }> = {
+  claude: { arg: "--resume", label: "agent.resumePick", hint: "agent.resumePickHint" },
+  antigravity: { arg: "--continue", label: "agent.resumeLast", hint: "agent.resumeLastHint" },
+  codex: { arg: "resume", label: "agent.resumePick", hint: "agent.resumePickHint" },
+  opencode: { arg: "--continue", label: "agent.resumeLast", hint: "agent.resumeLastHint" },
+};
+
+export function resumeCommand(agent: string): string {
+  const entry = RESUME[agent] ?? RESUME.claude;
+  return `${agentBinary(agent)} ${entry.arg}`;
 }
 
 /**
@@ -320,11 +449,11 @@ export function useInstalledAgents(enabled = true) {
  * `name` no es una clave del diccionario porque son nombres propios; `blurb` sí
  * lo es porque es prosa. Misma asimetría que en `ModelChoice`.
  */
-export const AGENTS: { id: AgentPickId; name: string; blurb: MessageKey }[] = [
-  { id: "claude", name: "Claude Code", blurb: "setup.agentClaude" },
-  { id: "antigravity", name: "Antigravity CLI", blurb: "setup.agentAntigravity" },
-  { id: "opencode", name: "OpenCode", blurb: "setup.agentOpencode" },
-  { id: "codex", name: "Codex", blurb: "setup.agentCodex" },
+export const AGENTS: { id: AgentPickId; name: string; blurb: MessageKey; icon: string }[] = [
+  { id: "claude", name: "Claude Code", blurb: "setup.agentClaude", icon: "https://claude.com/favicon.svg" },
+  { id: "antigravity", name: "Antigravity CLI", blurb: "setup.agentAntigravity", icon: "https://antigravity.google/assets/image/antigravity-logo.png" },
+  { id: "opencode", name: "OpenCode", blurb: "setup.agentOpencode", icon: "https://opencode.ai/favicon.svg" },
+  { id: "codex", name: "Codex", blurb: "setup.agentCodex", icon: "https://developers.openai.com/favicon.svg" },
 ];
 
 export type AgentPickId = "claude" | "antigravity" | "opencode" | "codex";

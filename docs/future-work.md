@@ -301,6 +301,72 @@ decide for them.
 A live mirror is the feature people actually picture. It is also a sync engine,
 and writing one of those is a much larger project than the app it would live in.
 
+## Onboarding: a showcase vault
+
+First run opens an empty vault. Every feature in this app is data-driven — the
+graph, the category rules, backlinks, `wiki search`, the renderers keyed to
+`type:` — which means an empty vault demonstrates exactly none of them. They are
+emergent properties of content, and with no content they are invisible.
+
+The proposal is an optional showcase vault, offered on first run beside "create a
+vault": a real vault with real files that the user can open, break and delete.
+Not a video, not a tour overlay pointing at empty panes.
+
+### Why this does not reintroduce the cost scaffold.ts avoids
+
+`src/scaffold.ts` refuses per-architecture templates on purpose — hand-written
+prose per package means the fourth package never gets added. A showcase vault
+looks like that same mistake and is not, *provided there is exactly one*, tied to
+no architecture. What the scaffold avoids is combinatorial (architectures ×
+prose); one fixed demo is a constant. The day someone proposes "a showcase per
+architecture", that constant becomes the thing `scaffold.ts` was written to
+prevent.
+
+Locale is the one real multiplier: the vault ships in `en` and `es`, so the
+content is written twice. That is the ceiling, and content that leans on
+structure rather than prose keeps it low.
+
+### The content is a specification, not a writing task
+
+Each feature needs an exhibit, or it stays invisible:
+
+- **Graph view** — enough notes and links for the layout to be non-trivial: at
+  least one dense hub and one sparse periphery, or it reads as a star or as noise.
+- **Backlinks and `wiki related`** — notes reached from several directions, not a
+  tree.
+- **Orphans** — at least one genuine orphan, so `wiki orphans` returns something
+  and the report teaches what it means.
+- **Categories** — rules in `.summa/categories.json` matching by `pillar`, by
+  path, by `type` and by tag, including one note that lands in two at once. It is
+  the only way the "rules, not lists" model becomes visible.
+- **Every `type:`** — `moc`, `area`, `project`, `knowledge`, `journal`, `source`,
+  `connection`, `system`, `person`. A renderer keyed to a type shows nothing when
+  the type is absent.
+- **A `source` note with its PDF beside it**, plus assets in WebP named by
+  convention, so the ingest and OCR paths have somewhere to point.
+- **A canvas**, since it is a distinct renderer.
+- **Provenance** — notes with `author:` of `human`, `agent` and `mixed`, carrying
+  real `<!-- ai -->` blocks, so the convention is seen before it is explained.
+- **A run of consecutive daily notes**, so the journal view is not one entry.
+- **A skill in `.agents/skills/`** with its adapter symlink, so the skill surface
+  has something in it on first run.
+
+### The maintenance trap, and the way out
+
+Content shipped alongside a schema drifts from it, and the failure mode here is
+specific and embarrassing: the spec changes, the showcase is not updated, and
+`wiki health` reports errors against the vault whose whole job is to demonstrate
+that this app keeps a vault healthy.
+
+The fix is to stop treating it as content and treat it as a fixture — run `wiki
+health` and the indexer against the showcase in CI. Then it cannot drift
+silently, and the burden turns into an asset: the linter and the indexer gain the
+realistic full-coverage corpus they currently lack.
+
+Which also sets the timing. Build it after the feature set stops moving. Every
+new feature adds a required exhibit, so building it early means rewriting it on
+every release.
+
 ## Smaller items
 
 - **`src/config.ts` resolves the vault at import time** (`const resolved = resolveVault()`
