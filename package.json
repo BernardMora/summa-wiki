@@ -1,6 +1,6 @@
 {
   "name": "summa-wiki",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Bernardo <hola@veridia.com.mx>",
   "private": true,
   "type": "module",
@@ -73,5 +73,4 @@
   "engines": {
     "node": ">=22.6"
   }
-
 }
