@@ -91,9 +91,37 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # El borrador se crea AQUÍ, una sola vez, y no lo crea electron-builder.
+  #
+  # Por qué: la versión anterior confiaba en que «el primer job de la matriz lo
+  # crea y los otros tres lo reutilizan», y eso es falso cuando los cuatro
+  # arrancan a la vez. En v0.2.0 dos publicadores vieron «release doesn't
+  # exist» con 170 ms de diferencia y los DOS lo crearon: GitHub no exige que
+  # el tag de un borrador sea único, así que salieron dos releases con el mismo
+  # tag e ids consecutivos. Windows y Linux subieron al que acabó publicándose;
+  # los cuatro artefactos de macOS se fueron al otro, que quedó invisible.
+  #
+  # El fallo no da error en ningún job: los seis salen en verde y el release
+  # queda a medias. Por eso la comprobación de abajo, que sí falla.
+  #
+  # `|| true` en la creación: si el borrador ya existe —reejecución de un job,
+  # un tag reempujado— no es un error, es el estado que queremos.
+  draft:
+    name: Crear el borrador
+    needs: web
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+                 --draft --title "$GITHUB_REF_NAME" --generate-notes
+
   build:
     name: ${{ matrix.name }}
-    needs: web
+    needs: [web, draft]
     runs-on: ${{ matrix.os }}
     strategy:
       # Sin esto, el primer fallo cancela las otras tres y te quedas sin saber
@@ -209,7 +237,7 @@ jobs:
 
   publish:
     name: Publicar el Release
-    needs: [web, build]
+    needs: [web, draft, build]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
@@ -220,6 +248,40 @@ jobs:
       #
       # Quitar el borrador es lo último que ocurre, y es lo que hace que
       # "empujar un tag" sea una decisión y no un riesgo.
+      # Ningún job falla cuando un artefacto no llega a su release: electron-builder
+      # da por buena la subida y sale en verde. Contar antes de quitar el
+      # borrador es lo único que distingue «las cuatro plataformas están» de
+      # «las cuatro compilaron».
+      #
+      # Cinco instaladores: dmg de arm64 e Intel, exe, AppImage y deb. Los .zip,
+      # .blockmap y latest*.yml son para el actualizador y no se cuentan aquí:
+      # lo que se comprueba es que haya algo que descargar en cada plataforma.
+      - name: Están los cinco instaladores
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          names="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+                    --json assets --jq '.assets[].name')"
+          echo "$names"
+          faltan=0
+          falta() { echo "::error::no hay instalador de $1"; faltan=1; }
+          # Conteos y no `grep -q`: con `-v` su código de salida difiere entre
+          # BSD y GNU, y una lista vacía le saca un falso positivo porque `echo ""`
+          # sigue imprimiendo una línea. Contar significa lo mismo en las dos.
+          cuenta() { echo "$names" | grep -cE "$1" || true; }
+
+          dmg=$(cuenta '\.dmg$')
+          arm=$(cuenta '\-arm64\.dmg$')
+          [ "$arm" -ge 1 ]               || falta "macOS Apple Silicon"
+          # El de Intel es el .dmg que NO lleva arm64: se distinguen por eso y
+          # no por posición, que depende de la versión.
+          [ "$((dmg - arm))" -ge 1 ]     || falta "macOS Intel"
+          [ "$(cuenta '\.exe$')" -ge 1 ]      || falta "Windows"
+          [ "$(cuenta '\.AppImage$')" -ge 1 ] || falta "Linux (AppImage)"
+          [ "$(cuenta '\.deb$')" -ge 1 ]      || falta "Linux (deb)"
+
+          [ "$faltan" -eq 0 ]
+
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
