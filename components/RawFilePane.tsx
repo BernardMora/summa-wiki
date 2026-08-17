@@ -142,10 +142,10 @@ export default function RawFilePane({ rel }: { rel: string }) {
         <span className="dim" style={{ fontSize: 11.5 }}>{kb(data.size)}</span>
         {err && <span className="err" style={{ fontSize: 11.5, whiteSpace: "normal" }}>{err}</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
-          {saved && <span className="dim" style={{ fontSize: 11.5 }}>guardado</span>}
+          {saved && <span className="dim" style={{ fontSize: 11.5 }}>{t("common.saved")}</span>}
           <button className="newbtn" style={{ width: "auto", margin: 0, padding: "2px 10px" }}
                   disabled={!dirty || saving} onClick={save}>
-            {saving ? "Guardando…" : "Guardar"}
+            {saving ? t("common.saving") : t("common.save")}
           </button>
           <a className="dim" href={href} download>{t("chrome.download")}</a>
         </span>

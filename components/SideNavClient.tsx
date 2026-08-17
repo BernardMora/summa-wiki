@@ -96,7 +96,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
             e.preventDefault(); e.stopPropagation();
             setMenu({ x: e.clientX, y: e.clientY, group: g });
           }}
-          title={g.id === "__uncategorised" ? "" : "Clic derecho para acciones"}
+          title={g.id === "__uncategorised" ? "" : t("nav.rightClickActions")}
         >
           {g.label} <span className="catcount">{g.total}</span>
         </h4>
@@ -205,7 +205,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
           {hidden.length > 0 && (
             <div className="hiddenzone">
               <button className="hiddentoggle" onClick={() => setShowHidden((v) => !v)}>
-                {showHidden ? "▾" : "▸"} Ocultas ({hidden.length})
+                {showHidden ? "▾" : "▸"} {t("nav.hiddenGroups", { n: hidden.length })}
               </button>
               {showHidden && hidden.map(renderGroup)}
             </div>
@@ -217,13 +217,13 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
         <div className="ctxmenu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <div className="ctxhead">{menu.group.label}</div>
           <button onClick={() => { setEditing(menu.group.id); setDraft(menu.group.label); setMenu(null); }}>
-            Renombrar
+            {t("common.rename")}
           </button>
           <button onClick={() => cat(menu.group.hidden ? "show" : "hide", { id: menu.group.id })}>
             {menu.group.hidden ? t("nav.show") : t("nav.hide")}
           </button>
           <button className="danger" onClick={() => { setConfirming(menu.group); setMenu(null); }}>
-            Borrar
+            {t("common.delete")}
           </button>
         </div>
       )}
@@ -231,21 +231,20 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
       {confirming && (
         <div className="confirmbox">
           <p style={{ margin: "0 0 4px" }}>
-            Borrar «<strong>{confirming.label}</strong>»
+            {t("nav.confirmDeleteGroup", { name: confirming.label })}
           </p>
           <p className="dim" style={{ margin: "0 0 8px", fontSize: 11.5 }}>
-            Las notas no se tocan, solo se pierde la agrupación. Si solo quieres
-            quitarla de en medio, usa <em>Ocultar</em>.
+            {t("nav.confirmDeleteBody", { hide: t("nav.hide") })}
           </p>
           <div style={{ display: "flex", gap: 4 }}>
             <button className="newbtn" style={{ margin: 0 }} onClick={() => cat("hide", { id: confirming.id })}>
-              Ocultar
+              {t("nav.hide")}
             </button>
             <button className="newbtn danger" style={{ margin: 0 }} onClick={() => cat("delete", { id: confirming.id })}>
-              Borrar
+              {t("common.delete")}
             </button>
             <button className="newbtn" style={{ margin: 0 }} onClick={() => setConfirming(null)}>
-              Cancelar
+              {t("common.cancel")}
             </button>
           </div>
         </div>

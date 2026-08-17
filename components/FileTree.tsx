@@ -429,7 +429,7 @@ export default function FileTree() {
     });
     const d = await r.json();
     setMoving(false);
-    if (!r.ok) { setErr(d.error ?? "no se pudo mover"); return; }
+    if (!r.ok) { setErr(d.error ?? t("tree.moveFailed")); return; }
     setOpen((p) => { const n = new Set(p); n.add(dest); return n; });
     await Promise.all([refreshDir(parentOf(rel)), refreshDir(dest)]);
     router.refresh();

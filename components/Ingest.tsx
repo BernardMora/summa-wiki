@@ -143,10 +143,7 @@ export default function Ingest() {
   return (
     <div className="welcome setupcreate">
       <h1>{t("ingest.title")}</h1>
-      <p>
-        Copia archivos de tu computadora al vault. Los originales no se tocan:
-        esto <strong>copia</strong>, nunca mueve ni borra.
-      </p>
+      <p>{bold(t("ingest.intro"))}</p>
 
       <div className="setupfield">
         <label>{t("setup.fieldSources")}</label>
@@ -160,7 +157,7 @@ export default function Ingest() {
               <div key={f} className="cfgrow">
                 <code className="cfgpath" style={{ flex: 1 }}>{f}</code>
                 <button className="linkish" onClick={() => { setFolders((x) => x.filter((y) => y !== f)); setPreview(null); }}>
-                  quitar
+                  {t("setup.remove")}
                 </button>
               </div>
             ))}
@@ -215,7 +212,7 @@ export default function Ingest() {
             </p>
           )}
           {preview.unreadable.length > 0 && (
-            <p className="cfghint">No se pudieron leer {preview.unreadable.length} carpetas (permisos).</p>
+            <p className="cfghint">{t("ingest.unreadable", { n: preview.unreadable.length })}</p>
           )}
 
           {preview.sample.length > 0 && (
