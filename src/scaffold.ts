@@ -400,7 +400,7 @@ export function createVault(
 
   // 4. El router de la raíz para el agente elegido.
   const root = rootAgentsFile(arch, name, x);
-  if (agent === "antigravity") {
+  if (agent === "antigravity" || agent === "codex") {
     write("AGENTS.md", root);
   } else if (agent === "opencode") {
     write("OPENCODE.md", root);
@@ -417,7 +417,7 @@ export function createVault(
   //
   // Fuera de `write()` a propósito: no es una nota, es un artefacto generado
   // que se regenera, y pasa por `writeSkill` porque tiene que quedar visible
-  // para los tres agentes, no solo para el que se eligió aquí. Elegir Claude en
+  // para los cuatro agentes, no solo para el que se eligió aquí. Elegir Claude en
   // el asistente no es motivo para dejar el vault inutilizable desde `agy`
   // mañana.
   const audit = writeAuditSkill(dir, arch, 4321, locale);

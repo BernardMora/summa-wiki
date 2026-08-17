@@ -1,0 +1,61 @@
+# Lo que tiene que pasar ANTES de mezclar, y en cada empujón a main.
+#
+# Por qué existe: hasta ahora el único workflow era `release.yml`, que se
+# dispara con un tag. Es decir, nada miraba un pull request. Mientras el repo
+# fue privado se aguantaba —el único que empujaba era su autor, y el ciclo de
+# comprobación era su propia terminal—, pero en un repo público el primer
+# contribuyente de fuera llega sin ese contexto y la revisión a mano no escala.
+#
+# Deliberadamente NO empaqueta. Construir las cuatro plataformas son ~40
+# minutos de runner por PR, y lo que atrapa un empaquetado —que node-pty
+# compile, que el servidor arranque desde el paquete— no cambia con un PR que
+# toca componentes. De eso responde `release.yml` con su prueba de humo antes
+# de publicar nada.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Un empujón nuevo al mismo PR cancela la corrida anterior: nadie necesita el
+# resultado de un commit que ya fue reemplazado, y en la cola gratuita esa
+# corrida zombi retrasa la que sí importa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Tipos, pruebas y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Primero los tipos: es lo más rápido y lo que más cosas atrapa. Además
+      # es lo único que comprueba que `lib/messages/es.ts` sigue teniendo las
+      # mismas claves que `en.ts` — `Messages` sale de `typeof en`, así que una
+      # traducción olvidada NO compila. Sin este paso, esa salvaguarda solo
+      # existe en la máquina de quien se acuerde de correr `tsc`.
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas
+        run: npm test
+
+      # Sólo en Linux, y no por ahorrar: `next build` falla en Windows con un
+      # EPERM al hacer glob sobre `C:\Users\<user>\Application Data`, un
+      # junction heredado que no se deja leer (ver `docs/future-work.md`). La
+      # salida de `next build` es JavaScript independiente de plataforma, así
+      # que compilarlo en más de un SO no comprobaría nada distinto.
+      - name: Build de la web
+        run: npm run build

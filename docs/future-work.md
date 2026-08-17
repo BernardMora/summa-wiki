@@ -231,6 +231,76 @@ Whenever this is revisited, the constraint to design against is *cross-platform
 first*, which likely means an ONNX or GGUF runtime rather than MLX, and accepting
 worse per-page quality in exchange for a feature that exists everywhere.
 
+## Ingest: cloud folders in a vault
+
+Asked for during vault creation: let someone point at a Google Drive, iCloud,
+OneDrive or Dropbox folder and have it become part of the vault — by symlink, or
+by some direct reference to the cloud provider. Not built, and the reason is that
+"a folder that is already on your disk" and "a folder that is a cache of a remote
+one" look identical to `readdir` and behave nothing alike.
+
+### The thing that breaks: files that exist but are not there
+
+Every one of these providers ships on-demand files by default. The file appears
+in a directory listing, `stat` reports a real size, and the bytes are on someone
+else's computer until something reads them. macOS iCloud leaves `.icloud` stubs;
+Windows uses reparse points flagged `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS`;
+Google Drive and Dropbox mount a synthetic filesystem that faults the content in.
+
+`src/indexer.ts` walks the vault and **reads every note** — it has to, the index
+is built from frontmatter and body. Point it at an on-demand folder and indexing
+becomes a download of the entire folder, triggered by an app the user opened to
+read one article. That can be gigabytes, on a metered connection, with no
+progress bar, and on a provider that bills for egress it can cost money. Worse,
+`wiki index` is exactly the command the docs tell people to run after adding
+notes.
+
+So the first requirement is not a symlink. It is a way for the indexer to ask
+"is this file actually local?" and skip what is not — which is a per-platform
+question with no portable answer, and the same cross-platform bind that
+disqualified [local OCR](#ingest-local-ocr).
+
+### Three more that each need an answer
+
+**Writing into a syncing folder invites conflicts.** Summa Wiki edits notes in
+place. A provider that sees a local write while a remote change is pending
+resolves it by keeping both — `note (conflicted copy 2026-08-16).md` — and the
+vault now has two articles where the user wrote one. The app cannot prevent this;
+what it can do is not put the files it writes most often inside the synced area.
+
+**`.summa/` must not sync.** The index in this author's vault is 6.8 MB and is
+rewritten whole on every `wiki index`. Inside a synced folder that is a
+multi-megabyte upload every time someone saves a note, on a file that is derived
+and worthless to any other machine. If a vault ever spans cloud folders, `.summa/`
+belongs outside them, which means the current rule — vault-level state lives at
+`<vault>/.summa/` — needs an exception it does not have today.
+
+**File watching is unreliable there.** The live-reload path assumes FSEvents and
+inotify semantics. Synthetic filesystems deliver those events late, coalesced, or
+not at all, so a note changed on another device may simply never appear until a
+manual reindex. That is acceptable if it is *stated*; it is a bug report if the
+app claims to watch.
+
+### Why symlinks are the wrong first move
+
+A symlink is easy to create and answers none of the above — it changes where the
+bytes come from and nothing about whether they are present, whether writes are
+safe, or whether changes are observable. It also adds its own problem: the walker
+would have to decide whether to follow links, and following them makes cycles and
+escapes from the vault root reachable, neither of which it currently has to
+handle.
+
+The honest smallest version, if this is picked up: **treat a cloud folder as a
+source to ingest from, not as part of the vault.** That path already exists — the
+setup wizard's "sources" step copies files in — and it sidesteps every item
+above, because the copy happens once, with a progress indicator, and what lands
+in the vault is a real local file. The cost is that it is a snapshot rather than a
+live mirror, and that is the trade to put in front of the user rather than to
+decide for them.
+
+A live mirror is the feature people actually picture. It is also a sync engine,
+and writing one of those is a much larger project than the app it would live in.
+
 ## Smaller items
 
 - **`src/config.ts` resolves the vault at import time** (`const resolved = resolveVault()`

@@ -98,11 +98,7 @@ export default function VaultPicker({ current, onDone }: { current: string | nul
       </div>
       {err && <div className="err">{err}</div>}
       {restart && (
-        <p className="cfghint">
-          Guardado. En el navegador el servidor no se reinicia solo: para el
-          proceso de <code>npm run dev</code> y vuelve a arrancarlo para que
-          tome el vault nuevo.
-        </p>
+        <p className="cfghint">{t("picker.restartHint", { cmd: "npm run dev" })}</p>
       )}
     </div>
   );

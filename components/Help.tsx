@@ -93,7 +93,7 @@ export default function Help() {
         <div className="cfgpanel helppanel">
           <div className="cfgsec">{t("help.images")}</div>
           <p className="helptext">{t("help.captionIntro")}</p>
-          <Snippet code={'![alt](assets/foto.webp "Mi pie de foto")'} />
+          <Snippet code={`![alt](assets/${t("help.sampleFile")} "${t("help.sampleCaption")}")`} />
           <p className="cfghint">{t("help.captionRule")}</p>
 
           <div className="cfgsec">{t("help.shortcuts")}</div>
@@ -109,7 +109,7 @@ export default function Help() {
             </tbody>
           </table>
           <p className="helptext">{t("help.combineIntro")}</p>
-          <Snippet code={'![alt](assets/foto.webp "[izq][w=220] Mi pie de foto")'} />
+          <Snippet code={`![alt](assets/${t("help.sampleFile")} "[${t("help.sampleDir")}][w=220] ${t("help.sampleCaption")}")`} />
 
           <div className="cfgsec">{t("help.editing")}</div>
           <ul className="helplist">

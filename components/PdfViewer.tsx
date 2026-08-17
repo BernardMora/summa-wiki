@@ -441,7 +441,7 @@ export default function PdfViewer({
             onBlur={() => goToPage(Number(pageInput))}
             aria-label={t("pdf.page")}
           />
-          <span className="dim"> de {pages || "…"}</span>
+          <span className="dim"> {t("pdf.ofPages", { n: pages || "…" })}</span>
         </span>
 
         <span className="pdfcolors">
