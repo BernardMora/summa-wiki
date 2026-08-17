@@ -14,8 +14,9 @@ out/
 .DS_Store
 
 # Material en crudo de la demo: grabaciones de pantalla en Retina, cientos de MB.
-# Lo que se publica es el asset ya optimizado, subido como attachment de GitHub y
-# enlazado por URL absoluta desde el README — no vive aqui.
+# Un .mov de 58 segundos pesa 136 MB, por encima del limite de 100 MB de GitHub;
+# ni siquiera se puede pushear. Lo que se publica es el GIF ya optimizado a los
+# 820 px a los que el README lo muestra, y ese vive en `docs/demo.gif`.
 #
 # Ignorado y no solo "no anadido" a proposito: asi entro `ocr/` al historial en su
 # dia, con un `git add .` que barrio 900 KB de escaneos que nadie quiso commitear.

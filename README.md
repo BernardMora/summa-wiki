@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/demo.gif" alt="Summa Wiki: front page, search, and an article with its backlinks" width="820">
+  <img src="docs/demo.gif" alt="Summa Wiki: an article with its table of contents, the graph view over a whole vault, and an agent working in the built-in terminal" width="820">
 </p>
 
 ## Download
