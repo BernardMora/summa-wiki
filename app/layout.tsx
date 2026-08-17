@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./appearance.css";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Masthead from "@/components/Masthead.tsx";
@@ -9,6 +10,9 @@ import ZoomGuard from "@/components/ZoomGuard.tsx";
 import { readConfig } from "@/src/config.ts";
 import { I18nProvider } from "@/components/I18n.tsx";
 import { getLocale, getT } from "@/lib/i18n.server.ts";
+import { appearanceExists, readAppearance } from "@/src/appearance/store.ts";
+import { appearanceAttributes, resolveAppearance } from "@/src/appearance/catalog.ts";
+import AppearanceMigration from "@/components/AppearanceMigration.tsx";
 
 /**
  * La identidad sale del vault (`04-Sistema/wiki-config.json`). Se resuelve en
@@ -36,21 +40,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const cfg = readConfig();
+  const appearance = readAppearance();
+  const migrateAppearance = !appearanceExists();
+  const resolvedAppearance = resolveAppearance(appearance);
   // Se resuelve una vez aquí y baja por contexto: es el único punto por el que
   // pasan todas las páginas, así que es el único sitio donde hace falta leerlo.
   const locale = getLocale();
   return (
-    <html lang={locale} suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{var t=localStorage.getItem('wiki.theme');" +
-              "if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}",
-          }}
-        />
-      </head>
+    <html lang={locale} suppressHydrationWarning {...appearanceAttributes(resolvedAppearance)}>
+      <head>{migrateAppearance && <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('wiki.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}" }} />}</head>
       <body>
+        <AppearanceMigration needed={migrateAppearance} />
         <ZoomGuard />
         <Suspense fallback={null}>
         <I18nProvider locale={locale}>

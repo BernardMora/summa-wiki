@@ -118,7 +118,7 @@ export default function CodePane({
       view.current?.dispatch({ effects: themeCompartment.reconfigure(themeExtensions(isDark())) });
     };
     const mo = new MutationObserver(repaint);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette"] });
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     mq.addEventListener("change", repaint);
 

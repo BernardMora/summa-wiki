@@ -220,7 +220,7 @@ export default function GraphView() {
       for (const e of edges.current) {
         const a = byId.current.get(e.s)!, b = byId.current.get(e.t)!;
         const lit = anchor && (e.s === anchor.id || e.t === anchor.id);
-        ctx.strokeStyle = lit ? "#3366cc" : (css.getPropertyValue("--line-soft") || "#ccc");
+        ctx.strokeStyle = lit ? (css.getPropertyValue("--link") || "#3366cc") : (css.getPropertyValue("--line-soft") || "#ccc");
         ctx.globalAlpha = anchor ? (lit ? 0.9 : 0.1) : 0.42;
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
@@ -234,11 +234,11 @@ export default function GraphView() {
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
         if (n === fo) {
           // El enfocado lleva un anillo doble para distinguirlo de sus vecinos.
-          ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 2.5; ctx.stroke();
+          ctx.strokeStyle = css.getPropertyValue("--link") || "#3366cc"; ctx.lineWidth = 2.5; ctx.stroke();
           ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
-          ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 1; ctx.globalAlpha = 0.5; ctx.stroke();
+          ctx.strokeStyle = css.getPropertyValue("--link") || "#3366cc"; ctx.lineWidth = 1; ctx.globalAlpha = 0.5; ctx.stroke();
           ctx.globalAlpha = 1;
-        } else if (n === hi) { ctx.strokeStyle = "#3366cc"; ctx.lineWidth = 2; ctx.stroke(); }
+        } else if (n === hi) { ctx.strokeStyle = css.getPropertyValue("--link") || "#3366cc"; ctx.lineWidth = 2; ctx.stroke(); }
         else if (n.pinned) {
           ctx.strokeStyle = css.getPropertyValue("--muted") || "#666";
           ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]);
@@ -260,7 +260,7 @@ export default function GraphView() {
        */
       const label = (n: Node, strong: boolean, avoid?: Rect): Rect => {
         const r = 3 + Math.min(9, Math.sqrt(n.degree) * 2);
-        ctx.font = `${strong ? 700 : 600} 12px -apple-system, system-ui, sans-serif`;
+        ctx.font = `${strong ? 700 : 600} 12px ${css.getPropertyValue("--font-ui") || "system-ui, sans-serif"}`;
         const text = n.title;
         const tw = ctx.measureText(text).width;
         const w = tw + 8, h = 18;
@@ -277,7 +277,7 @@ export default function GraphView() {
         ctx.globalAlpha = 0.94;
         ctx.fillRect(box.x, box.y, box.w, box.h);
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = strong ? "#3366cc" : (css.getPropertyValue("--line-soft") || "#ccc");
+        ctx.strokeStyle = strong ? (css.getPropertyValue("--link") || "#3366cc") : (css.getPropertyValue("--line-soft") || "#ccc");
         ctx.lineWidth = (strong ? 1.5 : 1) / k;
         ctx.strokeRect(box.x, box.y, box.w, box.h);
         ctx.fillStyle = css.getPropertyValue("--fg") || "#222";

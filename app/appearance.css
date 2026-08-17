@@ -1,0 +1,172 @@
+/* Appearance recipes. Semantic aliases keep component CSS independent from a palette. */
+@font-face { font-family:"Summa Sans"; src:url("/pdf-fonts/LiberationSans-Regular.ttf") format("truetype"); font-style:normal; font-weight:400; font-display:swap; }
+@font-face { font-family:"Summa Sans"; src:url("/pdf-fonts/LiberationSans-Bold.ttf") format("truetype"); font-style:normal; font-weight:700; font-display:swap; }
+:root {
+  --surface-app: #f8f9fa; --surface-content: #fff; --surface-muted: #f8f9fa;
+  --surface-hover: #f6f9fc; --surface-selected: #ccdff2;
+  --text-primary: #202122; --text-secondary: #54595d;
+  --border-default: #a2a9b1; --border-subtle: #c8ccd1;
+  --accent: #3366cc; --accent-visited: #795cb2; --danger: #d73333;
+  --control-radius: 2px; --panel-radius: 0px; --control-padding-y: 5px;
+  --shadow-popup: 0 6px 22px rgba(0,0,0,.18); --content-measure: 46em;
+  --border-width:1px; --panel-shadow:none; --button-shadow:none;
+  --button-bg:var(--surface-muted); --button-hover:var(--surface-hover);
+  --button-border:var(--border-default); --tab-radius:3px 3px 0 0;
+  --motion-fast: 120ms;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-content: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-heading: "Linux Libertine", Georgia, "Times New Roman", serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+:root[data-palette="paper-terracotta"] {
+  --surface-app:#f1eadf; --surface-content:#fffaf1; --surface-muted:#f6eddf;
+  --surface-hover:#f2e3d2; --surface-selected:#ead0b8; --text-primary:#352c25;
+  --text-secondary:#756457; --border-default:#aa8f79; --border-subtle:#d7c3b1;
+  --accent:#a94f35; --accent-visited:#7f5976; --danger:#b72f2f;
+}
+:root[data-palette="neutral-indigo"] {
+  --surface-app:#f4f5f8; --surface-content:#fff; --surface-muted:#f5f6fa;
+  --surface-hover:#eef0fa; --surface-selected:#dfe3f6; --text-primary:#20222a;
+  --text-secondary:#626675; --border-default:#9ca2b4; --border-subtle:#d5d8e2;
+  --accent:#5559c9; --accent-visited:#7b55a6; --danger:#c33d50;
+}
+:root[data-palette="archive-green"] {
+  --surface-app:#eeeae0; --surface-content:#fbf8ee; --surface-muted:#f1eee4;
+  --surface-hover:#e7ecdf; --surface-selected:#cedbc7; --text-primary:#292d26;
+  --text-secondary:#61695c; --border-default:#8d9986; --border-subtle:#c5ccbe;
+  --accent:#396847; --accent-visited:#685577; --danger:#a23b32;
+}
+:root[data-palette="technical-charcoal"] {
+  --surface-app:#e8eeec; --surface-content:#f7faf9; --surface-muted:#eaf1ef;
+  --surface-hover:#dcece8; --surface-selected:#c6e1da; --text-primary:#17211f;
+  --text-secondary:#566b66; --border-default:#758b85; --border-subtle:#bacbc6;
+  --accent:#087f6d; --accent-visited:#555f9b; --danger:#bd3440;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-palette="technical-charcoal"]) {
+    --surface-app:#101012; --surface-content:#1b1b1d; --surface-muted:#202024;
+    --surface-hover:#1c2432; --surface-selected:#2a3b53; --text-primary:#eaecf0;
+    --text-secondary:#a2a9b1; --border-default:#4b4d50; --border-subtle:#3a3c3f;
+    --accent:#88a5e8; --accent-visited:#b697e8; --danger:#ff6c6c;
+  }
+}
+:root[data-theme="dark"][data-palette="technical-charcoal"] { --surface-app:#101416; --surface-content:#171c1f; --surface-muted:#1d2427; --surface-hover:#1d302e; --surface-selected:#23443f; --text-primary:#e6f0ee; --text-secondary:#9dafab; --border-default:#52635f; --border-subtle:#34433f; --accent:#58d6bd; --accent-visited:#9ba6ff; --danger:#ff6b72; color-scheme:dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-palette="technical-charcoal"] { --surface-app:#101416; --surface-content:#171c1f; --surface-muted:#1d2427; --surface-hover:#1d302e; --surface-selected:#23443f; --text-primary:#e6f0ee; --text-secondary:#9dafab; --border-default:#52635f; --border-subtle:#34433f; --accent:#58d6bd; --accent-visited:#9ba6ff; --danger:#ff6b72; color-scheme:dark; }
+  :root:not([data-theme="light"])[data-palette="paper-terracotta"] { --surface-app:#191410; --surface-content:#241d18; --surface-muted:#2b221b; --surface-hover:#36261e; --surface-selected:#54352a; --text-primary:#f2e7db; --text-secondary:#bda99a; --border-default:#70594a; --border-subtle:#49382f; --accent:#e58b6e; --accent-visited:#c79abd; }
+  :root:not([data-theme="light"])[data-palette="neutral-indigo"] { --surface-app:#11121a; --surface-content:#191a24; --surface-muted:#20212d; --surface-hover:#25263a; --surface-selected:#35375a; --text-primary:#edeef8; --text-secondary:#a7a9ba; --border-default:#55586d; --border-subtle:#37394a; --accent:#a4a7ff; --accent-visited:#cc9fea; }
+  :root:not([data-theme="light"])[data-palette="archive-green"] { --surface-app:#121510; --surface-content:#1c2019; --surface-muted:#24291f; --surface-hover:#293326; --surface-selected:#394d35; --text-primary:#edf0e7; --text-secondary:#a9b2a1; --border-default:#596653; --border-subtle:#3b4437; --accent:#89c394; --accent-visited:#b99ec5; }
+}
+:root[data-theme="dark"]:not([data-palette="technical-charcoal"]) {
+  --surface-app:#101012; --surface-content:#1b1b1d; --surface-muted:#202024;
+  --surface-hover:#1c2432; --surface-selected:#2a3b53; --text-primary:#eaecf0;
+  --text-secondary:#a2a9b1; --border-default:#4b4d50; --border-subtle:#3a3c3f;
+  --accent:#88a5e8; --accent-visited:#b697e8; --danger:#ff6c6c;
+}
+/* Palette-specific dark recipes come last so the generic dark fallback cannot
+   flatten every package into the same charcoal-and-blue design. */
+:root[data-theme="dark"][data-palette="paper-terracotta"] { --surface-app:#191410; --surface-content:#241d18; --surface-muted:#2b221b; --surface-hover:#36261e; --surface-selected:#54352a; --text-primary:#f2e7db; --text-secondary:#bda99a; --border-default:#70594a; --border-subtle:#49382f; --accent:#e58b6e; --accent-visited:#c79abd; }
+:root[data-theme="dark"][data-palette="neutral-indigo"] { --surface-app:#11121a; --surface-content:#191a24; --surface-muted:#20212d; --surface-hover:#25263a; --surface-selected:#35375a; --text-primary:#edeef8; --text-secondary:#a7a9ba; --border-default:#55586d; --border-subtle:#37394a; --accent:#a4a7ff; --accent-visited:#cc9fea; }
+:root[data-theme="dark"][data-palette="archive-green"] { --surface-app:#121510; --surface-content:#1c2019; --surface-muted:#24291f; --surface-hover:#293326; --surface-selected:#394d35; --text-primary:#edf0e7; --text-secondary:#a9b2a1; --border-default:#596653; --border-subtle:#3b4437; --accent:#89c394; --accent-visited:#b99ec5; }
+
+:root[data-typography="humanist"] {
+  --font-ui: Optima, Candara, "Segoe UI", sans-serif;
+  --font-content: Charter, "Bitstream Charter", Georgia, serif;
+  --font-heading: Charter, "Bitstream Charter", Georgia, serif;
+}
+:root[data-typography="modern"] {
+  --font-ui: "Summa Sans", ui-sans-serif, sans-serif;
+  --font-content: "Summa Sans", ui-sans-serif, sans-serif;
+  --font-heading: "Summa Sans", ui-sans-serif, sans-serif;
+}
+:root[data-typography="academic"] {
+  --font-ui: "Arial Narrow", "Aptos Narrow", Arial, sans-serif;
+  --font-content: Baskerville, "Iowan Old Style", "Times New Roman", serif;
+  --font-heading: Baskerville, "Iowan Old Style", "Times New Roman", serif;
+}
+:root[data-typography="monospace"] {
+  --font-ui: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-content: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-heading: ui-monospace, "SF Mono", Menlo, monospace;
+}
+:root[data-typography="system"] {
+  --font-ui: system-ui, sans-serif; --font-content: system-ui, sans-serif;
+  --font-heading: system-ui, sans-serif;
+}
+
+:root[data-preset="notebook"] { --control-radius:999px; --panel-radius:14px; --content-measure:42em; --control-padding-y:7px; --border-width:0px; --panel-shadow:0 4px 18px rgba(88,55,32,.10); --button-shadow:0 1px 3px rgba(88,55,32,.12); --button-bg:var(--surface-hover); --button-border:transparent; --tab-radius:999px; }
+:root[data-preset="studio"] { --control-radius:8px; --panel-radius:10px; --shadow-popup:0 14px 38px rgba(27,31,49,.18); --content-measure:50em; --control-padding-y:7px; --panel-shadow:0 6px 20px rgba(34,39,66,.08); --button-shadow:0 1px 2px rgba(34,39,66,.12); --button-bg:var(--surface-content); --tab-radius:7px 7px 0 0; }
+:root[data-preset="archive"] { --control-radius:0; --panel-radius:0; --content-measure:44em; --control-padding-y:3px; --border-width:1px; --panel-shadow:none; --button-bg:transparent; --button-hover:var(--surface-selected); --tab-radius:0; }
+:root[data-preset="terminal"] { --control-radius:0; --panel-radius:0; --content-measure:54em; --control-padding-y:4px; --motion-fast:0ms; --border-width:1px; --panel-shadow:4px 4px 0 var(--border-subtle); --button-bg:transparent; --button-hover:var(--surface-selected); --button-border:var(--accent); --tab-radius:0; }
+
+:root[data-buttons="soft"] { --control-radius:9px; }
+:root[data-buttons="solid"] { --control-radius:7px; }
+:root[data-buttons="technical"] { --control-radius:0; --control-padding-y:3px; }
+
+/* Component grammar. appearance.css is loaded after globals.css, so these
+   semantic rules replace the many historical 2px/3px component constants. */
+.newbtn, .themebtn, .bar button, .pdfbar button, .graphbar button,
+.cfgmodes button, .viewtoggle button, .appearance-footer button,
+.appearance-modes button, .searchwrap button, .cvbar button {
+  border-width:var(--border-width); border-style:solid; border-color:var(--button-border);
+  border-radius:var(--control-radius); background:var(--button-bg); box-shadow:var(--button-shadow);
+  padding-top:var(--control-padding-y); padding-bottom:var(--control-padding-y);
+}
+.newbtn:hover, .themebtn:hover, .bar button:hover, .pdfbar button:hover,
+.graphbar button:hover, .cfgmodes button:hover, .viewtoggle button:hover,
+.appearance-footer button:hover, .appearance-modes button:hover, .searchwrap button:hover,
+.cvbar button:hover { background:var(--button-hover); }
+input, select, textarea { border-radius:var(--control-radius) !important; border-width:var(--border-width); }
+.searchwrap input { border-radius:var(--control-radius) 0 0 var(--control-radius) !important; }
+.searchwrap button { border-radius:0 var(--control-radius) var(--control-radius) 0; }
+.panel, .pane, .cfgpanel, .ctxmenu, .setupcard, .archcard, .appearance-dialog,
+.appearance-preview, .graphcanvas, .cvnode, .quick-switcher {
+  border-width:var(--border-width); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow);
+}
+.tabs button, .tabs a, .otab { border-radius:var(--tab-radius); }
+
+/* Cuaderno: controles blandos, tarjetas de papel y tabs como etiquetas. */
+:root[data-preset="notebook"] .panel,
+:root[data-preset="notebook"] .pane,
+:root[data-preset="notebook"] .setupcard,
+:root[data-preset="notebook"] .archcard { border:0; }
+:root[data-preset="notebook"] .panel > h2 { border-radius:var(--panel-radius) var(--panel-radius) 0 0; }
+:root[data-preset="notebook"] .otab { border:0; margin:3px 2px 4px; padding-inline:14px; }
+:root[data-preset="notebook"] .otab.on { border:0; box-shadow:inset 0 0 0 1px var(--border-subtle); }
+
+/* Estudio: cards elevadas y acciones primarias sólidas. */
+:root[data-preset="studio"] .newbtn.primary,
+:root[data-preset="studio"] .bar button.primary,
+:root[data-preset="studio"] .pdfsel button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+:root[data-preset="studio"] .otab.on { box-shadow:inset 0 3px 0 var(--accent); }
+:root[data-preset="studio"] .masthead { box-shadow:0 2px 10px rgba(34,39,66,.07); }
+
+/* Archivo: líneas firmes, cero redondez y jerarquía tipográfica compacta. */
+:root[data-preset="archive"] .panel,
+:root[data-preset="archive"] .pane,
+:root[data-preset="archive"] .cfgpanel,
+:root[data-preset="archive"] .ctxmenu { border-color:var(--border-default); }
+:root[data-preset="archive"] .newbtn,
+:root[data-preset="archive"] .themebtn,
+:root[data-preset="archive"] .bar button { border-bottom-width:2px; }
+:root[data-preset="archive"] .panel > h2,
+:root[data-preset="archive"] .panehead { text-transform:uppercase; letter-spacing:.055em; font-size:11px; }
+:root[data-preset="archive"] .otab.on { border-top:2px solid var(--accent); }
+
+/* Terminal: outlines de acento, sombras duras y ningún gesto ornamental. */
+:root[data-preset="terminal"] .newbtn,
+:root[data-preset="terminal"] .themebtn,
+:root[data-preset="terminal"] .bar button,
+:root[data-preset="terminal"] .pdfbar button,
+:root[data-preset="terminal"] .cvbar button { box-shadow:inset 3px 0 0 var(--accent); }
+:root[data-preset="terminal"] .newbtn:hover,
+:root[data-preset="terminal"] .themebtn:hover,
+:root[data-preset="terminal"] .bar button:hover { color:var(--accent); }
+:root[data-preset="terminal"] .panel > h2::before,
+:root[data-preset="terminal"] .panehead::before { content:"// "; color:var(--accent); }
+:root[data-preset="terminal"] .otab.on { border-top:1px solid var(--accent); color:var(--accent); }
+:root[data-preset="notebook"] .sidetoggle:not(.collapsed) { border-radius:0 10px 10px 0; }
+:root[data-preset="archive"] .sidetoggle:not(.collapsed),
+:root[data-preset="terminal"] .sidetoggle:not(.collapsed) { border-radius:0; }

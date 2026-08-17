@@ -166,7 +166,7 @@ export default function TerminalPane({ id }: { id: string }) {
       // sistema en modo "auto"): xterm no lee variables CSS por sí solo.
       const repaint = () => { term.options.theme = currentTheme(); };
       const mo = new MutationObserver(repaint);
-      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette"] });
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       mq.addEventListener("change", repaint);
 

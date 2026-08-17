@@ -4,34 +4,22 @@ import { useRouter } from "next/navigation";
 import VaultPicker from "./VaultPicker";
 import { useT, useLocale } from "./I18n";
 import { LOCALES, type Locale } from "@/lib/i18n.ts";
+import AppearanceDesigner from "./AppearanceDesigner.tsx";
 
 /**
  * Panel de configuración, en el sitio donde antes estaba el botón de tema.
  *
- * El tema vive en localStorage (es preferencia del dispositivo: la misma wiki
- * abierta en dos máquinas puede querer claro en una y oscuro en otra). El
- * nombre y la bajada viven en `04-Sistema/wiki-config.json`, dentro del vault,
- * porque son identidad de la wiki y tienen que viajar con ella.
- *
- * Ese reparto no es cosmético: por eso el tema se aplica al instante sin tocar
- * el servidor, y el nombre necesita un POST y un refresh.
+ * La apariencia y la identidad viven dentro del vault: la primera en
+ * `.summa/appearance.json` y la segunda en `.summa/config.json`. Ambas viajan
+ * con la wiki; el diseñador previsualiza en el cliente y solo escribe al
+ * pulsar Aplicar.
  *
  * El IDIOMA es el tercer caso y no encaja en ninguno de los dos anteriores. Es
- * preferencia del dispositivo como el tema —el mismo vault se puede leer en dos
- * idiomas en dos máquinas— pero no puede vivir en localStorage, porque media
+ * preferencia del dispositivo —el mismo vault se puede leer en dos idiomas en
+ * dos máquinas— pero no puede vivir en localStorage, porque media
  * interfaz la pinta el servidor. Va en `settings.json` de la máquina, y por eso
  * necesita POST + refresh aunque no sea identidad de la wiki.
  */
-
-type Mode = "system" | "light" | "dark";
-const KEY = "wiki.theme";
-
-/** El icono es del modo; la etiqueta se traduce al pintar. */
-const MODES: { id: Mode; icon: string; key: "settings.themeAuto" | "settings.themeLight" | "settings.themeDark" }[] = [
-  { id: "system", icon: "◐", key: "settings.themeAuto" },
-  { id: "light", icon: "☀", key: "settings.themeLight" },
-  { id: "dark", icon: "☾", key: "settings.themeDark" },
-];
 
 /**
  * El nombre de cada idioma, EN ese idioma.
@@ -65,7 +53,6 @@ const SOURCE_HINT = {
 
 export default function Settings({ name, tagline }: { name: string; tagline: string }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("system");
   const [draftName, setDraftName] = useState(name);
   const [draftTag, setDraftTag] = useState(tagline);
   const [saving, setSaving] = useState(false);
@@ -85,18 +72,6 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
     if (!open || vault) return;
     fetch("/api/vault").then((r) => r.json()).then(setVault).catch(() => {});
   }, [open, vault]);
-
-  useEffect(() => {
-    const s = localStorage.getItem(KEY) as Mode | null;
-    if (s === "light" || s === "dark" || s === "system") setMode(s);
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (mode === "system") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", mode);
-    localStorage.setItem(KEY, mode);
-  }, [mode]);
 
   // El servidor manda: si el nombre cambia por fuera (editando el JSON a mano,
   // o un agente), el borrador se re-sincroniza en vez de quedarse viejo.
@@ -200,16 +175,8 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
 
       {open && (
         <div className="cfgpanel">
-          <div className="cfgsec">{t("settings.theme")}</div>
-          <div className="cfgmodes">
-            {MODES.map((m) => (
-              <button
-                key={m.id}
-                className={mode === m.id ? "on" : ""}
-                onClick={() => setMode(m.id)}
-              >{m.icon} {t(m.key)}</button>
-            ))}
-          </div>
+          <div className="cfgsec">{t("settings.appearance")}</div>
+          <AppearanceDesigner />
 
           {/*
             El idioma va junto al tema y no abajo con el vault: los dos son

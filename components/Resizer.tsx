@@ -44,7 +44,7 @@ export default function Resizer() {
   return (
     <>
       <button
-        className="sidetoggle"
+        className={`sidetoggle${collapsed ? " collapsed" : ""}`}
         style={{ left: "var(--sidew)" }}
         onClick={() => {
           const next = collapsed ? `${localStorage.getItem(KEY) || 195}px` : "0px";
@@ -57,9 +57,20 @@ export default function Resizer() {
           setCollapsed(!collapsed);
         }}
         title={t("chrome.toggleSidebar")}
-        aria-label={t("chrome.collapseSidebar")}
+        aria-label={t("chrome.toggleSidebar")}
+        aria-expanded={!collapsed}
       >
-        {collapsed ? "›" : "‹"}
+        {collapsed ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="4" width="17" height="16" rx="2" />
+            <path d="M9 4v16" />
+            <path className="side-arrow" d="m13 9 3 3-3 3" />
+          </svg>
+        ) : (
+          <svg className="side-chevron" viewBox="0 0 12 20" aria-hidden="true">
+            <path d="m8 5-4 5 4 5" />
+          </svg>
+        )}
       </button>
     <div
       className={`resizer${dragging ? " dragging" : ""}`}
