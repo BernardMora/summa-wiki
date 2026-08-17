@@ -1,0 +1,32 @@
+# Sin campos obligatorios más allá de los dos primeros: una idea a medio formar
+# sigue siendo información útil, y un formulario largo la ahuyenta. Lo que sí se
+# pide es el PROBLEMA antes que la solución — es lo que permite descubrir que
+# hay una forma mejor que la que traía quien lo pidió.
+name: Feature request
+description: Suggest something
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: |
+        The problem, before the solution. "I can't find notes I wrote months
+        ago" tells us more than "add a date filter", because it might have a
+        better answer than the one you had in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+      description: Optional. If you already have a shape for it, describe it.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How do you handle it today?
+      description: |
+        Optional, and more useful than it sounds — a workaround that almost
+        works usually points at the smallest change that would help.
