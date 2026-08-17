@@ -33,7 +33,10 @@ export async function POST(req: Request) {
   const raw = body && typeof body.path === "string" ? body.path.trim() : "";
   const name = body && typeof body.name === "string" ? body.name.trim() : "";
   const packId = body && typeof body.architecture === "string" ? body.architecture : "";
-  const agent = body && typeof body.agent === "string" ? body.agent : "claude";
+  const requestedAgent = body && typeof body.agent === "string" ? body.agent : "claude";
+  const agent = ["claude", "antigravity", "opencode", "codex"].includes(requestedAgent)
+    ? requestedAgent
+    : "claude";
 
   const problems = validateCreate(name, raw);
   const errors = blocking(problems);

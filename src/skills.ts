@@ -11,9 +11,10 @@ import type { Locale } from "./locales.mjs";
  *    NO lee `.agents/skills/`.
  *  - **opencode** lee `.opencode/skills/`, `.claude/skills/` **y** `.agents/skills/`.
  *  - **Antigravity** (`agy`) lee `.agents/skills/` en la raíz del proyecto.
+ *  - **Codex** lee `.agents/skills/` y usa `AGENTS.md` como router.
  *
  * La intersección está vacía; la unión no. Así que el canon vive en
- * `.agents/skills/` —la convención neutral, la única que dos de los tres leen
+ * `.agents/skills/` —la convención neutral, la única que tres de los cuatro leen
  * nativamente— y hacia `.claude/skills/` sale un **symlink al directorio**, no
  * una copia.
  *
@@ -83,6 +84,7 @@ export function writeSkill(vault: string, name: string, content: string): SkillW
 
   const adapters: SkillWrite["adapters"] = [
     { agent: "antigravity", path: rel(vault, canonFile), kind: "native" },
+    { agent: "codex", path: rel(vault, canonFile), kind: "native" },
   ];
 
   for (const [agent, dir] of Object.entries(SKILL_ADAPTERS)) {

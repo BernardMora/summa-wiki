@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agyModels } from "@/src/agents.ts";
+import { agyModels, codexModels } from "@/src/agents.ts";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Catálogo en vivo de modelos para el agente que lo tenga (por ahora, agy).
- * Claude Code y OpenCode siguen con la lista fija de `agent-session.ts` — sus
- * CLIs no exponen un comando equivalente para pedirla en vivo.
+ * Catálogo en vivo de modelos para los CLIs que lo exponen. Claude Code y
+ * OpenCode siguen con sus aliases curados en `agent-session.ts`.
  */
 export async function GET(req: NextRequest) {
   const agent = req.nextUrl.searchParams.get("agent");
   if (agent === "antigravity") {
     return NextResponse.json({ models: await agyModels() });
+  }
+  if (agent === "codex") {
+    return NextResponse.json({ models: await codexModels() });
   }
   return NextResponse.json({ models: null });
 }

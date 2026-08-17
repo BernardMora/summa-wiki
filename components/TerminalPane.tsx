@@ -70,7 +70,7 @@ export function runInNewTerminal(id: string, cmd: string, cwd?: string) {
   if (cwd) pendingCwd.set(id, cwd);
 }
 
-export default function TerminalPane({ id }: { id: string }) {
+export default function TerminalPane({ id, onEnded }: { id: string; onEnded?: () => void }) {
   const t = useT();
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -135,7 +135,10 @@ export default function TerminalPane({ id }: { id: string }) {
       };
       ws.onopen = sendResize;
       ws.onmessage = (e) => term.write(e.data as string);
-      ws.onclose = () => term.write(`\r\n\x1b[2m${t("agent.terminalEnded")}\x1b[0m\r\n`);
+      ws.onclose = () => {
+        term.write(`\r\n\x1b[2m${t("agent.terminalEnded")}\x1b[0m\r\n`);
+        onEnded?.();
+      };
       term.onData((s) => { if (ws.readyState === ws.OPEN) ws.send(s); });
 
       // xterm no tiene mapeo propio para estos: Cmd+flecha/Delete se los
@@ -199,7 +202,7 @@ export default function TerminalPane({ id }: { id: string }) {
         entry!.term.dispose();
       }, 300);
     };
-  }, [id]);
+  }, [id, onEnded]);
 
   return <div ref={hostRef} className="termhost" />;
 }

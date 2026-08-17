@@ -121,6 +121,10 @@
 input, select, textarea { border-radius:var(--control-radius) !important; border-width:var(--border-width); }
 .searchwrap input { border-radius:var(--control-radius) 0 0 var(--control-radius) !important; }
 .searchwrap button { border-radius:0 var(--control-radius) var(--control-radius) 0; }
+.appearance-open, .appearance-open:hover {
+  padding:0; border:0; border-radius:0; background:transparent; box-shadow:none;
+  color:var(--link); text-align:left; text-transform:none; letter-spacing:normal;
+}
 .panel, .pane, .cfgpanel, .ctxmenu, .setupcard, .archcard, .appearance-dialog,
 .appearance-preview, .graphcanvas, .cvnode, .quick-switcher {
   border-width:var(--border-width); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow);
@@ -135,6 +139,17 @@ input, select, textarea { border-radius:var(--control-radius) !important; border
 :root[data-preset="notebook"] .panel > h2 { border-radius:var(--panel-radius) var(--panel-radius) 0 0; }
 :root[data-preset="notebook"] .otab { border:0; margin:3px 2px 4px; padding-inline:14px; }
 :root[data-preset="notebook"] .otab.on { border:0; box-shadow:inset 0 0 0 1px var(--border-subtle); }
+:root[data-preset="notebook"] .panechrome { align-items:center; padding:7px 12px; gap:5px; }
+:root[data-preset="notebook"] .panechrome button {
+  position:static; margin:0; padding:6px 14px; line-height:1.35;
+  border:0; border-radius:999px; background:transparent; color:var(--text-secondary);
+}
+:root[data-preset="notebook"] .panechrome button:hover { background:var(--surface-hover); color:var(--text-primary); }
+:root[data-preset="notebook"] .panechrome button.on {
+  border:0; background:var(--surface-selected); color:var(--text-primary);
+  box-shadow:inset 0 0 0 1px var(--border-subtle);
+}
+:root[data-preset="notebook"] .panechrome .crumb { padding-bottom:0; }
 
 /* Estudio: cards elevadas y acciones primarias sólidas. */
 :root[data-preset="studio"] .newbtn.primary,
@@ -154,6 +169,8 @@ input, select, textarea { border-radius:var(--control-radius) !important; border
 :root[data-preset="archive"] .panel > h2,
 :root[data-preset="archive"] .panehead { text-transform:uppercase; letter-spacing:.055em; font-size:11px; }
 :root[data-preset="archive"] .otab.on { border-top:2px solid var(--accent); }
+:root[data-preset="archive"] .tabs button,
+:root[data-preset="archive"] .tabs a { padding-block:4px; }
 
 /* Terminal: outlines de acento, sombras duras y ningún gesto ornamental. */
 :root[data-preset="terminal"] .newbtn,
@@ -167,6 +184,17 @@ input, select, textarea { border-radius:var(--control-radius) !important; border
 :root[data-preset="terminal"] .panel > h2::before,
 :root[data-preset="terminal"] .panehead::before { content:"// "; color:var(--accent); }
 :root[data-preset="terminal"] .otab.on { border-top:1px solid var(--accent); color:var(--accent); }
+:root[data-buttons="technical"] .newbtn,
+:root[data-buttons="technical"] .themebtn,
+:root[data-buttons="technical"] .bar button,
+:root[data-buttons="technical"] .pdfbar button,
+:root[data-buttons="technical"] .tabs button,
+:root[data-buttons="technical"] .tabs a,
+:root[data-buttons="technical"] .cfgmodes button,
+:root[data-buttons="technical"] .viewtoggle button,
+:root[data-buttons="technical"] .appearance-modes button {
+  text-transform:uppercase; letter-spacing:.035em;
+}
 :root[data-preset="notebook"] .sidetoggle:not(.collapsed) { border-radius:0 10px 10px 0; }
 :root[data-preset="archive"] .sidetoggle:not(.collapsed),
 :root[data-preset="terminal"] .sidetoggle:not(.collapsed) { border-radius:0; }
