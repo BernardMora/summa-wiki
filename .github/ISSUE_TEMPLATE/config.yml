@@ -1,0 +1,11 @@
+# Los issues en blanco quedan permitidos a propósito: hay reportes que no son
+# ni un bug ni una petición —una pregunta, una nota sobre la documentación— y
+# obligarlos a entrar por un formulario que no les queda hace que no se envíen.
+blank_issues_enabled: true
+contact_links:
+  - name: How the vault format works
+    url: https://github.com/BernardMora/summa-wiki/blob/main/docs/architecture.md
+    about: The vault format, the indexer, categories and the reasoning behind each decision.
+  - name: Already considered and deliberately not built
+    url: https://github.com/BernardMora/summa-wiki/blob/main/docs/future-work.md
+    about: Plugins, cloud folders, local OCR, more graph views — each with the reasoning. Worth a look before opening a feature request.

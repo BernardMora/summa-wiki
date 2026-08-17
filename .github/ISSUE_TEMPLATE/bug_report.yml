@@ -1,0 +1,96 @@
+# Un formulario y no una plantilla de Markdown: los campos se pueden marcar
+# obligatorios. La plantilla de Markdown se puede borrar entera y enviar un
+# "no me abre" sin plataforma ni versión, que es exactamente el reporte que no
+# se puede investigar.
+#
+# La primera pregunta es el sistema operativo porque esta app se empaqueta
+# cuatro veces y casi todo lo que se rompe se rompe en una sola de las cuatro.
+name: Bug report
+description: Something doesn't work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The two fields below that matter most are
+        **platform** and **version** — this app is packaged four times, and
+        most bugs happen on exactly one of the four.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS — Apple Silicon
+        - macOS — Intel
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      description: e.g. macOS 15.2, Windows 11 23H2, Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Summa Wiki version
+      description: Shown in the app's About window, or the version in the file you downloaded.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - .dmg (macOS)
+        - .exe installer (Windows)
+        - .AppImage (Linux)
+        - .deb (Linux)
+        - Built from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a vault with…
+        2. Click…
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: |
+        Optional, but it usually turns a guess into a fix. Open *View → Toggle
+        Developer Tools*, switch to the **Console** tab, and paste anything red.
+      render: shell
+
+  - type: textarea
+    id: vault
+    attributes:
+      label: Anything about your vault that might matter
+      description: |
+        Optional. Roughly how many notes, unusual filenames, a folder on an
+        external or network drive, a very large PDF. Do not paste private
+        content — a description is enough.
