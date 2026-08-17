@@ -19,6 +19,8 @@
     "wiki": "./bin/wiki"
   },
   "scripts": {
+    "test:agents": "node --experimental-strip-types --test tests/agents.test.ts",
+    "test": "node --experimental-strip-types --test \"tests/*.test.ts\"",
     "test:appearance": "node --experimental-strip-types --test tests/appearance.test.ts",
     "dev": "cross-env UV_THREADPOOL_SIZE=64 node --experimental-strip-types --no-warnings server.ts",
     "desktop": "electron electron/main.js",
