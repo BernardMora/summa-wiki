@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Settings from "./Settings.tsx";
+import AgentMenu from "./AgentMenu.tsx";
 import Help from "./Help.tsx";
 import { useT } from "./I18n";
 import { openInWorkspace, newTermId } from "./Tabs.tsx";
@@ -13,9 +14,17 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const t = useT();
+
+  useEffect(() => {
+    const value = localStorage.getItem("wiki.masthead") === "0";
+    setHidden(value);
+    document.body.classList.toggle("masthead-hidden", value);
+    return () => document.body.classList.remove("masthead-hidden");
+  }, []);
 
   useEffect(() => {
     if (q.trim().length < 2) { setHits([]); return; }
@@ -35,8 +44,15 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
     return () => document.removeEventListener("mousedown", away);
   }, []);
 
+  const setMastheadHidden = (value: boolean) => {
+    setHidden(value);
+    document.body.classList.toggle("masthead-hidden", value);
+    localStorage.setItem("wiki.masthead", value ? "0" : "1");
+  };
+
   return (
-    <header className="masthead">
+    <>
+    <header className={`masthead${hidden ? " hidden" : ""}`}>
       <Link href="/" className="wordmark">
         <span className="name">{name}</span>
         {tagline && <span className="tag">{tagline}</span>}
@@ -67,6 +83,8 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
         )}
       </div>
 
+      <AgentMenu />
+
       <button
         className="themebtn"
         title={t("masthead.newTerminal")}
@@ -76,6 +94,9 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
       </button>
       <Help />
       <Settings name={name} tagline={tagline} />
+      <button className="masthead-hide" title={t("masthead.hide")} aria-label={t("masthead.hide")} onClick={() => setMastheadHidden(true)}>⌃</button>
     </header>
+    {hidden && <button className="masthead-restore" title={t("masthead.show")} aria-label={t("masthead.show")} onClick={() => setMastheadHidden(false)}>⌄</button>}
+    </>
   );
 }

@@ -31,7 +31,10 @@ function parseTags(raw?: string): string[] {
 const AI_BLOCK = /<!--\s*ai\s*-->([\s\S]*?)<!--\s*\/ai\s*-->/g;
 const HUMAN_BLOCK = /<!--\s*human\s*-->([\s\S]*?)<!--\s*\/human\s*-->/g;
 
-const wc = (s: string) => (s.trim() ? s.trim().split(/\s+/).length : 0);
+const wc = (s: string) => {
+  const plain = s.replace(/<\/?(?:u|mark|span|sup|sub)(?:\s+[^>]*)?>/gi, "");
+  return plain.trim() ? plain.trim().split(/\s+/).length : 0;
+};
 
 /**
  * Attribute words to human vs agent using the markers from spec section 4.
@@ -137,6 +140,7 @@ export function buildIndex(): WikiIndex {
     const plain = body
       .replace(/<!--[\s\S]*?-->/g, "")
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/<\/?(?:u|mark|span|sup|sub)(?:\s+[^>]*)?>/gi, "")
       .replace(/[#*_`>|-]/g, " ")
       .replace(/\s+/g, " ")
       .trim();

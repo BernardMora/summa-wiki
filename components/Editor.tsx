@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { search, searchKeymap, openSearchPanel, highlightSelectionMatches } from "@codemirror/search";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
+import { frontmatterField, frontmatterVisible, livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
+import { toggleWrap } from "./editorCommands.ts";
 
 /**
  * El último editor que tuvo el foco, y el atajo global de búsqueda.
@@ -44,6 +45,28 @@ function trackFind(v: EditorView) {
   };
 }
 
+const HIDDEN_TAG_LEFT = /<\/?(?:u|sup|sub|span|mark)(?:\s+class="summa-(?:text|highlight)-[a-z]+")?>\s*$/i;
+const HIDDEN_TAG_RIGHT = /^<\/?(?:u|sup|sub|span|mark)(?:\s+class="summa-(?:text|highlight)-[a-z]+")?>/i;
+
+/** One arrow press always moves one visible character, skipping hidden tags. */
+function moveVisible(view: EditorView, forward: boolean, extend = false) {
+  const main = view.state.selection.main;
+  const source = view.state.doc.toString();
+  let head = main.head;
+  let skipped = false;
+  if (forward) {
+    for (let match = HIDDEN_TAG_RIGHT.exec(source.slice(head)); match; match = HIDDEN_TAG_RIGHT.exec(source.slice(head))) { head += match[0].length; skipped = true; }
+    if (!skipped) return false;
+    if (head < source.length) head += String.fromCodePoint(source.codePointAt(head)!).length;
+  } else {
+    for (let match = HIDDEN_TAG_LEFT.exec(source.slice(0, head)); match; match = HIDDEN_TAG_LEFT.exec(source.slice(0, head))) { head -= match[0].length; skipped = true; }
+    if (!skipped) return false;
+    if (head > 0) head -= /[\uDC00-\uDFFF]/.test(source[head - 1]) ? 2 : 1;
+  }
+  view.dispatch({ selection: { anchor: extend ? main.anchor : head, head }, scrollIntoView: true });
+  return true;
+}
+
 /**
  * Envuelve o desenvuelve la selección con un marcador de énfasis.
  *
@@ -51,47 +74,6 @@ function trackFind(v: EditorView) {
  * asteriscos. Sin selección inserta el par y deja el cursor en medio, que es
  * lo que se espera al empezar a escribir en negritas.
  */
-function toggleWrap(view: EditorView, mark: string) {
-  const { from, to } = view.state.selection.main;
-  const doc = view.state.doc;
-  const n = mark.length;
-
-  if (from === to) {
-    view.dispatch({
-      changes: { from, insert: mark + mark },
-      selection: { anchor: from + n },
-    });
-    return true;
-  }
-
-  const inner = doc.sliceString(from, to);
-  // Envuelta por dentro: **texto** seleccionado con los asteriscos incluidos.
-  if (inner.length >= n * 2 && inner.startsWith(mark) && inner.endsWith(mark)) {
-    const bare = inner.slice(n, -n);
-    view.dispatch({
-      changes: { from, to, insert: bare },
-      selection: { anchor: from, head: from + bare.length },
-    });
-    return true;
-  }
-  // Envuelta por fuera: los asteriscos quedaron justo afuera de la selección.
-  const before = doc.sliceString(Math.max(0, from - n), from);
-  const after = doc.sliceString(to, Math.min(doc.length, to + n));
-  if (before === mark && after === mark) {
-    view.dispatch({
-      changes: [{ from: to, to: to + n }, { from: from - n, to: from }],
-      selection: { anchor: from - n, head: to - n },
-    });
-    return true;
-  }
-
-  view.dispatch({
-    changes: [{ from, insert: mark }, { from: to, insert: mark }],
-    selection: { anchor: from + n, head: to + n },
-  });
-  return true;
-}
-
 /**
  * Envuelve la selección en marcadores de procedencia. Explícito, lo pide el usuario.
  *
@@ -190,7 +172,7 @@ const imagesIn = (dt: DataTransfer | null) =>
   [...(dt?.files ?? [])].filter((f) => f.type.startsWith("image/"));
 
 export default function Editor({
-  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery, onSelectionChange,
+  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery, onSelectionChange, showFrontmatter = false, rawMarkdown = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -206,9 +188,15 @@ export default function Editor({
   onLinkQuery?: (q: { query: string; from: number; to: number; x: number; y: number } | null) => void;
   /** Se avisa en cada cambio de selección, venga del ratón o del teclado. */
   onSelectionChange?: (hasSelection: boolean) => void;
+  showFrontmatter?: boolean;
+  rawMarkdown?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const frontmatterConfig = useRef(new Compartment());
+  const previewConfig = useRef(new Compartment());
+  const rawMarkdownRef = useRef(rawMarkdown);
+  rawMarkdownRef.current = rawMarkdown;
   // El efecto que construye CodeMirror corre una sola vez, así que el callback
   // se lee por referencia para no quedar congelado en el del primer render.
   const onLinkQueryRef = useRef(onLinkQuery);
@@ -231,6 +219,10 @@ export default function Editor({
           drawSelection(),
           // Antes que defaultKeymap: en macOS ⌘I ya está tomado por otras cosas.
           keymap.of([
+            { key: "ArrowLeft", run: (v) => rawMarkdownRef.current ? false : moveVisible(v, false) },
+            { key: "ArrowRight", run: (v) => rawMarkdownRef.current ? false : moveVisible(v, true) },
+            { key: "Shift-ArrowLeft", run: (v) => rawMarkdownRef.current ? false : moveVisible(v, false, true) },
+            { key: "Shift-ArrowRight", run: (v) => rawMarkdownRef.current ? false : moveVisible(v, true, true) },
             { key: "Mod-b", preventDefault: true, run: (v) => toggleWrap(v, "**") },
             { key: "Mod-i", preventDefault: true, run: (v) => toggleWrap(v, "*") },
           ]),
@@ -243,8 +235,8 @@ export default function Editor({
           keymap.of(searchKeymap),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           markdown({ base: markdownLanguage }),   // GFM: task lists, tables, strikethrough
-          livePreview,
-          tableField,
+          frontmatterConfig.current.of(frontmatterVisible.of(showFrontmatter)),
+          previewConfig.current.of(rawMarkdown ? [] : [livePreview, frontmatterField, tableField]),
           livePreviewTheme,
           linkClick,
           linkResolver.of(resolve),
@@ -389,6 +381,14 @@ export default function Editor({
       view.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: frontmatterConfig.current.reconfigure(frontmatterVisible.of(showFrontmatter)) });
+  }, [showFrontmatter]);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: previewConfig.current.reconfigure(rawMarkdown ? [] : [livePreview, frontmatterField, tableField]) });
+  }, [rawMarkdown]);
 
   return <div ref={host} />;
 }

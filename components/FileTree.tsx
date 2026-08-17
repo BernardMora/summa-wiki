@@ -7,6 +7,7 @@ import { REVEAL_EVENT } from "./Crumb.tsx";
 import { FileIcon, FolderIcon } from "./FileIcon.tsx";
 import { useT } from "./I18n";
 import { bold } from "./markup";
+import { queueTerminalInput, terminalTargets } from "./terminalBridge.ts";
 
 /** Sangría por nivel, en px. Es también la separación entre guías. */
 const STEP = 11;
@@ -75,6 +76,7 @@ export default function FileTree() {
   const [err, setErr] = useState("");
   const [cats, setCats] = useState<Cat[]>([]);
   const [pinOpen, setPinOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [vault, setVault] = useState("");
   const [links, setLinks] = useState<Record<string, string>>({});
@@ -113,13 +115,42 @@ export default function FileTree() {
    */
   const gaveUp = useRef<Set<string>>(new Set());
 
+  /**
+   * Un fallo tiene DOS formas y el árbol reacciona distinto a cada una, así que
+   * la respuesta las distingue en vez de colapsarlas en un `ok: false`.
+   *
+   * `reached: true` — el servidor contestó y contestó que no. La ruta no vale;
+   * `refreshDir` da la carpeta por perdida, que es lo correcto porque eso no se
+   * arregla solo.
+   *
+   * `reached: false` — no hubo respuesta. `fetch` RECHAZA (no devuelve un 4xx)
+   * cuando la petición no llega a salir o se corta a medias: el servidor
+   * todavía no escucha, la app se está cerrando, o —lo más común— la página
+   * está navegando y el navegador aborta lo que hubiera en vuelo.
+   * `openInWorkspace` navega con `window.location.href`, así que abrir una
+   * terminal desde la portada mientras el árbol carga produce exactamente eso.
+   * Aquí no se da nada por perdido: no se sabe nada del disco, solo que esta
+   * petición no llegó.
+   *
+   * Antes ese rechazo no se atrapaba en ningún sitio. `hardReload` lo esperaba
+   * sin `catch` y el efecto que lo llama tampoco, así que salía por arriba como
+   * una promesa rechazada sin manejar — el «Runtime TypeError: Failed to fetch»
+   * del overlay de Next, apuntando a un árbol que en realidad no tenía nada
+   * roto: solo se le fue la página debajo.
+   */
   async function fetchDir(dir: string, hidden = showHidden) {
     const params = new URLSearchParams({ dir });
     if (hidden) params.set("hidden", "1");
-    const r = await fetch(`/api/tree?${params}`);
-    if (!r.ok) return { ok: false as const };
-    const d = (await r.json()) as { children: Node[]; links: Record<string, string>; vault: string; defaultOpen: string[] };
-    return { ok: true as const, ...d };
+    try {
+      const r = await fetch(`/api/tree?${params}`);
+      if (!r.ok) return { ok: false as const, reached: true };
+      const d = (await r.json()) as { children: Node[]; links: Record<string, string>; vault: string; defaultOpen: string[] };
+      return { ok: true as const, ...d };
+    } catch {
+      // También cae aquí un `json()` que revienta: un cuerpo truncado es un
+      // servidor que se murió a media respuesta, no un veredicto sobre la ruta.
+      return { ok: false as const, reached: false };
+    }
   }
 
   function findNode(nodes: Node[], rel: string): Node | undefined {
@@ -176,10 +207,12 @@ export default function FileTree() {
   async function refreshDir(rel: string): Promise<void> {
     const d = await fetchDir(rel);
     if (!d.ok) {
-      // El servidor confirma que la ruta no es válida — ahí sí se da por
-      // vencido; a diferencia de un fallo de enganche en el cliente, esto no
-      // se va a resolver solo en un refresco posterior.
-      if (rel !== "") gaveUp.current.add(rel);
+      // Solo cuando el servidor CONFIRMA que la ruta no es válida se da por
+      // vencido; eso no se resuelve solo en un refresco posterior. Si no hubo
+      // respuesta (`reached: false`) la carpeta se queda como estaba: darla por
+      // perdida por una navegación a destiempo la borraría del árbol hasta el
+      // siguiente arranque.
+      if (rel !== "" && d.reached) gaveUp.current.add(rel);
       return;
     }
     setRoot((prev) => setChildrenAt(prev, rel, d.children ?? []));
@@ -271,7 +304,13 @@ export default function FileTree() {
     for (const rel of open) ensureDir(rel);
   }, [open, root]);
   useEffect(() => {
-    fetch("/api/categories").then((r) => r.json()).then((d) => setCats(d.categories ?? []));
+    // `.catch` por lo mismo que `fetchDir`: si la página navega mientras esto
+    // está en vuelo, el rechazo saldría al overlay. Sin categorías el árbol
+    // sigue siendo usable.
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((d) => setCats(d.categories ?? []))
+      .catch(() => { /* sin respuesta: se queda la lista que hubiera */ });
   }, []);
 
   // El reveal necesita el árbol cargado hasta ese punto, no solo `open`
@@ -312,8 +351,13 @@ export default function FileTree() {
     if (!activeId) { setActiveTrail(new Set()); return; }
     let cancelled = false;
     (async () => {
-      const r = await fetch(`/api/tree/resolve?id=${encodeURIComponent(activeId)}`);
-      const { rel } = (await r.json()) as { rel: string | null };
+      let rel: string | null;
+      try {
+        const r = await fetch(`/api/tree/resolve?id=${encodeURIComponent(activeId)}`);
+        ({ rel } = (await r.json()) as { rel: string | null });
+      } catch {
+        return; // misma historia que en `fetchDir`: sin respuesta no hay rastro que marcar
+      }
       if (!rel || cancelled) return;
       const segs = rel.split("/").slice(0, -1);
       const trail = segs.map((_, i) => segs.slice(0, i + 1).join("/"));
@@ -375,7 +419,7 @@ export default function FileTree() {
   }, []);
 
   useEffect(() => {
-    const close = () => { setMenu(null); setPinOpen(false); };
+    const close = () => { setMenu(null); setPinOpen(false); setChatOpen(false); };
     window.addEventListener("click", close);
     window.addEventListener("scroll", close, true);
     return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); };
@@ -525,6 +569,7 @@ export default function FileTree() {
       ));
       const onCtx = (e: React.MouseEvent) => {
         e.preventDefault(); e.stopPropagation();
+        setChatOpen(false);
         setMenu({ x: e.clientX, y: e.clientY, node: n });
       };
 
@@ -701,6 +746,22 @@ export default function FileTree() {
       {menu && createPortal(
         <div className="ctxmenu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <div className="ctxhead">{menu.node.name}</div>
+          {!menu.node.dir && <>
+            <button onClick={() => {
+              const ok = queueTerminalInput(`${menu.node.rel} `);
+              setMenu(null);
+              if (!ok) alert(t("terminal.chooseFirst"));
+            }}>{t("terminal.addToChat")}</button>
+            <div className="ctxsub">
+              <button onClick={() => setChatOpen((value) => !value)}>{t("terminal.addTo")}</button>
+              {chatOpen && <div className="ctxsubmenu">
+                {terminalTargets().length === 0 && <div className="ctxhead">{t("terminal.noneOpen")}</div>}
+                {terminalTargets().map((target) => <button key={target.id} onClick={() => {
+                  queueTerminalInput(`${menu.node.rel} `, target.id); setMenu(null); setChatOpen(false);
+                }}>{target.title}</button>)}
+              </div>}
+            </div>
+          </>}
           {menu.node.dir && (
             <button onClick={() => {
               setCreatingIn(menu.node.rel); setSelDir(menu.node.rel);

@@ -4,6 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useT } from "./I18n";
+import { markTerminalFocused, registerTerminalSender, takeTerminalInput } from "./terminalBridge.ts";
 
 /**
  * Shell real dentro de la app — para no saltar de pestaña a correr Claude
@@ -56,18 +57,67 @@ const registry = new Map<string, Entry>();
  * Comandos que deben ejecutarse al abrir una terminal, por id de pestaña.
  *
  * Un buzón fuera de React, como el `registry` de arriba y por el mismo motivo:
- * quien programa el comando (la ingesta) y quien abre la pestaña (el workspace)
- * no comparten árbol de componentes, y pasarlo por props obligaría a enhebrar
- * el dato por cinco niveles que no lo usan.
+ * quien programa el comando y quien abre la pestaña no comparten árbol de
+ * componentes, y pasarlo por props obligaría a enhebrar el dato por cinco
+ * niveles que no lo usan.
+ *
+ * **En `sessionStorage` y no en un `Map` de módulo**, y la diferencia no es de
+ * estilo: `openInWorkspace` navega con `window.location.href` cuando el
+ * workspace no está montado —la portada, /search, /categories—, y una
+ * navegación completa tira todo el módulo. El comando se programaba, se perdía
+ * a medio viaje, y la pestaña abría una shell pelada: ningún error, ninguna
+ * pista, solo un botón que "no hacía nada". Desde la ingesta no se veía porque
+ * ahí la terminal se monta en la misma página, sin navegar.
+ *
+ * `sessionStorage` y no `localStorage` porque el buzón es de ESTA pestaña del
+ * navegador: dos ventanas de la app abriendo terminales a la vez no tienen por
+ * qué verse los comandos. Lo que quede sin consumir muere con la pestaña.
  */
-const pendingCmd = new Map<string, string>();
+const PENDING_KEY = "wiki.pendingTerm";
 
-const pendingCwd = new Map<string, string>();
+interface Pending { cmd: string; cwd?: string }
+
+/**
+ * La misma terminal se nombra de dos maneras en la app, y el buzón tiene que
+ * responder a las dos.
+ *
+ * Quien programa el comando trabaja con el id de PESTAÑA (`term:abc123`), que
+ * es lo que entiende `openInWorkspace`. Pero el workspace monta el panel con el
+ * id pelado —`<TerminalPane id={p.activeId.slice(5)} />`, Workspace.tsx— porque
+ * ese es el nombre de la sesión en el servidor. Sin normalizar, quien programa
+ * y quien consume miran claves distintas: el comando se guarda, la terminal
+ * abre sin él, y no hay error en ninguna de las dos puntas.
+ *
+ * Se normaliza aquí, en el buzón, y no exigiendo la forma correcta a quien
+ * llama: la convención correcta depende de si el panel se monta en el workspace
+ * o suelto (la ingesta usa el id entero), o sea que el llamador no siempre
+ * puede saberlo, y una regla que se puede incumplir en silencio se incumple.
+ */
+const key = (id: string) => (id.startsWith("term:") ? id.slice(5) : id);
+
+function readPending(): Record<string, Pending> {
+  try { return JSON.parse(sessionStorage.getItem(PENDING_KEY) || "{}"); } catch { return {}; }
+}
+
+function writePending(all: Record<string, Pending>) {
+  try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(all)); } catch { /* modo privado */ }
+}
+
+/** Lee y BORRA lo programado para ese id: de un solo uso, ver más abajo. */
+function takePending(id: string): Pending | null {
+  const all = readPending();
+  const hit = all[key(id)];
+  if (!hit) return null;
+  delete all[key(id)];
+  writePending(all);
+  return hit;
+}
 
 /** Programa un comando —y opcionalmente un directorio— para la próxima terminal con ese id. */
 export function runInNewTerminal(id: string, cmd: string, cwd?: string) {
-  pendingCmd.set(id, cmd);
-  if (cwd) pendingCwd.set(id, cwd);
+  const all = readPending();
+  all[key(id)] = cwd ? { cmd, cwd } : { cmd };
+  writePending(all);
 }
 
 export default function TerminalPane({ id, onEnded }: { id: string; onEnded?: () => void }) {
@@ -116,11 +166,10 @@ export default function TerminalPane({ id, onEnded }: { id: string; onEnded?: ()
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const termPort = Number(location.port || (location.protocol === "https:" ? 443 : 80)) + 1;
-      const cmd = pendingCmd.get(id) ?? "";
-      const cwd = pendingCwd.get(id) ?? "";
       // De un solo uso: reengancharse a la pestaña no debe relanzar el comando.
-      pendingCmd.delete(id);
-      pendingCwd.delete(id);
+      const pending = takePending(id);
+      const cmd = pending?.cmd ?? "";
+      const cwd = pending?.cwd ?? "";
       const q = new URLSearchParams({ id });
       if (cmd) q.set("cmd", cmd);
       if (cwd) q.set("cwd", cwd);
@@ -133,7 +182,10 @@ export default function TerminalPane({ id, onEnded }: { id: string; onEnded?: ()
         // línea).
         if (ws.readyState === ws.OPEN) ws.send("" + JSON.stringify({ cols: term.cols, rows: term.rows }));
       };
-      ws.onopen = sendResize;
+      const flushPending = () => {
+        for (const text of takeTerminalInput(id)) ws.send(text);
+      };
+      ws.onopen = () => { sendResize(); flushPending(); };
       ws.onmessage = (e) => term.write(e.data as string);
       ws.onclose = () => {
         term.write(`\r\n\x1b[2m${t("agent.terminalEnded")}\x1b[0m\r\n`);
@@ -190,9 +242,24 @@ export default function TerminalPane({ id, onEnded }: { id: string; onEnded?: ()
     }
     entry.fit.fit();
     entry.term.focus();
+    markTerminalFocused(id);
+    if (entry.ws.readyState === entry.ws.OPEN) {
+      for (const text of takeTerminalInput(id)) entry.ws.send(text);
+    }
+    const unregisterSender = registerTerminalSender(id, (text) => {
+      if (entry!.ws.readyState !== entry!.ws.OPEN) return false;
+      entry!.ws.send(text);
+      entry!.term.focus();
+      markTerminalFocused(id);
+      return true;
+    });
+    const onFocus = () => markTerminalFocused(id);
+    host.addEventListener("focusin", onFocus);
     entry.ro.observe(host);
 
     return () => {
+      unregisterSender();
+      host.removeEventListener("focusin", onFocus);
       entry!.ro.unobserve(host);
       entry!.teardown = setTimeout(() => {
         registry.delete(id);
