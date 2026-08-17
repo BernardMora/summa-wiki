@@ -85,11 +85,9 @@
 
 button, input, select, textarea { border-radius: var(--control-radius); transition: background var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast); }
 .panel, .pane, .setupcard, .archcard, .confirmbox, .warnbox { border-radius: var(--panel-radius); }
-:root[data-buttons="soft"] button:not(.linkish):not(.toctoggle):not(.hiddentoggle) { background: var(--surface-muted); }
 :root[data-buttons="solid"] button.primary,
 :root[data-buttons="solid"] .newbtn.primary,
 :root[data-buttons="solid"] .bar button.primary { background: var(--accent); border-color: var(--accent); color: white; }
-:root[data-buttons="technical"] button { text-transform: uppercase; letter-spacing: .035em; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -616,6 +614,28 @@ body.resizing { cursor: col-resize; user-select: none; }
 .setupfield > label {
   font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
 }
+.setupfield-label { display: flex; align-items: center; gap: 6px; }
+.setupfield-label > label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.structurehelp {
+  position: relative; width: 17px; height: 17px; padding: 0;
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  border: 1px solid var(--line-soft); border-radius: 50%;
+  background: transparent; color: var(--muted); font: 600 10px/1 var(--sans);
+  cursor: help;
+}
+.structurehelp:hover, .structurehelp:focus-visible { color: var(--fg); border-color: var(--muted); }
+.structurehelp::after {
+  content: attr(data-tooltip); position: absolute; z-index: 80; left: 24px; top: -8px;
+  width: min(310px, 70vw); padding: 9px 11px; pointer-events: none;
+  border: 1px solid var(--line); border-radius: var(--control-radius);
+  background: var(--bg); color: var(--fg); box-shadow: var(--panel-shadow);
+  font: 11.5px/1.5 var(--sans); text-align: left; text-transform: none;
+  letter-spacing: normal; opacity: 0; transform: translateY(3px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.structurehelp:hover::after, .structurehelp:focus-visible::after { opacity: 1; transform: none; }
 .setupfield input {
   font: inherit; font-size: 13px; padding: 6px 8px;
   border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
@@ -634,6 +654,41 @@ body.resizing { cursor: col-resize; user-select: none; }
 .archcard.on { border-color: var(--fg); background: var(--bg); }
 .archcard strong { font-size: 13.5px; }
 .archcard span { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+/*
+ * La insignia de «instalado / no instalado» en la tarjeta del agente.
+ *
+ * Va dentro del `<strong>` del nombre, en línea, y no como una fila aparte: lo
+ * que el usuario compara al elegir es cuál de los cuatro tiene, y esa respuesta
+ * tiene que leerse en el mismo golpe de vista que el nombre.
+ *
+ * Sin color de fondo. El rojo de «no instalado» diría que algo está mal, y no
+ * lo está — no tener Codex instalado es el estado normal de casi todo el mundo,
+ * y la app funciona sin ninguno de los cuatro.
+ */
+.archcard strong { display: flex; align-items: baseline; gap: 6px; }
+.agentok, .agentmissing {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .02em;
+  text-transform: lowercase;
+}
+.agentok { color: var(--ok, var(--muted)); }
+.agentok::before { content: "\2713\a0"; }
+.agentmissing { color: var(--muted); opacity: .75; }
+.architecture-options { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+.architecture-options .archcard { min-width: 0; }
+.archmini {
+  display: flex; flex-direction: column; gap: 1px; margin: 5px 0 3px; padding: 7px 8px;
+  border: 1px solid var(--line-soft); border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  font-family: var(--mono); overflow: hidden;
+}
+.archmini-row { display: flex; gap: 4px; min-width: 0; }
+.archmini-folder { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg) !important; }
+.archbest { margin-top: auto; padding-top: 5px; color: var(--fg) !important; }
+.archbest > strong { font-size: inherit; color: var(--link); }
+@media (max-width: 620px) { .architecture-options { grid-template-columns: 1fr; } }
 
 .cfglink { font-size: 12.5px; }
 .setupfield textarea {
@@ -670,7 +725,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .agentterm > div { height: 100%; }
 
-.archpreview { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 3px; }
+.archpreview { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 3px; }
 .archpreview .structtable { margin: 6px 0; }
 /* Fuera del panel —en la pantalla de primer arranque— el selector no debe
    estirarse a lo ancho de la portada. */

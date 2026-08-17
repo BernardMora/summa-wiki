@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { postJSON, TimeoutError } from "./net";
 import VaultPicker from "./VaultPicker";
 import AgentSession from "./AgentSession";
-import { PERMS, useAgyModels } from "./agent-session";
+import { AGENTS, type AgentPickId, PERMS, useAgentModels, useInstalledAgents } from "./agent-session";
+import AgentMissing from "./AgentMissing";
 import { useT } from "./I18n";
 import { bold } from "./markup";
 
@@ -43,6 +44,12 @@ interface Preview {
   inbox: string;
 }
 
+const BEST_FOR = {
+  identidad: "setup.bestIdentidad",
+  para: "setup.bestPara",
+  plano: "setup.bestPlano",
+} as const;
+
 export type Step = "start" | "open" | "create" | "sources" | "run";
 
 const mb = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
@@ -64,10 +71,11 @@ export default function Setup({
   // Paso «crear»
   const [packs, setPacks] = useState<Pack[]>([]);
   const [chosen, setChosen] = useState("");
-  const [agent, setAgent] = useState<"claude" | "antigravity" | "opencode">("claude");
+  const [agent, setAgent] = useState<AgentPickId>("claude");
   const [model, setModel] = useState("");
   const [perm, setPerm] = useState("acceptEdits");
-  const { models: agentModels, loading: modelsLoading } = useAgyModels(agent);
+  const { models: agentModels, loading: modelsLoading } = useAgentModels(agent);
+  const { agents: installedAgents, installed } = useInstalledAgents();
   const [name, setName] = useState(suggestName);
   const [dir, setDir] = useState(suggestDir);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -82,6 +90,7 @@ export default function Setup({
 
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [agentFinished, setAgentFinished] = useState(false);
   /**
    * Segundos transcurridos mientras se analiza.
    *
@@ -160,7 +169,7 @@ export default function Setup({
   }
 
   async function addSource() {
-    const p = await window.summa?.chooseFolder("Carpeta con material para tu wiki");
+    const p = await window.summa?.chooseFolder(t("setup.pickSourcesTitle"));
     if (p) setSources((f) => (f.includes(p) ? f : [...f, p]));
     setPreview(null);
   }
@@ -214,7 +223,7 @@ export default function Setup({
   if (step === "start") {
     return (
       <div className="welcome">
-        <h1>Bienvenido</h1>
+        <h1>{t("setup.welcome")}</h1>
         <p>{t("setup.intro")}</p>
         <div className="setupchoices">
           <button className="setupcard" onClick={() => setStep("open")}>
@@ -278,38 +287,80 @@ export default function Setup({
           )}
         </div>
 
-        <div className="setupfield">
-          <label>{t("setup.fieldStructure")}</label>
-          <div className="archgrid">
+        <div className="setupfield structurefield">
+          <div className="setupfield-label">
+            <label>{t("setup.fieldStructure")}</label>
+            <button type="button" className="structurehelp"
+                    aria-label={t("setup.structureHelpLabel")}
+                    data-tooltip={t("setup.structureHelpBody")}>?</button>
+          </div>
+          <div className="archgrid architecture-options">
             {packs.map((p) => (
               <button key={p.id} className={`archcard${p.id === chosen ? " on" : ""}`}
                       onClick={() => setChosen(p.id)}>
                 <strong>{p.name}</strong>
                 <span>{p.description}</span>
+                <span className="archmini" aria-label={t("setup.folderPreview")}>
+                  {p.folders.map((folder, index) => (
+                    <span className="archmini-row" key={folder.path}>
+                      <span aria-hidden="true">{index === p.folders.length - 1 ? "└" : "├"}─</span>
+                      <span className="archmini-folder">{folder.path.replace(/\/$/, "")}</span>
+                    </span>
+                  ))}
+                </span>
+                <span className="archbest">
+                  <strong>{t("setup.bestIf")}</strong>{" "}
+                  {t(BEST_FOR[p.id as keyof typeof BEST_FOR] ?? "setup.bestGeneric")}
+                </span>
               </button>
             ))}
           </div>
+
+          {pack && (
+            <div className="archpreview">
+              <p className="cfghint">{t("setup.foldersCreated")}</p>
+              <table className="structtable">
+                <tbody>
+                  {pack.folders.map((f) => (
+                    <tr key={f.path}>
+                      <td><code>{f.path}</code></td>
+                      <td>{f.purpose.replace(/\*\*/g, "")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="cfghint">
+                {pack.hubs.length
+                  ? t("setup.packWithHubs", { hubs: pack.hubs.length, cats: pack.categories })
+                  : t("setup.packNoHubs", { cats: pack.categories })}
+                {" "}{t("setup.packEditable", { file: ".summa/architecture.json" })}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="setupfield">
           <label>{t("setup.fieldAgent")}</label>
           <div className="archgrid">
-            <button className={`archcard${agent === "claude" ? " on" : ""}`}
-                    onClick={() => { setAgent("claude"); setModel(""); setPerm("acceptEdits"); }}>
-              <strong>Claude Code</strong>
-              <span>{t("setup.agentClaude")}</span>
-            </button>
-            <button className={`archcard${agent === "antigravity" ? " on" : ""}`}
-                    onClick={() => { setAgent("antigravity"); setModel(""); setPerm("acceptEdits"); }}>
-              <strong>Antigravity CLI</strong>
-              <span>{t("setup.agentAntigravity")}</span>
-            </button>
-            <button className={`archcard${agent === "opencode" ? " on" : ""}`}
-                    onClick={() => { setAgent("opencode"); setModel(""); setPerm("acceptEdits"); }}>
-              <strong>OpenCode</strong>
-              <span>{t("setup.agentOpencode")}</span>
-            </button>
+            {AGENTS.map((a) => {
+              const has = installed(a.id);
+              return (
+                <button key={a.id} className={`archcard${agent === a.id ? " on" : ""}`}
+                        onClick={() => { setAgent(a.id); setModel(""); setPerm("acceptEdits"); }}>
+                  <strong>
+                    {a.name}
+                    {has !== null && (
+                      <span className={has ? "agentok" : "agentmissing"}>
+                        {t(has ? "agent.installed" : "agent.notInstalled")}
+                      </span>
+                    )}
+                  </strong>
+                  <span>{t(a.blurb)}</span>
+                </button>
+              );
+            })}
           </div>
+          <AgentMissing agent={agent} installed={installed(agent)} all={installedAgents} />
         </div>
 
         <div className="setupfield">
@@ -349,28 +400,6 @@ export default function Setup({
             </div>
           )}
         </div>
-
-        {pack && (
-          <div className="archpreview">
-            <p className="cfghint">{t("setup.foldersCreated")}</p>
-            <table className="structtable">
-              <tbody>
-                {pack.folders.map((f) => (
-                  <tr key={f.path}>
-                    <td><code>{f.path}</code></td>
-                    <td>{f.purpose.replace(/\*\*/g, "")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="cfghint">
-              {pack.hubs.length
-                ? t("setup.packWithHubs", { hubs: pack.hubs.length, cats: pack.categories })
-                : t("setup.packNoHubs", { cats: pack.categories })}
-              {" "}{t("setup.packEditable", { file: ".summa/architecture.json" })}
-            </p>
-          </div>
-        )}
 
         {err && <div className="err">{err}</div>}
 
@@ -471,17 +500,29 @@ export default function Setup({
       <p className="steps">{t("setup.stepSort")}</p>
       <p>{t("setup.runIntro", { n: copied?.copied ?? 0 })}</p>
 
-      <AgentSession cwd={vault} agent={agent} model={model} perm={perm} />
+      <AgentMissing agent={agent} installed={installed(agent)} all={installedAgents} />
+      <p className="cfghint">{t("agent.optionalNote")}</p>
+      <AgentSession cwd={vault} agent={agent} model={model} perm={perm}
+                    installed={installed(agent)}
+                    onStarted={() => setAgentFinished(false)}
+                    onEnded={() => setAgentFinished(true)} />
 
-      <div className="cfgrow" style={{ marginTop: 22 }}>
-        <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
-                onClick={openVault}>
-          {t("setup.openMyWiki")}
-        </button>
-        <span className="dim" style={{ fontSize: 11.5 }}>
-          {t("setup.openAnyway")}
-        </span>
-      </div>
+      {/*
+        * El botón sale también cuando el agente NO está instalado: si no,
+        * esperar a que «termine» algo que nunca puede arrancar deja al usuario
+        * encerrado en el último paso del asistente, con su vault ya creado y
+        * sin manera de abrirlo. Justo al novato, que es quien no lo tiene.
+        */}
+      {agentFinished || installed(agent) === false ? (
+        <div className="cfgrow" style={{ marginTop: 22 }}>
+          <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
+                  onClick={openVault}>
+            {t("setup.openMyWiki")}
+          </button>
+        </div>
+      ) : (
+        <p className="cfghint" style={{ marginTop: 18 }}>{t("setup.waitForAgent")}</p>
+      )}
     </div>
   );
 }

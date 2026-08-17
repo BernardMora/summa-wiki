@@ -2,7 +2,8 @@
 import { useState } from "react";
 import TerminalPane, { runInNewTerminal } from "./TerminalPane";
 import { newTermId } from "./Tabs";
-import { PERMS, agentCommand, useAgyModels } from "./agent-session";
+import { PERMS, agentCommand, useAgentModels, useInstalledAgents } from "./agent-session";
+import AgentMissing from "./AgentMissing";
 import { useT } from "./I18n";
 
 /**
@@ -17,6 +18,11 @@ import { useT } from "./I18n";
  * `cwd` es el vault destino, que puede no ser el abierto: ahí están la skill,
  * el ledger y la bandeja que el agente necesita.
  *
+ * `installed` lo pasa quien ya sondeó (el asistente lo hace en el paso de
+ * configuración, y repetir el sondeo levantaría una segunda shell de login para
+ * preguntar lo mismo). Sin ese dato, el componente lo sondea él mismo: es el
+ * caso de la ingesta suelta, que no pasa por el asistente.
+ *
  * `model`/`perm` son controlados por quien lo use cuando ya se decidieron
  * antes (el asistente de creación los pide en el paso de configuración, junto
  * con el resto del vault, para no preguntar dos veces). Sin ellos, el
@@ -28,13 +34,18 @@ export default function AgentSession({
   agent = "claude",
   model: modelProp,
   perm: permProp,
+  installed: installedProp,
   onStarted,
+  onEnded,
 }: {
   cwd: string;
   agent?: string;
   model?: string;
   perm?: string;
+  /** `true` instalado, `false` no, `null`/ausente: hay que averiguarlo aquí. */
+  installed?: boolean | null;
   onStarted?: () => void;
+  onEnded?: () => void;
 }) {
   const t = useT();
   const [modelState, setModelState] = useState("");
@@ -46,8 +57,18 @@ export default function AgentSession({
   const perm = permProp ?? permState;
 
   const command = agentCommand(agent, model, perm);
-  const { models, loading: modelsLoading } = useAgyModels(agent);
+  const { models, loading: modelsLoading } = useAgentModels(agent);
   const perms = PERMS[agent] || PERMS.claude;
+
+  /*
+   * Solo se sondea si no lo hicieron por nosotros. `installedProp` llega como
+   * `null` mientras el asistente espera respuesta, y ese `null` NO es «no se
+   * sabe, averígualo»: es «lo están averiguando ya». Distinguirlo de `undefined`
+   * —que sí significa que nadie ha mirado— es lo que evita el segundo sondeo.
+   */
+  const own = useInstalledAgents(installedProp === undefined);
+  const installed = installedProp !== undefined ? installedProp : own.installed(agent);
+  const missing = installed === false;
 
   function start() {
     const id = newTermId();
@@ -60,13 +81,13 @@ export default function AgentSession({
     return (
       <div className="agentrun">
         <p className="cfghint">
-          Corriendo <code>{command}</code> en <code>{cwd}</code>.{" "}
+          {t("agent.runningIn", { command, cwd })}{" "}
           {agent === "antigravity"
             ? t("agent.oneShot")
             : t("agent.interactive")}
         </p>
         <div className="agentterm">
-          <TerminalPane id={termId} />
+          <TerminalPane id={termId} onEnded={onEnded} />
         </div>
       </div>
     );
@@ -117,13 +138,22 @@ export default function AgentSession({
         </div>
       )}
 
+      {installedProp === undefined && (
+        <AgentMissing agent={agent} installed={installed} all={own.agents} />
+      )}
+
       <div className="cfgrow" style={{ marginTop: 14 }}>
+        {/*
+          * Deshabilitado cuando el binario no está, en vez de dejar que la
+          * terminal conteste `command not found`. Un botón que arranca algo
+          * condenado a fallar no es una opción, es una trampa.
+          */}
         <button className="newbtn" style={{ margin: 0, width: "auto", padding: "6px 16px" }}
-                onClick={start}>
-          Empezar el reparto
+                disabled={missing} onClick={start}>
+          {t("agent.startSorting")}
         </button>
       </div>
-      <p className="cfghint">{t("agent.willRun")} <code>{command}</code></p>
+      {!missing && <p className="cfghint">{t("agent.willRun")} <code>{command}</code></p>}
     </>
   );
 }
