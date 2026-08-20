@@ -12,7 +12,14 @@ import { applyHumanProvenance } from "./provenance.ts";
  */
 
 let cache: { index: WikiIndex; builtAt: number } | null = null;
-const TTL_MS = 5_000;
+/*
+ * Reconstruir el índice implica recorrer y parsear todo el vault. Cinco
+ * segundos convertían cualquier clic después de leer un rato en un rebuild
+ * síncrono antes de poder mostrar la nota. Las mutaciones propias ya llaman a
+ * `invalidate()` y el watcher invalida cambios externos, así que el TTL queda
+ * como red de seguridad, no como mecanismo normal de frescura.
+ */
+const TTL_MS = 5 * 60_000;
 
 export function getIndex(force = false): WikiIndex {
   if (!force && cache && Date.now() - cache.builtAt < TTL_MS) return cache.index;

@@ -6,6 +6,7 @@ import { getPacks, getPack } from "@/src/architectures/index.ts";
 import { createVault } from "@/src/scaffold.ts";
 import { validateCreate, blocking } from "@/src/validate.ts";
 import { getLocale } from "@/lib/i18n.server.ts";
+import { readSettings } from "@/src/appdata.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,18 @@ export async function POST(req: Request) {
   let result;
   try {
     result = createVault(dir, name.trim(), pack!, agent, getLocale());
+    const machine = readSettings();
+    if (machine.onboarding.status === "in_progress") {
+      const appearance = {
+        version: 1,
+        activePreset: machine.onboarding.design,
+        mode: machine.onboarding.mode,
+        overrides: { typography: null, palette: null, buttons: null },
+        customPresets: [],
+      };
+      fs.mkdirSync(path.join(dir, ".summa"), { recursive: true });
+      fs.writeFileSync(path.join(dir, ".summa", "appearance.json"), JSON.stringify(appearance, null, 2) + "\n", "utf8");
+    }
   } catch (e) {
     return NextResponse.json({ error: `no se pudo escribir: ${(e as Error).message}` }, { status: 500 });
   }

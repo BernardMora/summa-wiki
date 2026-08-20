@@ -34,6 +34,7 @@ export const en = {
   "common.done": "Done",
   "common.optional": "optional",
   "common.loading": "Loading…",
+  "external.confirm": "Do you want to open this link in your browser?",
 
   // ── Masthead ──────────────────────────────────────────────────────────────
   "masthead.searchPlaceholder": "Search the wiki",
@@ -43,6 +44,18 @@ export const en = {
 
   // ── Ayuda del formato ─────────────────────────────────────────────────────
   "help.title": "Formatting help",
+  "help.exampleTour": "Tour and example vault",
+  "help.exampleBody": "Practice again or reset Alex's fictional wiki.",
+  "help.exampleVault": "Example vault",
+  "help.keyboardShortcuts": "Keyboard shortcuts",
+  "help.findFiles": "Find files in the vault",
+  "help.macOS": "macOS",
+  "help.windowsLinux": "Windows/Linux",
+  "help.categories": "Categories",
+  "help.categoriesRules": "A note has no category: field. Categories are rules that match its tags, pillar, type, origin, or path.",
+  "help.categoriesManual": "To classify it from raw frontmatter, add a tag used by that category's rule:",
+  "help.categoryTagExample": "philosophy",
+  "help.categoriesPin": "For an explicit exception, right-click the file in the file explorer and pin it to a category. Pins live in .summa/categories.json.",
   "help.images": "Images",
   "help.captionIntro":
     "The caption is markdown's own title \u2014 in quotes, inside the parentheses:",
@@ -238,13 +251,24 @@ export const en = {
   // ── File tree ─────────────────────────────────────────────────────────────
   "tree.folderNamePlaceholder": "Folder name",
   "tree.noteTitlePlaceholder": "Note title",
+  "tree.canvasTitlePlaceholder": "Canvas name",
   "tree.moveFailed": "couldn't move",
   "tree.deleteFailed": "error deleting",
   "tree.moving": "Moving and repointing links\u2026",
   "tree.hint": "Right-click to create, rename or delete \u00b7 drag to move",
   "tree.hidden": "Hidden",
   "tree.newNoteHere": "New note here",
+  "tree.newCanvasHere": "New canvas here",
   "tree.newFolderHere": "New folder here",
+  "tree.newNote": "New note",
+  "tree.newCanvas": "New canvas",
+  "tree.newFolder": "New folder",
+  "tree.openGraph": "Open graph",
+  "tree.chooseLocation": "Where should it be created?",
+  "tree.chooseLocationHint": "Search for and select an existing vault folder.",
+  "tree.rootLocation": "Vault root",
+  "tree.searchFolders": "Search folders…",
+  "tree.noFoldersFound": "No folders found",
   "tree.openBesideBlocked": "Open a note first; the side panel opens next to it.",
   "tree.openBeside": "Open beside",
   "tree.pinTo": "Pin to \u25b8",
@@ -277,8 +301,10 @@ export const en = {
   "nav.hide": "Hide",
 
   // ── Quick switcher / link picker ──────────────────────────────────────────
-  "qs.placeholder": "Search a note by title or path\u2026",
+  "qs.placeholder": "Search a file or folder by name or path\u2026",
   "qs.noResults": "No results",
+  "qs.folder": "Folder",
+  "qs.noExtension": "No extension",
   "qs.move": "\u2191\u2193 move",
   "qs.open": "\u21b5 open",
   "qs.newTab": "\u2318\u21b5 new tab",
@@ -298,8 +324,10 @@ export const en = {
   "chrome.download": "Download",
 
   // ── Graph ─────────────────────────────────────────────────────────────────
-  "graph.bothBundles": "Both bundles",
-  "graph.allBundles": "All bundles",
+  "graph.category": "Category",
+  "graph.allCategories": "All categories",
+  "graph.origin": "Origin",
+  "graph.wholeWiki": "Whole wiki",
   "graph.releasePinned": "Nodes you drag stay pinned; this releases them",
   "graph.openNote": "Open note",
   "graph.exit": "Exit",
@@ -382,6 +410,9 @@ export const en = {
   "raw.noExtension": "no extension",
   "raw.binary": "This is a binary file: there's nothing readable to show as text.",
   "raw.openInBrowser": "Open in the browser",
+  "raw.displayMode": "HTML display mode",
+  "raw.view": "View",
+  "raw.raw": "Raw",
 
   // ── Ingest ────────────────────────────────────────────────────────────────
   "ingest.title": "Bring folders into the vault",

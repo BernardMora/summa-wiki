@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import path from "node:path";
 import os from "node:os";
 import { VAULT, VAULT_SOURCE, HAS_VAULT, MIGRATED, vaultExists } from "@/src/config.ts";
-import { readSettings, rememberVault, inspectVault } from "@/src/appdata.mjs";
+import { readSettings, rememberVault, inspectVault, writeSettings } from "@/src/appdata.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +66,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, vault: abs, needsRestart: false, kind });
   }
 
-  rememberVault(abs);
+  const settings = rememberVault(abs);
+  // Abrir Atlas mantiene el recorrido en curso. Cualquier otro vault elegido
+  // explícitamente completa el onboarding: el usuario ya llegó a su espacio.
+  if (settings.demoVault?.path !== abs && settings.onboarding.status === "in_progress") {
+    writeSettings({ onboarding: { ...settings.onboarding, status: "completed", stage: "done", lesson: null } });
+  }
   return NextResponse.json({ ok: true, vault: abs, display: homeRelative(abs), needsRestart: true, kind });
 }

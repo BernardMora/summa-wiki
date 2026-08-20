@@ -1,12 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import FileTree from "./FileTree.tsx";
+import FileTree, { type FileTreeCreateKind, type FileTreeCreateRequest } from "./FileTree.tsx";
+import { FileIcon, FolderIcon } from "./FileIcon.tsx";
 import { useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
 import { GRAPH_ID } from "./Tabs.tsx";
 import { useT } from "./I18n";
+import Help from "./Help.tsx";
+import Settings from "./Settings.tsx";
 
 interface NavItem { id: string; title: string; pinned?: boolean; }
 interface NavGroup { id: string; label: string; blurb?: string; items: NavItem[]; total: number; hidden?: boolean; }
@@ -14,7 +17,7 @@ interface Menu { x: number; y: number; group: NavGroup; }
 
 interface QLink { id: string; title: string; count: number; }
 
-export default function SideNavClient({ groups, centre, questions, name, tagline, hasIcon }: {
+export default function SideNavClient({ groups, name, tagline, hasIcon }: {
   groups: NavGroup[];
   centre: { id: string; title: string } | null;
   questions: QLink[];
@@ -31,19 +34,50 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
   const [menu, setMenu] = useState<Menu | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [confirming, setConfirming] = useState<NavGroup | null>(null);
+  const [selectedDir, setSelectedDir] = useState("");
+  const [createRequest, setCreateRequest] = useState<FileTreeCreateRequest | null>(null);
+  const [locationPrompt, setLocationPrompt] = useState<{ kind: FileTreeCreateKind; folder: string } | null>(null);
+  const [folderSearch, setFolderSearch] = useState("");
+  const [folderOptions, setFolderOptions] = useState<string[]>([]);
+  const [folderLoading, setFolderLoading] = useState(false);
+  const sideRef = useRef<HTMLElement>(null);
+  const viewRef = useRef<"cat" | "files">("cat");
+  const viewScroll = useRef({ cat: 0, files: 0 });
   const router = useRouter();
   const tabs = useTabs();
 
   useEffect(() => {
     const v = localStorage.getItem("wiki.sideview");
-    if (v === "files" || v === "cat") setView(v);
+    if (v === "files" || v === "cat") { viewRef.current = v; setView(v); }
   }, []);
+
+  useEffect(() => {
+    if (!locationPrompt) return;
+    setFolderSearch(""); setFolderLoading(true);
+    fetch("/api/fs", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => setFolderOptions(Array.isArray(data.folders) ? data.folders : [""]))
+      .catch(() => setFolderOptions([""]))
+      .finally(() => setFolderLoading(false));
+  }, [locationPrompt?.kind]);
   useEffect(() => { localStorage.setItem("wiki.sideview", view); }, [view]);
+
+  /** Cambiar de vista no desmonta el árbol ni pierde la posición del usuario. */
+  function changeView(next: "cat" | "files") {
+    const current = viewRef.current;
+    if (next === current) return;
+    if (sideRef.current) viewScroll.current[current] = sideRef.current.scrollTop;
+    viewRef.current = next;
+    setView(next);
+    requestAnimationFrame(() => {
+      if (sideRef.current) sideRef.current.scrollTop = viewScroll.current[next];
+    });
+  }
 
   // A breadcrumb click must flip to the filesystem view, or the reveal lands
   // on a panel that is not showing.
   useEffect(() => {
-    const onReveal = () => setView("files");
+    const onReveal = () => changeView("files");
     window.addEventListener(REVEAL_EVENT, onReveal as EventListener);
     return () => window.removeEventListener(REVEAL_EVENT, onReveal as EventListener);
   }, []);
@@ -70,11 +104,28 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
     tabs?.open(item.id, item.title, e.metaKey || e.ctrlKey);
   }
 
+  function requestCreate(kind: FileTreeCreateKind) {
+    if (view === "files") {
+      setCreateRequest({ seq: Date.now(), kind, folder: selectedDir });
+      return;
+    }
+    setLocationPrompt({ kind, folder: "" });
+  }
+
+  function confirmCreateLocation() {
+    if (!locationPrompt) return;
+    const folder = locationPrompt.folder.trim().replace(/^\/+|\/+$/g, "");
+    changeView("files");
+    setCreateRequest({ seq: Date.now(), kind: locationPrompt.kind, folder });
+    setLocationPrompt(null);
+  }
+
   // Categories arrive already sorted alphabetically. Empty ones are dropped
   // here and only here: the portada shows them so an unfilled shelf reads as an
   // invitation, but in a 20-item rail they are dead weight.
   const visible = groups.filter((g) => !g.hidden && g.total > 0);
   const hidden = groups.filter((g) => g.hidden);
+  const visibleFolders = folderOptions.filter((folder) => !folderSearch.trim() || folder.toLocaleLowerCase().includes(folderSearch.trim().toLocaleLowerCase())).slice(0, 100);
 
   const renderGroup = (g: NavGroup) => (
     <div key={g.id}>
@@ -123,7 +174,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
   );
 
   return (
-    <nav className="side">
+    <nav className="side" ref={sideRef}>
       {/* Con foto se muestra la foto; sin ella, la inicial del nombre — que es
           lo que hacía la "B" fija, solo que ahora sigue a quien configure la
           wiki. `[...name][0]` y no `name[0]`: con un emoji o un carácter fuera
@@ -137,53 +188,33 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
       <div className="sidename">{name}</div>
       {tagline && <div className="sidetag">{tagline}</div>}
 
-      <div className="viewtoggle">
-        <button className={view === "cat" ? "on" : ""} onClick={() => setView("cat")}>{t("nav.categories")}</button>
-        <button className={view === "files" ? "on" : ""} onClick={() => setView("files")}>{t("nav.files")}</button>
-      </div>
+      <div className="side-sticky-tools">
+        <div className="viewtoggle">
+          <button className={view === "cat" ? "on" : ""} onClick={() => changeView("cat")}>{t("nav.categories")}</button>
+          <button className={view === "files" ? "on" : ""} onClick={() => changeView("files")}>{t("nav.files")}</button>
+        </div>
 
-      {/* The identity map is the primary navigation: the vault is organised by
-          these questions, so the sidebar leads with them and keeps the utility
-          links below. */}
-      {centre && (
-        <>
-          <h4 className="corehead4">{t("nav.core")}</h4>
-          <ul className="navid">
-            <li className="navcentre">
-              <a href={`/note/${encodeURIComponent(centre.id)}`}
-                 onClick={(e) => openNote(e, { id: centre.id, title: centre.title })}>
-                {centre.title}
-              </a>
-            </li>
-            {questions.map((q) => (
-              <li key={q.id}>
-                <a href={`/note/${encodeURIComponent(q.id)}`}
-                   onClick={(e) => openNote(e, { id: q.id, title: q.title })}>
-                  {q.title}
-                </a>
-                {q.count > 0 && <span className="navcount">{q.count}</span>}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+        <div className="tree-createbar" data-tour="tree-create-actions">
+          <button onClick={() => requestCreate("folder")} data-tooltip={t("tree.newFolder")} aria-label={t("tree.newFolder")}><FolderIcon open={false} /><span aria-hidden="true">+</span></button>
+          <button onClick={() => requestCreate("note")} data-tooltip={t("tree.newNote")} aria-label={t("tree.newNote")}><FileIcon name="note.md" /><span aria-hidden="true">+</span></button>
+          <button onClick={() => requestCreate("canvas")} data-tooltip={t("tree.newCanvas")} aria-label={t("tree.newCanvas")}><FileIcon name="board.canvas" /><span aria-hidden="true">+</span></button>
+          <button onClick={() => tabs?.open(GRAPH_ID, t("nav.graph"), true)} data-tooltip={t("tree.openGraph")} aria-label={t("tree.openGraph")}>
+            <svg className="ficon graph-action-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true"><path d="M8 3.2 4.1 5.5v4.8L8 12.7l3.9-2.4V5.5zM8 3.2v4.7m-3.9-2.4L8 7.9l3.9-2.4M8 7.9v4.8"/><circle cx="8" cy="2.3" r="1.1" fill="currentColor" stroke="none"/><circle cx="3.3" cy="5.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="12.7" cy="5.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="3.3" cy="10.7" r="1.1" fill="currentColor" stroke="none"/><circle cx="12.7" cy="10.7" r="1.1" fill="currentColor" stroke="none"/><circle cx="8" cy="13.6" r="1.1" fill="currentColor" stroke="none"/></svg>
+          </button>
+        </div>
+      </div>
 
       <h4>{t("nav.navigation")}</h4>
       <ul>
         <li><Link href="/">{t("nav.home")}</Link></li>
-        <li><Link href="/random">{t("nav.randomArticle")}</Link></li>
-        <li>
-          {/* El grafo es una pestaña más: ⌘clic lo abre en una nueva. */}
-          <a href="/graph" onClick={(e) => openNote(e, { id: GRAPH_ID, title: "Grafo" })}>{t("nav.graph")}</a>
-        </li>
         <li><Link href="/#categorias">{t("nav.allCategories")}</Link></li>
         <li><Link href="/health">{t("nav.health")}</Link></li>
       </ul>
 
-      {view === "files" ? (
-        <FileTree />
-      ) : (
-        <>
+      <div hidden={view !== "files"}>
+        <FileTree createRequest={createRequest} onSelectedDirChange={setSelectedDir} />
+      </div>
+      <div hidden={view !== "cat"}>
           {visible.map(renderGroup)}
 
           {adding ? (
@@ -210,8 +241,7 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
               {showHidden && hidden.map(renderGroup)}
             </div>
           )}
-        </>
-      )}
+      </div>
 
       {menu && (
         <div className="ctxmenu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
@@ -249,6 +279,27 @@ export default function SideNavClient({ groups, centre, questions, name, tagline
           </div>
         </div>
       )}
+
+      {locationPrompt && (
+        <div className="qsback create-location-backdrop" onMouseDown={() => setLocationPrompt(null)}>
+          <div className="qsbox create-location" onMouseDown={(e) => e.stopPropagation()}>
+            <h2>{t("tree.chooseLocation")}</h2>
+            <p>{t("tree.chooseLocationHint")}</p>
+            <input className="folder-search" autoFocus value={folderSearch} placeholder={t("tree.searchFolders")} onChange={(e) => setFolderSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setLocationPrompt(null); }} />
+            <div className="folder-picker-list">
+              {folderLoading && <div className="folder-picker-empty">{t("common.loading")}</div>}
+              {!folderLoading && visibleFolders.map((folder) => <button key={folder || "__root"} className={locationPrompt.folder === folder ? "selected" : ""} onClick={() => setLocationPrompt({ ...locationPrompt, folder })}><FolderIcon open={locationPrompt.folder === folder} /><span>{folder || t("tree.rootLocation")}</span></button>)}
+              {!folderLoading && visibleFolders.length === 0 && <div className="folder-picker-empty">{t("tree.noFoldersFound")}</div>}
+            </div>
+            <div className="onboarding-actions"><button onClick={() => setLocationPrompt(null)}>{t("common.cancel")}</button><button className="newbtn primary" onClick={confirmCreateLocation}>{t("common.next")}</button></div>
+          </div>
+        </div>
+      )}
+
+      <div className="side-footer">
+        <Help />
+        <Settings name={name} tagline={tagline} />
+      </div>
     </nav>
   );
 }

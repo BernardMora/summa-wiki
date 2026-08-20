@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useT } from "./I18n";
 
 /**
  * Ayuda del formato de imágenes.
  *
- * Vive en el masthead y no en la spec del vault porque documenta algo que solo
+ * Vive en la barra lateral y no en la spec del vault porque documenta algo que solo
  * existe dentro de esta app: los corchetes del pie de foto (`[izq]`, `[w=220]`)
  * los interpreta el live preview —ver `parseCaption` en `livePreview.ts`— y en
  * cualquier otro renderizador de markdown se leen como texto del pie. Quien
@@ -55,12 +56,14 @@ function Snippet({ code }: { code: string }) {
 export default function Help() {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const t = useT();
 
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!box.current?.contains(target) && !panel.current?.contains(target)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", away);
@@ -89,8 +92,23 @@ export default function Help() {
         </svg>
       </button>
 
-      {open && (
-        <div className="cfgpanel helppanel">
+      {open && createPortal(
+        <div className="cfgpanel helppanel" ref={panel}>
+          <div className="cfgsec">{t("help.exampleVault")}</div>
+          <p className="helptext">{t("help.exampleBody")}</p>
+          <a className="newbtn" href="/onboarding" style={{ display: "block", textAlign: "center", textDecoration: "none", marginBottom: 14 }}>
+            {t("help.exampleTour")}
+          </a>
+          <div className="cfgsec">{t("help.keyboardShortcuts")}</div>
+          <p className="help-shortcut">
+            <span>{t("help.findFiles")}</span>
+            <span><kbd>⌘ O</kbd> <small>{t("help.macOS")}</small> · <kbd>Ctrl O</kbd> <small>{t("help.windowsLinux")}</small></span>
+          </p>
+          <div className="cfgsec">{t("help.categories")}</div>
+          <p className="helptext">{t("help.categoriesRules")}</p>
+          <p className="helptext">{t("help.categoriesManual")}</p>
+          <Snippet code={`tags: [${t("help.categoryTagExample")}]`} />
+          <p className="cfghint">{t("help.categoriesPin")}</p>
           <div className="cfgsec">{t("help.images")}</div>
           <p className="helptext">{t("help.captionIntro")}</p>
           <Snippet code={`![alt](assets/${t("help.sampleFile")} "${t("help.sampleCaption")}")`} />
@@ -118,7 +136,8 @@ export default function Help() {
             <li>{t("help.editUnknown")}</li>
             <li>{t("help.editPortable")}</li>
           </ul>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

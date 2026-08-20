@@ -7,7 +7,7 @@
 # alguien revierte dentro de seis meses "por si acaso". Mismo razonamiento que
 # next.config.mjs: el formato se elige para poder documentar la decisión.
 
-appId: com.veridia.summawiki
+appId: com.summawiki.app
 productName: Summa Wiki
 
 # En false a propósito, no por descuido. Next escribe en disco en tiempo de

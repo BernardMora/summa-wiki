@@ -8,9 +8,10 @@ import type { Payload } from "./ArticlePane.tsx";
  * `/workspace` monta el mismo componente con `initial` en null y la pestaña a
  * abrir en `seed`: es el mismo workspace, sin nota de la que colgar.
  */
-export default function ArticleClient({ initial, seed }: {
+export default function ArticleClient({ initial, seed, vaultKey }: {
   initial: Payload | null;
   seed?: { id: string; title: string } | null;
+  vaultKey: string;
 }) {
-  return <Workspace initial={initial} seed={seed} />;
+  return <Workspace initial={initial} seed={seed} vaultKey={vaultKey} />;
 }

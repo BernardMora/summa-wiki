@@ -271,6 +271,22 @@ export function conversationCommand(agent: string, perm: string): string {
 }
 
 /**
+ * Inicia el agente elegido con una primera pregunta visible en su terminal.
+ * Se usa en recorridos guiados donde abrir una TUI vacía escondería la parte
+ * importante: cómo el agente lee y conecta el contexto del vault.
+ */
+export function promptCommand(agent: string, model: string, prompt: string): string {
+  const perms = CONVERSATION_PERMS[agent] || CONVERSATION_PERMS.claude;
+  const askFlag = perms.find((p) => p.id === "ask")?.flag;
+  return [
+    agentBinary(agent),
+    model && `--model ${shellArg(model)}`,
+    askFlag,
+    agent === "antigravity" ? `-p ${shellArg(prompt)}` : shellArg(prompt),
+  ].filter(Boolean).join(" ");
+}
+
+/**
  * Reanudar una conversación que ya existe.
  *
  * **Sin nivel de permiso, y es una decisión, no un olvido.** Reanudar admite
@@ -448,12 +464,25 @@ export function useInstalledAgents(enabled = true) {
  *
  * `name` no es una clave del diccionario porque son nombres propios; `blurb` sí
  * lo es porque es prosa. Misma asimetría que en `ModelChoice`.
+ *
+ * `icon` apunta a `public/providers/`, NO a los servidores de cada proveedor.
+ * Las URLs remotas funcionaban en desarrollo y fallaban justo donde importa:
+ * esta es una app de escritorio para un vault local, así que el menú se abría
+ * sin iconos en un avión o detrás de un firewall, y cada apertura mandaba
+ * cuatro peticiones a terceros —con IP y hora— desde una app que por lo demás
+ * no habla con nadie. Un vault privado no debería avisar a Google cada vez que
+ * alguien mira la lista de agentes.
+ *
+ * PNG de 48 px y no el SVG original: son 7 KB los cuatro, se pintan a 14 px con
+ * sitio de sobra hasta 3x, y evitan que un SVG de un tercero —que puede traer
+ * su propio CSS o rutas raras— entre al bundle. Rasterizados desde la fuente
+ * oficial de cada proyecto; para actualizarlos, volver a bajarla y reescalar.
  */
 export const AGENTS: { id: AgentPickId; name: string; blurb: MessageKey; icon: string }[] = [
-  { id: "claude", name: "Claude Code", blurb: "setup.agentClaude", icon: "https://claude.com/favicon.svg" },
-  { id: "antigravity", name: "Antigravity CLI", blurb: "setup.agentAntigravity", icon: "https://antigravity.google/assets/image/antigravity-logo.png" },
-  { id: "opencode", name: "OpenCode", blurb: "setup.agentOpencode", icon: "https://opencode.ai/favicon.svg" },
-  { id: "codex", name: "Codex", blurb: "setup.agentCodex", icon: "https://developers.openai.com/favicon.svg" },
+  { id: "claude", name: "Claude Code", blurb: "setup.agentClaude", icon: "/providers/claude.png" },
+  { id: "antigravity", name: "Antigravity CLI", blurb: "setup.agentAntigravity", icon: "/providers/antigravity.png" },
+  { id: "opencode", name: "OpenCode", blurb: "setup.agentOpencode", icon: "/providers/opencode.png" },
+  { id: "codex", name: "Codex", blurb: "setup.agentCodex", icon: "/providers/codex.png" },
 ];
 
 export type AgentPickId = "claude" | "antigravity" | "opencode" | "codex";

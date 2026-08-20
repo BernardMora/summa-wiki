@@ -58,6 +58,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
 
   return (
     <ArticleClient
+      vaultKey={VAULT}
       initial={{
       id,
       content: file.content,

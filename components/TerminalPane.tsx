@@ -271,5 +271,5 @@ export default function TerminalPane({ id, onEnded }: { id: string; onEnded?: ()
     };
   }, [id, onEnded]);
 
-  return <div ref={hostRef} className="termhost" />;
+  return <div ref={hostRef} className="termhost" data-tour="terminal-pane" />;
 }

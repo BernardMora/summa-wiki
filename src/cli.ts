@@ -169,23 +169,33 @@ switch (cmd) {
    */
   case "tree": {
     const idx = load();
-    const root = args[1] && !args[1].startsWith("--") ? args[1].replace(/\/$/, "") : "";
+    const root = args[1] && !args[1].startsWith("--")
+      ? args[1].split(/[\\/]+/).filter(Boolean).join("/")
+      : "";
     const maxDepth = Number(flag("depth") ?? 99);
 
     /**
-     * A note's `path` is relative to *its bundle*, so veridia notes look like
-     * "01 - Servicios/…" and used to surface as if they were vault top-level
+     * A note's `path` is relative to *its bundle*, so notes in a nested bundle
+     * used to surface as if they were vault top-level
      * folders — and no path prefix could ever select them. Rebuild the path
      * relative to the vault instead, derived from the bundle roots rather than
      * hardcoded, so the tree matches what is actually on disk.
      */
     const vaultRoot = idx.bundles.find((b) => b.id === ARCH.primaryBundle)?.root ?? "";
     const shared = new Set(idx.bundles.filter((b) => b.shared).map((b) => b.id));
-    const vaultPath = (n: Note) =>
-      (n.abs && vaultRoot && n.abs.startsWith(vaultRoot + "/")
-        ? n.abs.slice(vaultRoot.length + 1)
+    const vaultPath = (n: Note) => {
+      if (!n.abs || !vaultRoot) return n.path.normalize("NFC");
+      // `path.relative` + `path.sep`, no concatenar "/": es el mismo idioma que
+      // usa `indexer.ts` para derivar `path` y `relFromVault`, y es lo que hace
+      // que esto no mienta en Windows, donde el separador es "\\".
+      const rel = path.relative(vaultRoot, n.abs);
+      // Sale con ".." cuando la nota no cuelga del bundle primario. Los bundles
+      // compartidos son el caso normal, no un error: ahí manda `n.path`.
+      return (rel && !rel.startsWith("..") && !path.isAbsolute(rel)
+        ? rel.split(path.sep).join("/")
         : n.path
       ).normalize("NFC");
+    };
 
     const notes = idx.notes.filter((n) => {
       const p = vaultPath(n);

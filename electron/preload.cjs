@@ -56,4 +56,6 @@ contextBridge.exposeInMainWorld("summa", {
    * viejo hasta reiniciar la app.
    */
   localeChanged: () => ipcRenderer.invoke("locale:changed"),
+  /** Confirma y abre un enlace externo en el navegador del sistema. */
+  openExternal: (url) => ipcRenderer.invoke("external:open", url),
 });

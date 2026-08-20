@@ -22,7 +22,7 @@ export const isImgId = (id: string) => id.startsWith("img:");
 export const isTermId = (id: string) => id.startsWith("term:");
 export const isFileId = (id: string) => isPdfId(id) || isImgId(id) || isCanvasId(id) || isRawId(id);
 export const hrefFor = (id: string) =>
-  isGraphId(id) ? "/graph"
+  isGraphId(id) ? "/workspace?open=graph%3A"
   : isCanvasId(id) ? `/canvas?p=${encodeURIComponent(id.slice(7))}`
   : isTermId(id) ? `/terminal?id=${encodeURIComponent(id.slice(5))}`
   : isRawId(id) ? `/api/asset?p=${encodeURIComponent(id.slice(4))}`
@@ -76,6 +76,14 @@ export function openInWorkspace(id: string, title: string, newTab = false) {
   window.location.href = isSpecialId(id)
     ? `/workspace?open=${encodeURIComponent(id)}&title=${encodeURIComponent(title)}`
     : hrefFor(id);
+}
+
+/** Abre un archivo en una nueva columna junto al panel activo. */
+export function openBesideInWorkspace(id: string, title: string): boolean {
+  const fn = (globalThis as any).__wikiOpenBeside;
+  if (!fn) return false;
+  fn(id, title);
+  return true;
 }
 
 /** Shape the sidebar and tree expect. */

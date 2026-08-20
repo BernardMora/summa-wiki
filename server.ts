@@ -50,6 +50,19 @@ const termPort = port + 1;
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
+// El servidor de escritorio corre detached para poder matar todo su grupo al
+// salir, pero detached también lo deja vivo si Electron se cae antes de
+// ejecutar before-quit. El PID explícito permite reconocer esa caída y evita
+// que una sesión futura herede un Next huérfano con cachés desactualizadas.
+const desktopParent = Number(process.env.WIKI_PARENT_PID);
+if (Number.isInteger(desktopParent) && desktopParent > 1) {
+  const parentWatch = setInterval(() => {
+    try { process.kill(desktopParent, 0); }
+    catch { clearInterval(parentWatch); process.exit(0); }
+  }, 1_000);
+  parentWatch.unref();
+}
+
 /**
  * La terminal debe ser una shell nueva de verdad, no heredar el entorno del
  * árbol de procesos que lanzó el servidor. Tres cosas se filtran:

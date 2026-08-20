@@ -62,12 +62,8 @@ happens by rename, so no copy is left behind to drift.
 
 ## Bundles
 
-Declared by the architecture, not by code. This vault's:
-
-| id | root | shared |
-|---|---|---|
-| `personal` | the vault | no |
-| `veridia` | `01-Hacer/01-veridia` (symlink to Drive) | yes, with the team |
+Declared entirely by the selected architecture, not by application code. Each
+entry supplies an id, a root relative to the vault, and whether it is shared.
 
 A declared bundle whose folder is not on disk is dropped at load — otherwise the
 graph offers a filter that always returns nothing and never says why.

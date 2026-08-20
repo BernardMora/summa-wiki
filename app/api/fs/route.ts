@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
-import { VAULT, invalidate } from "@/lib/server.ts";
+import { VAULT, getIndex, invalidate } from "@/lib/server.ts";
 import { bundleOf } from "@/src/config.ts";
 import { relink } from "@/lib/relink.ts";
 import { getT } from "@/lib/i18n.server.ts";
+import { EXCLUDE_DIRS } from "@/src/config.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +37,51 @@ function countInside(dir: string): number {
   return n;
 }
 
+/** Lista compacta para el selector de destino de la barra lateral. */
+export async function GET() {
+  const folders = [""];
+  const inventory: Array<{ name: string; path: string; dir: boolean; ext: string; id?: string; title?: string }> = [];
+  const byPath = new Map(getIndex().notes.map((note) => [
+    path.relative(VAULT, note.abs).split(path.sep).join("/"),
+    { id: note.id, title: note.title },
+  ]));
+  const stack: Array<{ abs: string; rel: string }> = [{ abs: path.resolve(VAULT), rel: "" }];
+  const visited = new Set<string>();
+  while (stack.length && folders.length < 5000) {
+    const current = stack.pop()!;
+    let real: string;
+    try { real = fs.realpathSync(current.abs); } catch { continue; }
+    if (visited.has(real)) continue;
+    visited.add(real);
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(current.abs, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || (EXCLUDE_DIRS.has(entry.name) && entry.name !== "assets")) continue;
+      const abs = path.join(current.abs, entry.name);
+      let isDir = entry.isDirectory();
+      if (entry.isSymbolicLink()) { try { isDir = fs.statSync(abs).isDirectory(); } catch { continue; } }
+      const rel = current.rel ? `${current.rel}/${entry.name}` : entry.name;
+      if (isDir) {
+        folders.push(rel);
+        if (inventory.length < 10000) inventory.push({ name: entry.name, path: rel, dir: true, ext: "" });
+        stack.push({ abs, rel });
+      } else {
+        const indexed = byPath.get(rel);
+        const ext = path.extname(entry.name).replace(/^\./, "").toLowerCase();
+        if (inventory.length < 10000) inventory.push({ name: entry.name, path: rel, dir: false, ext, ...indexed });
+      }
+      if (folders.length >= 5000) break;
+    }
+  }
+  folders.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  inventory.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  return NextResponse.json({ folders, entries: inventory });
+}
+
 export async function POST(req: Request) {
   const { action, rel, name, confirm } = await req.json();
-  const abs = safe(rel ?? "");
+  // Crear dentro de la raíz es válido; modificar o borrar la raíz nunca lo es.
+  const abs = action === "mkdir" && (rel ?? "") === "" ? path.resolve(VAULT) : safe(rel ?? "");
   if (!abs) return NextResponse.json({ error: getT()("err.invalidPath") }, { status: 400 });
   if (!fs.existsSync(abs)) return NextResponse.json({ error: getT()("err.doesNotExist") }, { status: 404 });
 

@@ -65,7 +65,7 @@ export default function Settings({ name, tagline }: { name: string; tagline: str
   const locale = useLocale();
   const [switching, setSwitching] = useState<Locale | null>(null);
 
-  // Se pide al abrir, no al montar: el panel vive en el masthead de cada
+  // Se pide al abrir, no al montar: el panel vive en la barra lateral de cada
   // página y la ruta del vault no cambia sola. Pedirla en cada carga sería una
   // petición por navegación para un dato que casi nadie mira.
   useEffect(() => {

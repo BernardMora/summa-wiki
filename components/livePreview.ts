@@ -449,7 +449,6 @@ const VIDEO_RE = /<(iframe|video)\b[^>]*\bsrc="([^"]+)"[^>]*><\/\1>/gi;
 const INLINE_HTML_TAG_RE = /<(\/?)\s*(u|span|mark|sup|sub)(?:\s+class="(summa-(?:text|highlight)-[a-z]+)")?\s*>/gi;
 
 function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet } {
-  const b = new RangeSetBuilder<Decoration>();
   const sel = view.state.selection.main;
   const doc = view.state.doc;
   const resolve = view.state.facet(linkResolver);
@@ -614,13 +613,20 @@ function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet }
     }
   }
 
-  items.sort((a, b) => a.from - b.from || a.to - b.to);
-  const at = new RangeSetBuilder<Decoration>();
-  for (const it of items) {
-    b.add(it.from, it.to, it.deco);
-    if (it.atomic && it.to > it.from) at.add(it.from, it.to, it.deco);
-  }
-  return { deco: b.finish(), atomic: at.finish() };
+  /*
+   * `RangeSetBuilder` no acepta simplemente orden por `from`/`to`: cuando dos
+   * decoraciones empiezan en el mismo punto exige además el `startSide`
+   * interno de cada Decoration. Esto ocurre con frecuencia al editar una
+   * línea que combina Decoration.line, marks y replacements. Delegar el sort
+   * a CodeMirror evita reproducir parcialmente ese comparador y cubre también
+   * widgets con prioridades distintas.
+   */
+  return {
+    deco: Decoration.set(items.map((it) => it.deco.range(it.from, it.to)), true),
+    atomic: Decoration.set(items
+      .filter((it) => it.atomic && it.to > it.from)
+      .map((it) => it.deco.range(it.from, it.to)), true),
+  };
 }
 
 /**

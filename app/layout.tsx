@@ -13,6 +13,8 @@ import { getLocale, getT } from "@/lib/i18n.server.ts";
 import { appearanceExists, readAppearance } from "@/src/appearance/store.ts";
 import { appearanceAttributes, resolveAppearance } from "@/src/appearance/catalog.ts";
 import AppearanceMigration from "@/components/AppearanceMigration.tsx";
+import DemoGuide from "@/components/onboarding/DemoGuide.tsx";
+import { readSettings, resolveVault } from "@/src/appdata.mjs";
 
 /**
  * La identidad sale del vault (`04-Sistema/wiki-config.json`). Se resuelve en
@@ -46,6 +48,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // Se resuelve una vez aquí y baja por contexto: es el único punto por el que
   // pasan todas las páginas, así que es el único sitio donde hace falta leerlo.
   const locale = getLocale();
+  const machine = readSettings();
+  const activeVault = resolveVault().path;
+  const inExample = machine.onboarding.status === "in_progress"
+    && machine.onboarding.stage === "demo"
+    && machine.demoVault?.path === activeVault;
   return (
     <html lang={locale} suppressHydrationWarning {...appearanceAttributes(resolvedAppearance)}>
       <head>{migrateAppearance && <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('wiki.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}" }} />}</head>
@@ -64,6 +71,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {children}
             </div>
           </div>
+          {inExample && <DemoGuide
+            locale={locale}
+            initialLesson={machine.onboarding.lesson}
+            completed={machine.onboarding.completed}
+            skipped={machine.onboarding.skipped}
+            aiConfigured={machine.ai.configured}
+            agent={machine.ai.agent}
+            model={machine.ai.model}
+            vaultPath={machine.demoVault?.path ?? activeVault}
+          />}
         </TabsProvider>
         </I18nProvider>
         </Suspense>

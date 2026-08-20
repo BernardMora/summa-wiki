@@ -14,8 +14,9 @@ function slugify(s: string) {
 }
 
 export async function POST(req: Request) {
-  const { folder = "", title = "", type = "knowledge" } = await req.json();
+  const { folder = "", title = "", type = "knowledge", format = "note" } = await req.json();
   if (!title.trim()) return NextResponse.json({ error: "title required" }, { status: 400 });
+  if (format !== "note" && format !== "canvas") return NextResponse.json({ error: "invalid format" }, { status: 400 });
   if (!TYPES.has(type)) return NextResponse.json({ error: "invalid type" }, { status: 400 });
 
   const slug = slugify(title);
@@ -29,8 +30,16 @@ export async function POST(req: Request) {
   if (!fs.existsSync(dirAbs) || !fs.statSync(dirAbs).isDirectory())
     return NextResponse.json({ error: "folder not found" }, { status: 400 });
 
-  const abs = path.join(dirAbs, `${slug}.md`);
-  if (fs.existsSync(abs)) return NextResponse.json({ error: "ya existe una nota con ese nombre" }, { status: 409 });
+  const extension = format === "canvas" ? ".canvas" : ".md";
+  const abs = path.join(dirAbs, `${slug}${extension}`);
+  if (fs.existsSync(abs)) return NextResponse.json({ error: "ya existe un archivo con ese nombre" }, { status: 409 });
+
+  if (format === "canvas") {
+    fs.writeFileSync(abs, '{\n\t"nodes":[],\n\t"edges":[]\n}', "utf8");
+    invalidate();
+    const rel = path.relative(VAULT, abs).split(path.sep).join("/");
+    return NextResponse.json({ ok: true, rel, id: `canvas:${rel}` });
+  }
 
   // Local date, not toISOString(): UTC would stamp tomorrow after 5pm here.
   const d = new Date();

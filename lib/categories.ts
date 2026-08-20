@@ -41,12 +41,9 @@ const SEED: Category[] = ARCH.categories;
 export const norm = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 
-/** Ids from the v1 seed. Dropping them is an upgrade, not data loss. */
-const LEGACY_SEED = new Set(["veridia", "contenido", "estudio", "finanzas", "salud", "otros"]);
-
 /**
- * Older files carry the six pillar-only categories. Their rules are superseded,
- * but pins and hand-made categories are the user's work and survive the upgrade.
+ * Merge the architecture seed with stored categories without knowing any
+ * vault-specific ids. Unknown groups are user data and always survive.
  */
 function migrate(stored: Category[]): Category[] {
   const out = SEED.map((s) => ({ ...s, notes: [...s.notes] }));
@@ -58,9 +55,6 @@ function migrate(stored: Category[]): Category[] {
       if (old.hidden) hit.hidden = true;
       continue;
     }
-    // "Otros" and friends only ever meant "pillar: other" — a catch-all, not a
-    // subject. An empty one is dropped; one holding pins is the user's and stays.
-    if (LEGACY_SEED.has(old.id) && (old.notes?.length ?? 0) === 0) continue;
     out.push(old);
   }
   return out;

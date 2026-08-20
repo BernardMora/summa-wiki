@@ -203,7 +203,11 @@ export default function ArticlePane({
   const resolveHref = useCallback((href: string) => {
     const hit = data?.resolve[href];
     if (hit) return hit;
-    if (!data || /^(https?:|aios:|mailto:|#)/.test(href) || /\.md$/i.test(href)) return null;
+    // External URLs must reach onNavigate, which sends them to Electron's
+    // confirmation bridge. Returning null used to let them fall through the
+    // editor and, in some paths, Next's router loaded them inside this pane.
+    if (/^(https?:|mailto:)/i.test(href)) return href;
+    if (!data || /^(aios:|#)/.test(href) || /\.md$/i.test(href)) return null;
     const dir = data.meta.vaultPath.split("/").slice(0, -1).join("/");
     const out: string[] = [];
     for (const sg of `${dir}/${href}`.split("/")) {
@@ -269,7 +273,7 @@ export default function ArticlePane({
             {/* El estado de la selección lo reporta el editor, no un onMouseUp:
                 seleccionar con shift+flechas nunca disparaba ese evento y los
                 botones de procedencia se quedaban apagados. */}
-            <div style={{ display: tab === "article" ? "block" : "none" }}>
+            <div style={{ display: tab === "article" ? "block" : "none" }} data-tour="editor-area">
               {toolbarVisible ? <EditorToolbar view={view} revision={selectionRevision} onImage={() => setImageDialog(true)} onVideo={() => setVideoDialog(true)}
                 showNavigation={showNavigation} showFrontmatter={showFrontmatter}
                 rawMarkdown={rawMarkdown} hasSelection={hasSel} hideAuthorship={hideProv}
@@ -311,6 +315,14 @@ export default function ArticlePane({
                 showFrontmatter={showFrontmatter}
                 rawMarkdown={rawMarkdown}
                 onNavigate={(url, text) => {
+                  if (/^(https?:|mailto:)/i.test(url)) {
+                    if (window.summa?.openExternal) {
+                      void window.summa.openExternal(url);
+                    } else if (window.confirm(t("external.confirm"))) {
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }
+                    return;
+                  }
                   // ⌘clic abre en pestaña nueva. Antes hacía router.push, que
                   // remonta el workspace entero y cierra los paneles divididos.
                   if (url.startsWith("/note/")) {

@@ -5,12 +5,13 @@ import { useT } from "./I18n";
 
 interface Node {
   id: string; title: string; type: string; bundle: string; pillar: string;
-  words: number; degree: number; isIndex: boolean;
+  words: number; degree: number; isIndex: boolean; categories: string[];
   x: number; y: number; vx: number; vy: number;
   /** Set once dragged: the node keeps the position it was dropped at. */
   pinned?: boolean;
 }
 interface Edge { s: string; t: string; }
+interface Category { id: string; label: string; total: number; }
 
 const COLOR: Record<string, string> = {
   knowledge: "#3366cc", project: "#d97706", area: "#059669",
@@ -61,6 +62,10 @@ export default function GraphView() {
   const [bundle, setBundle] = useState("all");
   /** Los bundles reales del vault. Estaban escritos a mano en el `<select>`. */
   const [bundles, setBundles] = useState<string[]>([]);
+  const [category, setCategory] = useState("all");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [types, setTypes] = useState<string[]>([]);
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(() => new Set());
   const [hideIndexes, setHideIndexes] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [overNode, setOverNode] = useState(false);
@@ -105,11 +110,25 @@ export default function GraphView() {
     const r = await fetch("/api/graph");
     const d = await r.json();
     setBundles(d.bundles ?? []);
+    setCategories(d.categories ?? []);
+    setTypes(d.types ?? []);
     const keep = (d.nodes as Node[]).filter(
-      (n) => (bundle === "all" || n.bundle === bundle) && (!hideIndexes || !n.isIndex),
+      (n) => (bundle === "all" || n.bundle === bundle)
+        && (category === "all" || n.categories.includes(category))
+        && !hiddenTypes.has(n.type)
+        && (!hideIndexes || !n.isIndex),
     );
     const ids = new Set(keep.map((n) => n.id));
     const es = (d.edges as Edge[]).filter((e) => ids.has(e.s) && ids.has(e.t));
+
+    // A filter can remove the focused or hovered node. Those refs belong to
+    // the previous induced graph; retaining either leaves draw() asking the
+    // new adjacency map for a node it cannot contain.
+    focus.current = null;
+    hover.current = null;
+    camera.current = null;
+    setFocused(null);
+    setOverNode(false);
 
     const R = 320;
     keep.forEach((n, i) => {
@@ -129,7 +148,7 @@ export default function GraphView() {
     }
     setStats({ n: keep.length, e: es.length });
     setReady(true);
-  }, [bundle, hideIndexes]);
+  }, [bundle, category, hiddenTypes, hideIndexes]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -214,7 +233,10 @@ export default function GraphView() {
       const fo = focus.current;
       const hi = hover.current;
       const anchor = fo ?? hi;
-      const near = anchor ? adj.current.get(anchor.id)! : null;
+      // During a filter transition the animation frame may still carry an
+      // anchor from the previous graph. Missing adjacency means "no active
+      // anchor", not a fatal rendering error.
+      const near = anchor ? (adj.current.get(anchor.id) ?? null) : null;
 
       ctx.lineWidth = 0.7;
       for (const e of edges.current) {
@@ -228,7 +250,7 @@ export default function GraphView() {
       ctx.globalAlpha = 1;
       for (const n of nodes.current) {
         const r = 3 + Math.min(9, Math.sqrt(n.degree) * 2);
-        const dim = anchor && n !== anchor && !near!.has(n.id);
+        const dim = Boolean(anchor && near && n !== anchor && !near.has(n.id));
         ctx.globalAlpha = dim ? 0.14 : 1;
         ctx.fillStyle = COLOR[n.type] ?? "#888";
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
@@ -335,10 +357,20 @@ export default function GraphView() {
   return (
     <div className="graphwrap">
       <div className="graphbar">
-        <select value={bundle} onChange={(e) => setBundle(e.target.value)}>
-          <option value="all">{bundles.length === 2 ? t("graph.bothBundles") : t("graph.allBundles")}</option>
-          {bundles.map((b) => <option key={b} value={b}>{b}</option>)}
-        </select>
+        <label className="graphfilter">
+          <span>{t("graph.category")}</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="all">{t("graph.allCategories")}</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.label} ({c.total})</option>)}
+          </select>
+        </label>
+        <label className="graphfilter">
+          <span>{t("graph.origin")}</span>
+          <select value={bundle} onChange={(e) => setBundle(e.target.value)}>
+            <option value="all">{t("graph.wholeWiki")}</option>
+            {bundles.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </label>
         <label>
           <input type="checkbox" checked={hideIndexes} onChange={(e) => setHideIndexes(e.target.checked)} />
           {" "}{t("graph.hideIndexes")}
@@ -356,8 +388,15 @@ export default function GraphView() {
         </button>
         <span className="dim">{stats.n} notas · {stats.e} enlaces</span>
         <span className="graphlegend">
-          {Object.entries(COLOR).map(([t, c]) => (
-            <span key={t}><i style={{ background: c }} />{t}</span>
+          {types.map((type) => (
+            <button key={type} type="button" className={hiddenTypes.has(type) ? "off" : ""}
+              aria-pressed={!hiddenTypes.has(type)} onClick={() => setHiddenTypes((current) => {
+                const next = new Set(current);
+                if (next.has(type)) next.delete(type); else next.add(type);
+                return next;
+              })}>
+              <i style={{ background: COLOR[type] ?? "#888" }} />{type}
+            </button>
           ))}
         </span>
       </div>
