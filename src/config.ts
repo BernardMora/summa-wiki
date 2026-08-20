@@ -187,12 +187,31 @@ export function bundleOf(abs: string): BundleConfig {
   return best;
 }
 
+/**
+ * Carpeta de este módulo, sin poder reventar al cargarlo.
+ *
+ * `fileURLToPath` es la forma correcta —en Windows `URL.pathname` devuelve
+ * "/C:/…" con barra inicial y deja de ser una ruta válida—, pero este archivo
+ * lo empaqueta webpack dentro del servidor de Next, y ahí `import.meta.url` no
+ * siempre es una URL de archivo absoluta. Cuando no lo es, `fileURLToPath`
+ * lanza `ERR_INVALID_FILE_URL_PATH` y, como esto corre al importar el módulo,
+ * se lleva por delante TODAS las rutas de API del paquete de Windows.
+ *
+ * El `catch` vuelve al comportamiento anterior, que era incorrecto en Windows
+ * pero no tiraba nada. Así el binario nativo gana la ruta buena y el bundle no
+ * pierde nada respecto a como estaba.
+ */
+function moduleDir(): string {
+  try {
+    return path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return path.dirname(new URL(import.meta.url).pathname);
+  }
+}
+
 export const INDEX_PATH = process.env.WIKI_INDEX
   ? path.resolve(process.env.WIKI_INDEX)
-  // `fileURLToPath`, no `URL.pathname`: en Windows `pathname` sale como
-  // "/C:/…" con barra inicial y deja de ser una ruta válida. Es el mismo
-  // idioma que ya usa `electron/main.js`.
-  : path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "index.json");
+  : path.join(moduleDir(), "..", "index.json");
 
 export function vaultExists(): boolean {
   return fs.existsSync(VAULT);
