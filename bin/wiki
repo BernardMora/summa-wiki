@@ -1,4 +1,26 @@
-#!/usr/bin/env bash
-# Thin wrapper so the agent and the shell can call: wiki <command>
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec node --experimental-strip-types --no-warnings "$DIR/src/cli.ts" "$@"
+#!/usr/bin/env node
+// Thin wrapper so the agent and the shell can call: wiki <command>
+//
+// JS and not bash on purpose: npm builds the Windows shim from this shebang, so
+// `wiki` works in cmd and PowerShell without Git Bash. The file has no
+// extension because six places already point at `bin/wiki`; Node reads the
+// module type from the package.json above it.
+//
+// The child process exists only to pass --experimental-strip-types, which Node
+// needs to load cli.ts. Drop the spawn and point the shebang straight at the
+// CLI once `engines` can require Node >=22.18, where stripping is on by default.
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const cli = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "cli.ts");
+
+spawn(
+  process.execPath,
+  ["--experimental-strip-types", "--no-warnings", cli, ...process.argv.slice(2)],
+  { stdio: "inherit" },
+).on("exit", (code, signal) => {
+  // Re-raise the signal instead of exiting 0, so Ctrl-C reads as Ctrl-C upstream.
+  if (signal) process.kill(process.pid, signal);
+  else process.exit(code ?? 0);
+});

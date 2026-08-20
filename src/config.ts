@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { BundleConfig } from "./types.ts";
 import { resolveVault, userDataDir, inspectVault, resolveLocale } from "./appdata.mjs";
 import type { Architecture } from "./architecture.ts";
@@ -92,9 +93,8 @@ function seedArchitecture(): void {
 /**
  * Los bundles declarados por la arquitectura, con sus raíces ya absolutas.
  *
- * Antes eran dos constantes, y la segunda —`01-Hacer/01-veridia`— es una
- * carpeta que solo existe en este vault. Cualquier otro usuario arrastraba un
- * bundle fantasma apuntando a una ruta inexistente.
+ * Antes eran constantes propias de un vault. Cualquier otro usuario arrastraba
+ * bundles fantasma apuntando a rutas inexistentes.
  */
 export const bundles: BundleConfig[] = ARCH.bundles
   .map((b) => ({
@@ -104,10 +104,9 @@ export const bundles: BundleConfig[] = ARCH.bundles
   }))
   // Un bundle cuya carpeta no está en disco no se declara.
   //
-  // No es cosmético: el selector del grafo ofrecía filtrar por `veridia` en
-  // vaults donde esa carpeta no existe, y el filtro devolvía siempre cero sin
-  // decir por qué. Vale también para este vault — `01-Hacer/01-veridia` es un
-  // symlink a Drive, y con Drive sin montar el bundle sencillamente no está.
+  // No es cosmético: un selector no debe ofrecer bundles cuya carpeta no
+  // existe y devolver siempre cero sin explicar por qué. También cubre raíces
+  // compartidas o montadas que estén temporalmente desconectadas.
   //
   // El primario nunca se cae aunque falte: es el vault, y si no existe el
   // problema es otro y la pantalla de "no se encuentra el vault" ya lo dice.
@@ -175,8 +174,8 @@ export function isExcluded(relPath: string): boolean {
  * A qué bundle pertenece una ruta absoluta.
  *
  * Se elige la raíz MÁS LARGA que la contenga, no un bundle por nombre. Los
- * bundles se anidan —`01-Hacer/01-veridia` vive dentro del vault— así que la
- * raíz más específica es la respuesta correcta, y con N bundles declarados por
+ * bundles pueden anidarse dentro del vault, así que la raíz más específica es
+ * la respuesta correcta, y con N bundles declarados por
  * la arquitectura ya no hay dos nombres fijos a los que preguntar.
  */
 export function bundleOf(abs: string): BundleConfig {
@@ -190,7 +189,10 @@ export function bundleOf(abs: string): BundleConfig {
 
 export const INDEX_PATH = process.env.WIKI_INDEX
   ? path.resolve(process.env.WIKI_INDEX)
-  : path.join(path.dirname(new URL(import.meta.url).pathname), "..", "index.json");
+  // `fileURLToPath`, no `URL.pathname`: en Windows `pathname` sale como
+  // "/C:/…" con barra inicial y deja de ser una ruta válida. Es el mismo
+  // idioma que ya usa `electron/main.js`.
+  : path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "index.json");
 
 export function vaultExists(): boolean {
   return fs.existsSync(VAULT);
