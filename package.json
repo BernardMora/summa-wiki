@@ -1,7 +1,7 @@
 {
   "name": "summa-wiki",
   "version": "0.3.0",
-  "author": "Bernardo <hola@veridia.com.mx>",
+  "author": "Bernardo",
   "private": true,
   "type": "module",
   "main": "electron/main.js",

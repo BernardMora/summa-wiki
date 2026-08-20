@@ -2,9 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Settings from "./Settings.tsx";
 import AgentMenu from "./AgentMenu.tsx";
-import Help from "./Help.tsx";
 import { useT } from "./I18n";
 import { openInWorkspace, newTermId } from "./Tabs.tsx";
 
@@ -58,6 +56,19 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
         {tagline && <span className="tag">{tagline}</span>}
       </Link>
 
+      <div className="masthead-actions">
+        <AgentMenu />
+        <button
+          className="themebtn terminal-icon-btn"
+          data-tour="new-terminal"
+          title={t("masthead.newTerminal")}
+          aria-label={t("masthead.newTerminal")}
+          onClick={() => openInWorkspace(newTermId(), "Terminal", true)}
+        >
+          <svg viewBox="0 0 18 18" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1.8" y="2.4" width="14.4" height="13.2" rx="1.8"/><path d="m4.7 6.2 2.4 2.1-2.4 2.1M9.2 11.1h3.7"/></svg>
+        </button>
+      </div>
+
       <div className="searchwrap" ref={box}>
         <form
           onSubmit={(e) => { e.preventDefault(); if (q.trim()) router.push(`/search?q=${encodeURIComponent(q)}`); }}
@@ -83,17 +94,6 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
         )}
       </div>
 
-      <AgentMenu />
-
-      <button
-        className="themebtn"
-        title={t("masthead.newTerminal")}
-        onClick={() => openInWorkspace(newTermId(), "Terminal", true)}
-      >
-        ⌗ Terminal
-      </button>
-      <Help />
-      <Settings name={name} tagline={tagline} />
       <button className="masthead-hide" title={t("masthead.hide")} aria-label={t("masthead.hide")} onClick={() => setMastheadHidden(true)}>⌃</button>
     </header>
     {hidden && <button className="masthead-restore" title={t("masthead.show")} aria-label={t("masthead.show")} onClick={() => setMastheadHidden(false)}>⌄</button>}

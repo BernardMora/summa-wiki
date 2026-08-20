@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useTabs } from "./Tabs.tsx";
+import { openBesideInWorkspace, useTabs } from "./Tabs.tsx";
 import { REVEAL_EVENT } from "./Crumb.tsx";
 import { FileIcon, FolderIcon } from "./FileIcon.tsx";
 import { useT } from "./I18n";
@@ -19,6 +19,8 @@ interface Cat { id: string; label: string; }
 
 const TYPES = ["knowledge", "project", "area", "moc", "journal", "source", "connection", "system"];
 const OPEN_KEY = "wiki.tree.open";
+export type FileTreeCreateKind = "note" | "canvas" | "folder";
+export interface FileTreeCreateRequest { seq: number; kind: FileTreeCreateKind; folder: string; }
 
 /**
  * Filesystem view of the vault, Obsidian-sidebar style. Right-click gives
@@ -26,7 +28,7 @@ const OPEN_KEY = "wiki.tree.open";
  * delete). Categories answer "what is this about"; this answers "where does
  * it live".
  */
-export default function FileTree() {
+export default function FileTree({ createRequest, onSelectedDirChange }: { createRequest?: FileTreeCreateRequest | null; onSelectedDirChange?: (rel: string) => void }) {
   const t = useT();
   const [root, setRoot] = useState<Node[]>([]);
   /**
@@ -65,6 +67,7 @@ export default function FileTree() {
   const [activeTrail, setActiveTrail] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<Menu | null>(null);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
+  const [canvasIn, setCanvasIn] = useState<string | null>(null);
   const [mkdirIn, setMkdirIn] = useState<string | null>(null);
   const [dragRel, setDragRel] = useState<string | null>(null);
   const [overDir, setOverDir] = useState<string | null>(null);
@@ -84,6 +87,13 @@ export default function FileTree() {
   const router = useRouter();
   const tabs = useTabs();
   const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { onSelectedDirChange?.(selDir); }, [selDir, onSelectedDirChange]);
+  useEffect(() => {
+    if (!createRequest) return;
+    setSelDir(createRequest.folder);
+    beginCreate(createRequest.kind, createRequest.folder);
+  }, [createRequest]);
 
   /**
    * Carga perezosa, carpeta por carpeta — como Finder o VS Code, no como el
@@ -259,8 +269,8 @@ export default function FileTree() {
    * Las tres rutas de un nodo.
    *
    * `abs` es la ruta dentro del vault; `real` solo difiere cuando el nodo cuelga
-   * de una carpeta montada por symlink — hoy el bundle de Veridia, que vive en
-   * Drive. Ahí «ruta absoluta» es ambiguo, así que se ofrecen las dos en vez de
+   * de una carpeta montada por symlink. Ahí «ruta absoluta» es ambiguo, así que
+   * se ofrecen las dos en vez de
    * elegir en silencio: la del vault sirve para el terminal y para esta app, la
    * real es la que ven Finder y Drive.
    */
@@ -445,6 +455,26 @@ export default function FileTree() {
     if (!r.ok) { setErr(d.error ?? "error"); return; }
     setCreatingIn(null); setDraft(""); await refreshDir(folder);
     router.push(`/note/${encodeURIComponent(d.id)}`); router.refresh();
+  }
+
+  async function createCanvas(folder: string) {
+    setErr("");
+    const r = await fetch("/api/create", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder, title: draft, format: "canvas" }),
+    });
+    const d = await r.json();
+    if (!r.ok) { setErr(d.error ?? "error"); return; }
+    setCanvasIn(null); setDraft(""); await refreshDir(folder);
+    tabs?.open(d.id, `${draft.trim()}.canvas`, false); router.refresh();
+  }
+
+  function beginCreate(kind: FileTreeCreateKind, folder = selDir) {
+    setCreatingIn(kind === "note" ? folder : null);
+    setCanvasIn(kind === "canvas" ? folder : null);
+    setMkdirIn(kind === "folder" ? folder : null);
+    setDraft(""); setErr(""); setMenu(null);
+    if (folder) setOpen((p) => new Set(p).add(folder));
   }
 
   async function createFolder(parent: string) {
@@ -673,6 +703,24 @@ export default function FileTree() {
               </div>
             )}
 
+            {canvasIn === n.rel && (
+              <div className="newform" style={{ marginLeft: 4 + depth * 11 }}>
+                <input
+                  autoFocus placeholder={t("tree.canvasTitlePlaceholder")} value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") createCanvas(n.rel);
+                    if (e.key === "Escape") { setCanvasIn(null); setDraft(""); }
+                  }}
+                />
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => createCanvas(n.rel)}>{t("common.create")}</button>
+                  <button className="newbtn" style={{ margin: 0 }} onClick={() => { setCanvasIn(null); setDraft(""); }}>{t("common.cancel")}</button>
+                </div>
+                {err && <div className="err">{err}</div>}
+              </div>
+            )}
+
             {isOpen && (n.children
               ? render(n.children, depth + 1, [...trail, n.rel])
               : <div className="row" style={{ paddingLeft: 4 + (depth + 1) * STEP, opacity: 0.5 }}>{t("common.loading")}</div>)}
@@ -686,6 +734,7 @@ export default function FileTree() {
           className={`row ${n.id ? "file" : "other"}${(n.id && n.id === activeId) || activeId === `pdf:${n.rel}` || activeId === `img:${n.rel}` || activeId === `canvas:${n.rel}` ? " current" : ""}`}
           style={pad}
           title={n.rel}
+          data-tour-path={n.rel}
           draggable
           onDragStart={(e) => { setDragRel(n.rel); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", n.rel); }}
           onDragEnd={() => { setDragRel(null); setOverDir(null); }}
@@ -714,7 +763,7 @@ export default function FileTree() {
   }
 
   return (
-    <div ref={boxRef}>
+    <div ref={boxRef} data-tour="file-tree">
       <div className="treehint" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <span style={{ flex: 1 }}>{moving ? t("tree.moving") : t("tree.hint")}</span>
         <label style={{ display: "flex", gap: 4, alignItems: "center", cursor: "pointer", opacity: showHidden ? 1 : 0.6, whiteSpace: "nowrap" }}>
@@ -741,13 +790,43 @@ export default function FileTree() {
         </div>
       )}
 
+      {canvasIn === "" && (
+        <div className="newform">
+          <input
+            autoFocus placeholder={t("tree.canvasTitlePlaceholder")} value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") createCanvas(""); if (e.key === "Escape") setCanvasIn(null); }}
+          />
+          <div style={{ display: "flex", gap: 4 }}>
+            <button className="newbtn" style={{ margin: 0 }} onClick={() => createCanvas("")}>{t("common.create")}</button>
+            <button className="newbtn" style={{ margin: 0 }} onClick={() => setCanvasIn(null)}>{t("common.cancel")}</button>
+          </div>
+          {err && <div className="err">{err}</div>}
+        </div>
+      )}
+
+      {mkdirIn === "" && (
+        <div className="newform">
+          <input
+            autoFocus placeholder={t("tree.folderNamePlaceholder")} value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") createFolder(""); if (e.key === "Escape") setMkdirIn(null); }}
+          />
+          <div style={{ display: "flex", gap: 4 }}>
+            <button className="newbtn" style={{ margin: 0 }} onClick={() => createFolder("")}>{t("common.create")}</button>
+            <button className="newbtn" style={{ margin: 0 }} onClick={() => setMkdirIn(null)}>{t("common.cancel")}</button>
+          </div>
+          {err && <div className="err">{err}</div>}
+        </div>
+      )}
+
       <div className="tree">{render(root)}</div>
 
       {menu && createPortal(
-        <div className="ctxmenu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+        <div className="ctxmenu" data-tour="file-context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <div className="ctxhead">{menu.node.name}</div>
           {!menu.node.dir && <>
-            <button onClick={() => {
+            <button data-tour="file-add-chat" onClick={() => {
               const ok = queueTerminalInput(`${menu.node.rel} `);
               setMenu(null);
               if (!ok) alert(t("terminal.chooseFirst"));
@@ -764,25 +843,26 @@ export default function FileTree() {
           </>}
           {menu.node.dir && (
             <button onClick={() => {
-              setCreatingIn(menu.node.rel); setSelDir(menu.node.rel);
-              setOpen((p) => new Set(p).add(menu.node.rel));
-              setDraft(""); setErr(""); setMenu(null);
+              setSelDir(menu.node.rel); beginCreate("note", menu.node.rel);
             }}>{t("tree.newNoteHere")}</button>
           )}
           {menu.node.dir && (
             <button onClick={() => {
-              setMkdirIn(menu.node.rel); setCreatingIn(null); setDraft(""); setMenu(null);
-              setOpen((p) => { const n = new Set(p); n.add(menu.node.rel); return n; });
+              setSelDir(menu.node.rel); beginCreate("canvas", menu.node.rel);
+            }}>{t("tree.newCanvasHere")}</button>
+          )}
+          {menu.node.dir && (
+            <button onClick={() => {
+              setSelDir(menu.node.rel); beginCreate("folder", menu.node.rel);
             }}>{t("tree.newFolderHere")}</button>
           )}
           {!menu.node.dir && (menu.node.id || /\.pdf$/i.test(menu.node.name)) && (
-            <button onClick={() => {
+            <button data-tour="file-open-beside" onClick={() => {
               const sid = menu.node.id ?? `pdf:${menu.node.rel}`;
               const cur = tabs?.activeId;
               setMenu(null);
-              // Splitting only makes sense against a note in the main pane.
               if (cur && !cur.startsWith("pdf:")) {
-                router.push(`/note/${encodeURIComponent(cur)}?split=${encodeURIComponent(sid)}`);
+                if (!openBesideInWorkspace(sid, menu.node.name)) alert(t("tree.openBesideBlocked"));
               } else {
                 alert(t("tree.openBesideBlocked"));
               }

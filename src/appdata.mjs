@@ -35,6 +35,9 @@ export const APP_NAME = "Summa Wiki";
  * problema que vino a resolver. Una sola fórmula, los dos procesos.
  */
 export function userDataDir() {
+  // Inyección explícita para pruebas y builds de humo: permite comprobar el
+  // primer arranque sin tocar la configuración real de la máquina que corre CI.
+  if (process.env.WIKI_USER_DATA?.trim()) return path.resolve(process.env.WIKI_USER_DATA.trim());
   const appData =
     process.platform === "darwin"
       ? path.join(os.homedir(), "Library", "Application Support")
@@ -49,10 +52,39 @@ export function settingsPath() {
 }
 
 /**
+ * @typedef {object} OnboardingState
+ * @property {number} version
+ * @property {"not_started"|"in_progress"|"completed"} status
+ * @property {"welcome"|"ai"|"demo"|"vault"|"done"} stage
+ * @property {string|null} lesson
+ * @property {string[]} completed
+ * @property {string[]} skipped
+ * @property {"summa-classic"|"notebook"|"studio"|"archive"|"terminal"} design
+ * @property {"system"|"light"|"dark"} mode
+ */
+
+/**
+ * @typedef {object} AiSettings
+ * @property {"claude"|"antigravity"|"opencode"|"codex"|null} agent
+ * @property {string} model
+ * @property {boolean} configured
+ */
+
+/**
+ * @typedef {object} DemoVaultSettings
+ * @property {string} path
+ * @property {Locale} locale
+ * @property {number} templateVersion
+ */
+
+/**
  * @typedef {object} Settings
  * @property {string|null} vault    Ruta absoluta del vault abierto.
  * @property {string[]} recents     Vaults abiertos antes, del más reciente al más viejo.
  * @property {Locale|null} locale   Idioma elegido. `null` = todavía sin elegir.
+ * @property {OnboardingState} onboarding Estado versionado del primer recorrido.
+ * @property {AiSettings} ai       Agente y modelo preferidos para la interfaz.
+ * @property {DemoVaultSettings|null} demoVault Copia local y versión del vault de ejemplo.
  */
 
 /**
@@ -64,7 +96,70 @@ export function settingsPath() {
  *
  * @type {Settings}
  */
-const DEFAULTS = { vault: null, recents: [], locale: null };
+const DEFAULT_ONBOARDING = {
+  version: 1,
+  status: "not_started",
+  stage: "welcome",
+  lesson: null,
+  completed: [],
+  skipped: [],
+  design: "summa-classic",
+  mode: "system",
+};
+
+const DEFAULTS = {
+  vault: null,
+  recents: [],
+  locale: null,
+  onboarding: DEFAULT_ONBOARDING,
+  ai: { agent: null, model: "", configured: false },
+  demoVault: null,
+};
+
+const stringList = (value) => Array.isArray(value)
+  ? [...new Set(value.filter((v) => typeof v === "string" && v.trim()))]
+  : [];
+
+/** @returns {OnboardingState} */
+function safeOnboarding(value) {
+  if (!value || typeof value !== "object") return { ...DEFAULT_ONBOARDING };
+  const statuses = new Set(["not_started", "in_progress", "completed"]);
+  const stages = new Set(["welcome", "ai", "demo", "vault", "done"]);
+  const designs = new Set(["summa-classic", "notebook", "studio", "archive", "terminal"]);
+  const modes = new Set(["system", "light", "dark"]);
+  return {
+    version: Number.isInteger(value.version) && value.version > 0 ? value.version : 1,
+    status: statuses.has(value.status) ? value.status : "not_started",
+    stage: stages.has(value.stage) ? value.stage : "welcome",
+    lesson: typeof value.lesson === "string" && value.lesson.trim() ? value.lesson : null,
+    completed: stringList(value.completed),
+    skipped: stringList(value.skipped),
+    design: designs.has(value.design) ? value.design : "summa-classic",
+    mode: modes.has(value.mode) ? value.mode : "system",
+  };
+}
+
+/** @returns {AiSettings} */
+function safeAi(value) {
+  if (!value || typeof value !== "object") return { ...DEFAULTS.ai };
+  const agents = new Set(["claude", "antigravity", "opencode", "codex"]);
+  const agent = agents.has(value.agent) ? value.agent : null;
+  return {
+    agent,
+    model: typeof value.model === "string" ? value.model : "",
+    configured: Boolean(value.configured && agent),
+  };
+}
+
+/** @returns {DemoVaultSettings|null} */
+function safeDemoVault(value) {
+  if (!value || typeof value !== "object" || typeof value.path !== "string" || !value.path.trim()) return null;
+  return {
+    path: path.resolve(value.path),
+    locale: isLocale(value.locale) ? value.locale : FALLBACK_LOCALE,
+    templateVersion: Number.isInteger(value.templateVersion) ? value.templateVersion : 1,
+  };
+}
 
 /** @returns {Settings} */
 export function readSettings() {
@@ -85,6 +180,9 @@ export function readSettings() {
     // Se valida contra la lista, no se normaliza: aquí interesa si hay una
     // elección guardada, y un valor basura equivale a no haber elegido.
     locale: isLocale(raw.locale) ? raw.locale : null,
+    onboarding: safeOnboarding(raw.onboarding),
+    ai: safeAi(raw.ai),
+    demoVault: safeDemoVault(raw.demoVault),
   };
 }
 

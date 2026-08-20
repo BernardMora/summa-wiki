@@ -1,12 +1,11 @@
 "use client";
-import { isArticlePath } from "@/src/match.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fuzzy } from "@/lib/fuzzy.ts";
 import { useT } from "./I18n";
+import { REVEAL_EVENT } from "./Crumb.tsx";
 
 interface Item {
-  id: string; title: string; path: string; type: string;
-  updated: string; words: number;
+  name: string; path: string; dir: boolean; ext: string; id?: string; title?: string;
 }
 
 function Marked({ text, hits }: { text: string; hits: number[] }) {
@@ -36,13 +35,9 @@ export default function QuickSwitcher({
   // Load once, lazily: the list is only needed the first time it opens.
   useEffect(() => {
     if (!show || items.length) return;
-    fetch("/api/index")
+    fetch("/api/fs")
       .then((r) => r.json())
-      .then((d) => setItems(
-        (d.notes ?? [])
-          .filter((n: Item) => isArticlePath(n.path, d.notArticles))
-          .map((n: Item) => ({ ...n, path: n.path.replace(/^[a-z]+:/, "") })),
-      ))
+      .then((d) => setItems(d.entries ?? []))
       .catch(() => {});
   }, [show, items.length]);
 
@@ -65,15 +60,16 @@ export default function QuickSwitcher({
     if (!items.length) return [];
     const scored: { it: Item; score: number; tHits: number[]; pHits: number[] }[] = [];
     for (const it of items) {
-      const t = fuzzy(it.title, q);
+      const nameMatch = fuzzy(it.name, q);
+      const titleMatch = it.title && it.title !== it.name ? fuzzy(it.title, q) : null;
+      const t = nameMatch ?? titleMatch;
       const p = q ? fuzzy(it.path, q) : null;
       if (!t && !p) continue;
       // A title match is worth far more than the same match buried in a path.
       const score = Math.max((t?.score ?? -1e9) * 2, p?.score ?? -1e9);
-      scored.push({ it, score, tHits: t?.hits ?? [], pHits: t ? [] : (p?.hits ?? []) });
+      scored.push({ it, score, tHits: nameMatch?.hits ?? [], pHits: t ? [] : (p?.hits ?? []) });
     }
-    scored.sort((a, b) =>
-      b.score - a.score || (b.it.updated ?? "").localeCompare(a.it.updated ?? ""));
+    scored.sort((a, b) => b.score - a.score || a.it.name.localeCompare(b.it.name));
     return scored.slice(0, 40);
   }, [items, q]);
 
@@ -87,7 +83,18 @@ export default function QuickSwitcher({
   const choose = useCallback((i: number, newTab: boolean) => {
     const hit = results[i];
     if (!hit) return;
-    onOpen(hit.it.id, hit.it.title, newTab);
+    if (hit.it.dir) {
+      window.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: hit.it.path }));
+    } else {
+      const ext = hit.it.ext.toLowerCase();
+      const id = hit.it.id
+        ?? (ext === "canvas" ? `canvas:${hit.it.path}`
+          : ext === "pdf" ? `pdf:${hit.it.path}`
+          : ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext) ? `img:${hit.it.path}`
+          : `raw:${hit.it.path}`);
+      const title = hit.it.id ? (hit.it.title || hit.it.name.replace(/\.md$/i, "")) : hit.it.name;
+      onOpen(id, title, newTab);
+    }
     setShow(false);
   }, [results, onOpen]);
 
@@ -114,14 +121,14 @@ export default function QuickSwitcher({
           )}
           {results.map((r, i) => (
             <li
-              key={r.it.id}
+              key={r.it.path}
               className={`qsrow${i === sel ? " on" : ""}`}
               onMouseEnter={() => setSel(i)}
               onMouseDown={(e) => { e.preventDefault(); choose(i, e.metaKey || e.ctrlKey); }}
             >
-              <span className="qstitle"><Marked text={r.it.title} hits={r.tHits} /></span>
+              <span className="qstitle"><Marked text={r.it.name} hits={r.tHits} /></span>
               <span className="qspath"><Marked text={r.it.path} hits={r.pHits} /></span>
-              <span className="qsmeta">{r.it.type}</span>
+              <span className="qsmeta">{r.it.dir ? t("qs.folder") : (r.it.ext ? `.${r.it.ext}` : t("qs.noExtension"))}</span>
             </li>
           ))}
         </ul>

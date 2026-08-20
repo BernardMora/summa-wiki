@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getIndex } from "@/lib/server.ts";
 import { ARCH } from "@/src/config.ts";
 import { containsAny } from "@/src/match.ts";
+import { navGroups } from "@/lib/nav.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -10,16 +11,24 @@ export async function GET() {
   const idx = getIndex();
   const keep = idx.notes.filter((n) => !containsAny(n.path, ARCH.articles.notArticles.contains));
   const ids = new Set(keep.map((n) => n.id));
+  const groups = navGroups(Number.MAX_SAFE_INTEGER);
+  const categoriesByNote = new Map<string, string[]>();
+  for (const group of groups) for (const item of group.items) {
+    const current = categoriesByNote.get(item.id) ?? [];
+    current.push(group.id);
+    categoriesByNote.set(item.id, current);
+  }
 
   const nodes = keep.map((n) => ({
     id: n.id,
     title: n.title,
-    type: n.type,
+    type: n.type || "unknown",
     bundle: n.bundle,
     pillar: n.pillar ?? "",
     words: n.words,
     degree: 0,
     isIndex: n.slug === "_index",
+    categories: categoriesByNote.get(n.id) ?? [],
   }));
   const byId = new Map(nodes.map((n) => [n.id, n]));
 
@@ -38,8 +47,11 @@ export async function GET() {
     }
   }
 
-  // El selector de bundles del grafo los listaba a mano —"personal" y
-  // "veridia"— así que un vault con otros bundles ofrecía filtros que no
-  // existen y escondía los suyos.
-  return NextResponse.json({ nodes, edges, bundles: idx.bundles.map((b) => b.id) });
+  return NextResponse.json({
+    nodes, edges,
+    bundles: idx.bundles.map((b) => b.id),
+    categories: groups.filter((g) => !g.hidden && g.total > 0)
+      .map((g) => ({ id: g.id, label: g.label, total: g.total })),
+    types: [...new Set(nodes.map((n) => n.type))].sort(),
+  });
 }

@@ -46,8 +46,8 @@ function safeDir(dir: string): string | null {
 /**
  * Un solo nivel de `dir`, no todo el árbol. El árbol completo era un
  * `fs.readdirSync` recursivo hasta profundidad 8 en cada carga y en cada
- * evento del watcher — sobre `01-Hacer/01-veridia`, un punto de montaje de
- * Google Drive, eso es lento y a veces incompleto. El cliente pide cada
+ * evento del watcher — sobre un punto de montaje remoto eso es lento y a veces
+ * incompleto. El cliente pide cada
  * carpeta cuando el usuario la abre, como Finder o VS Code.
  */
 function listDir(
@@ -76,8 +76,8 @@ function listDir(
     let isDir = e.isDirectory();
     if (e.isSymbolicLink()) {
       try { isDir = fs.statSync(childAbs).isDirectory(); } catch { continue; }
-      // El bundle de Veridia vive en Drive: su ruta real no se puede deducir
-      // desde el cliente concatenando la del vault.
+      // La ruta real de un bundle enlazado no se puede deducir desde el cliente
+      // concatenando la del vault.
       if (isDir) { try { links[childRel] = fs.realpathSync(childAbs); } catch { /* enlace roto */ } }
     }
 

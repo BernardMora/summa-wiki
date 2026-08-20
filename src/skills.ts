@@ -21,9 +21,9 @@ import type { Locale } from "./locales.mjs";
  * Symlink y no copia porque la skill se regenera: con copias, editar el canon
  * deja a Claude leyendo la versión vieja, y ese desacuerdo es invisible hasta
  * que el agente hace algo que nadie le pidió. Con un enlace hay un solo
- * archivo y no puede haber dos verdades. (Que Claude Code sigue directorios de
- * skill enlazados está comprobado en uso: las skills de Veridia de este mismo
- * repo son symlinks a una carpeta de Drive y se cargan sin problema.)
+ * archivo y no puede haber dos verdades. Que Claude Code sigue directorios de
+ * skill enlazados está comprobado en uso con skills montadas desde una carpeta
+ * compartida.
  *
  * La copia queda de plan B para donde no se pueda enlazar —Windows sin permiso
  * de symlink, algún sistema de archivos de red— porque fallar ahí significaría

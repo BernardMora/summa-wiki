@@ -34,7 +34,7 @@ export default function EditorToolbar({ view, onImage, onVideo, revision, showNa
   const selected = view?.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to) ?? "";
 
   return (
-    <div className="editor-toolbar" role="toolbar" aria-label={t("editor.toolbar")}>
+    <div className="editor-toolbar" role="toolbar" aria-label={t("editor.toolbar")} data-tour="editor-toolbar">
       <div className="editor-toolgroup">
         {button(t("editor.heading1"), "H1", (v) => setLinePrefix(v, "# "))}
         {button(t("editor.heading2"), "H2", (v) => setLinePrefix(v, "## "))}
@@ -68,14 +68,14 @@ export default function EditorToolbar({ view, onImage, onVideo, revision, showNa
         }}><option value="">{t("editor.highlight")}</option><option value="none">{t("editor.noHighlight")}</option><option value="yellow">Yellow</option><option value="orange">Orange</option><option value="green">Green</option><option value="blue">Blue</option><option value="purple">Purple</option><option value="gray">Gray</option></select></label>
         {button(t("editor.clearFormat"), "Tx", clearInlineFormatting)}
       </div>
-      <div className="editor-toolgroup">
+      <div className="editor-toolgroup" data-tour="media-tools">
         {button(t("editor.link"), <ToolbarIcon kind="link" />, (v) => {
           const label = selected || t("editor.linkText");
           insertText(v, `[${label}](https://)`, label.length + 3);
         })}
-        <button type="button" title={t("editor.image")} aria-label={t("editor.image")} disabled={!view}
+        <button type="button" title={t("editor.image")} aria-label={t("editor.image")} disabled={!view} data-tour="insert-image"
           data-tooltip={t("editor.image")} onMouseDown={(e) => e.preventDefault()} onClick={onImage}><ToolbarIcon kind="image" /></button>
-        <button type="button" title={t("editor.video")} data-tooltip={t("editor.video")} aria-label={t("editor.video")} disabled={!view}
+        <button type="button" title={t("editor.video")} data-tooltip={t("editor.video")} aria-label={t("editor.video")} disabled={!view} data-tour="insert-video"
           onMouseDown={(e) => e.preventDefault()} onClick={onVideo}><ToolbarIcon kind="video" /></button>
         {button(t("editor.table"), <ToolbarIcon kind="table" />, insertTable)}
         {button(t("editor.rule"), "—", (v) => insertText(v, "\n\n---\n\n"))}
@@ -85,9 +85,9 @@ export default function EditorToolbar({ view, onImage, onVideo, revision, showNa
         {button(t("editor.redo"), "↷", redo)}
       </div>
       <div className="editor-toolgroup editor-viewtools">
-        <button type="button" title={t("pane.markMine")} data-tooltip={t("pane.markMine")} aria-label={t("pane.markMine")} disabled={!hasSelection}
+        <button type="button" title={t("pane.markMine")} data-tooltip={t("pane.markMine")} aria-label={t("pane.markMine")} disabled={!hasSelection} data-tour="authorship-human"
           onMouseDown={(e) => e.preventDefault()} onClick={onMarkHuman}><ToolbarIcon kind="human" /></button>
-        <button type="button" title={t("pane.markAi")} data-tooltip={t("pane.markAi")} aria-label={t("pane.markAi")} disabled={!hasSelection}
+        <button type="button" title={t("pane.markAi")} data-tooltip={t("pane.markAi")} aria-label={t("pane.markAi")} disabled={!hasSelection} data-tour="authorship-ai"
           onMouseDown={(e) => e.preventDefault()} onClick={onMarkAi}><ToolbarIcon kind="ai" /></button>
         <button type="button" title={t("pane.unmark")} data-tooltip={t("pane.unmark")} aria-label={t("pane.unmark")}
           onMouseDown={(e) => e.preventDefault()} onClick={onUnmark}><ToolbarIcon kind="unmark" /></button>

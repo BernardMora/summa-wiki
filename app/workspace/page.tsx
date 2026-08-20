@@ -1,4 +1,5 @@
 import ArticleClient from "@/components/ArticleClient.tsx";
+import { VAULT } from "@/lib/server.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,5 @@ export default async function WorkspacePage({
   const q = await searchParams;
   const id = q.open?.trim();
   const seed = id ? { id, title: q.title?.trim() || id } : null;
-  return <ArticleClient initial={null} seed={seed} />;
+  return <ArticleClient initial={null} seed={seed} vaultKey={VAULT} />;
 }

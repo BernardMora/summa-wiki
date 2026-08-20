@@ -20,9 +20,12 @@ export default async function SetupPage({
 }: {
   // Promesa, no objeto: Next 15 cambió la firma para poder empezar a renderizar
   // antes de conocer los parámetros.
-  searchParams: Promise<{ new?: string }>;
+  searchParams: Promise<{ new?: string; open?: string }>;
 }) {
-  const deliberate = (await searchParams)?.new === "1";
+  const params = await searchParams;
+  const create = params?.new === "1";
+  const open = params?.open === "1";
+  const deliberate = create || open;
   if (!deliberate && HAS_VAULT && vaultExists()) redirect("/");
 
   /*
@@ -37,7 +40,7 @@ export default async function SetupPage({
 
   return (
     <Setup
-      startAt={deliberate ? "create" : "start"}
+      startAt={create ? "create" : open ? "open" : "start"}
       suggestDir={suggest?.dir ?? ""}
       suggestName={suggest?.name && suggest.name !== "Summa Wiki" ? suggest.name : ""}
     />

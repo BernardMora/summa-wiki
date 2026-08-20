@@ -18,6 +18,8 @@ interface SummaBridge {
   chooseFolder: (title?: string) => Promise<string | null>;
   /** Avisa que cambió el idioma, para reconstruir el menú nativo. */
   localeChanged: () => Promise<boolean>;
+  /** Pide confirmación nativa y, si se acepta, abre el navegador del sistema. */
+  openExternal: (url: string) => Promise<boolean>;
 }
 
 interface Window {

@@ -28,6 +28,7 @@ const NOTA: Record<string, MessageKey> = {
   pptx: "raw.pptx",
 };
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "ogv", "mov"]);
+const HTML_EXTENSIONS = new Set(["html", "htm"]);
 
 const kb = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -51,6 +52,8 @@ export default function RawFilePane({ rel }: { rel: string }) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [htmlMode, setHtmlMode] = useState<"view" | "raw">("view");
+  const [previewHtml, setPreviewHtml] = useState("");
   // El texto en vuelo no vive en el estado de React: cambiarlo en cada
   // pulsación volvería a renderizar el panel entero y CodeMirror ya lleva su
   // propio documento. Solo se lee al guardar.
@@ -59,19 +62,27 @@ export default function RawFilePane({ rel }: { rel: string }) {
 
   useEffect(() => {
     let alive = true;
-    setData(null); setErr(""); setDirty(false);
+    setData(null); setErr(""); setDirty(false); setHtmlMode("view");
     fetch(`/api/file?p=${encodeURIComponent(rel)}`)
       .then((r) => r.json())
       .then((d: Loaded & { error?: string }) => {
         if (!alive) return;
         if (d.error) { setErr(d.error); return; }
         draft.current = d.text ?? "";
+        setPreviewHtml(d.text ?? "");
         mtime.current = d.mtimeMs;
         setData(d);
       })
       .catch(() => { if (alive) setErr(t("raw.readFailed")); });
     return () => { alive = false; };
   }, [rel]);
+
+  const showHtml = useCallback(() => {
+    // The editor owns the live document, so take its current value when the
+    // user switches back instead of previewing the last saved snapshot.
+    setPreviewHtml(draft.current);
+    setHtmlMode("view");
+  }, []);
 
   const save = useCallback(async () => {
     if (saving) return;
@@ -159,6 +170,13 @@ export default function RawFilePane({ rel }: { rel: string }) {
     );
   }
 
+  const isHtml = HTML_EXTENSIONS.has(ext);
+  const previewBase = `/api/html-preview/${rel.split("/").slice(0, -1).map(encodeURIComponent).join("/")}${rel.includes("/") ? "/" : ""}`;
+  const htmlWithBase = previewHtml.replace(
+    /<head(\s[^>]*)?>/i,
+    (head) => `${head}<base href="${previewBase}">`,
+  );
+
   return (
     <div className="imgview">
       <div className="imgbar">
@@ -167,6 +185,12 @@ export default function RawFilePane({ rel }: { rel: string }) {
         <span className="dim" style={{ fontSize: 11.5 }}>{kb(data.size)}</span>
         {err && <span className="err" style={{ fontSize: 11.5, whiteSpace: "normal" }}>{err}</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+          {isHtml && <span className="fileviewtoggle" role="group" aria-label={t("raw.displayMode")}>
+            <button type="button" className={htmlMode === "view" ? "on" : ""}
+                    aria-pressed={htmlMode === "view"} onClick={showHtml}>{t("raw.view")}</button>
+            <button type="button" className={htmlMode === "raw" ? "on" : ""}
+                    aria-pressed={htmlMode === "raw"} onClick={() => setHtmlMode("raw")}>{t("raw.raw")}</button>
+          </span>}
           {saved && <span className="dim" style={{ fontSize: 11.5 }}>{t("common.saved")}</span>}
           <button className="newbtn" style={{ width: "auto", margin: 0, padding: "2px 10px" }}
                   disabled={!dirty || saving} onClick={save}>
@@ -175,7 +199,16 @@ export default function RawFilePane({ rel }: { rel: string }) {
           <a className="dim" href={href} download>{t("chrome.download")}</a>
         </span>
       </div>
-      <div className="codewrap">
+      {isHtml && htmlMode === "view" ? (
+        <div className="htmlpreview">
+          <iframe
+            key={`${rel}:${previewHtml}`}
+            title={name}
+            srcDoc={/<head(?:\s[^>]*)?>/i.test(previewHtml) ? htmlWithBase : `<base href="${previewBase}">${previewHtml}`}
+            sandbox="allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+          />
+        </div>
+      ) : <div className="codewrap">
         <CodePane
           key={rel}
           filename={name}
@@ -183,7 +216,7 @@ export default function RawFilePane({ rel }: { rel: string }) {
           onChange={(v) => { draft.current = v; if (!dirty) setDirty(true); }}
           onSave={() => { if (dirty) save(); }}
         />
-      </div>
+      </div>}
     </div>
   );
 }

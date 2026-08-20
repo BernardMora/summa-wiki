@@ -116,8 +116,8 @@ function walk(root: string, out: string[] = []): string[] {
 
 export function buildIndex(): WikiIndex {
   // Se recorren TODOS los bundles declarados, no dos por nombre. Antes eran
-  // `find(...)!` sobre "personal" y "veridia": con un bundle menos —el vault de
-  // alguien que no tiene Veridia— la aserción reventaba el índice entero. `walk`
+  // Antes se buscaban dos ids concretos con `find(...)!`: con un bundle menos,
+  // la aserción reventaba el índice entero. `walk`
   // ya devuelve vacío para una raíz que no existe, así que un bundle ausente
   // simplemente no aporta archivos.
   const files = new Set<string>();
@@ -125,6 +125,7 @@ export function buildIndex(): WikiIndex {
 
   const notes: Note[] = [];
   const byAbs = new Map<string, Note>();
+  const sourceByAbs = new Map<string, string>();
 
   for (const abs of [...files].sort()) {
     const b = bundleOf(abs);
@@ -133,6 +134,7 @@ export function buildIndex(): WikiIndex {
     if (isExcluded(relFromVault)) continue;
 
     const raw = fs.readFileSync(abs, "utf8");
+    sourceByAbs.set(abs, raw);
     const { fm, body } = parseFrontmatter(raw);
     const clean = stripFences(body);
 
@@ -175,7 +177,9 @@ export function buildIndex(): WikiIndex {
 
   // Second pass: resolve links now that every note id exists.
   for (const note of notes) {
-    const raw = fs.readFileSync(note.abs, "utf8");
+    // El primer pase ya leyó cada archivo para extraer su metadata. Conservar
+    // esa fuente evita duplicar toda la E/S del vault en cada reconstrucción.
+    const raw = sourceByAbs.get(note.abs) ?? "";
     const { body } = parseFrontmatter(raw);
     const clean = stripFences(body);
     const dir = path.dirname(note.abs);

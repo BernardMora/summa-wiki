@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { VAULT } from "@/lib/server.ts";
+import { invalidate, VAULT } from "@/lib/server.ts";
 import { EXCLUDE_DIRS, isExcluded } from "@/src/config.ts";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +65,11 @@ function ensureWatcher() {
         const batch = [...hub.pending];
         hub.pending.clear();
         hub.timer = null;
+        // El árbol no es el único consumidor del filesystem: las rutas de
+        // notas usan el índice para backlinks, títulos y resolución de links.
+        // Invalidarlo aquí mantiene fresco el cache largo sin volver a
+        // reconstruirlo en cada navegación.
+        invalidate();
         for (const l of hub.listeners) l(batch);
       }, 250);
     });

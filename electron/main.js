@@ -29,8 +29,35 @@ import { serverEnv, SERVER_ARGV } from "./server-env.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const PORT = Number(process.env.PORT ?? 4321);
-const ORIGIN = `http://localhost:${PORT}`;
+const PREFERRED_PORT = Number(process.env.PORT ?? 4321);
+let PORT = PREFERRED_PORT;
+let ORIGIN = `http://localhost:${PORT}`;
+
+/** Comprueba que podemos poseer el puerto, no solo que alguien lo abrió. */
+function portAvailable(port) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    const done = (available) => { probe.close(() => resolve(available)); };
+    probe.once("error", () => resolve(false));
+    probe.listen(port, "127.0.0.1", () => done(true));
+  });
+}
+
+/**
+ * Next y la terminal necesitan dos puertos consecutivos. Nunca adoptamos un
+ * listener preexistente: podría ser un servidor huérfano con una caché vieja
+ * (la causa del splash perpetuo de "Compilando") o incluso otra aplicación.
+ */
+async function chooseOwnedPorts() {
+  for (let candidate = PREFERRED_PORT; candidate < PREFERRED_PORT + 100; candidate += 2) {
+    if (await portAvailable(candidate) && await portAvailable(candidate + 1)) {
+      PORT = candidate;
+      ORIGIN = `http://localhost:${PORT}`;
+      return;
+    }
+  }
+  throw new Error(`No hay un par de puertos libres desde ${PREFERRED_PORT}`);
+}
 
 /**
  * El bundle se llama "Summa Wiki": la MARCA, no el contenido.
@@ -157,6 +184,10 @@ function startServer() {
   // dos sitios, la prueba estaría comprobando su propia copia — que es
   // exactamente como se coló el modo desarrollo dentro del .exe.
   const env = serverEnv({ isPackaged, port: PORT });
+  // Si Electron termina de forma abrupta y no alcanza before-quit, el hijo se
+  // autodestruye al detectar que este PID ya no existe. Sin esto, detached:true
+  // convertía server.ts en un huérfano con PPID 1.
+  env.WIKI_PARENT_PID = String(process.pid);
 
   server = spawn(node, SERVER_ARGV, {
     cwd: ROOT,
@@ -187,6 +218,7 @@ function startServer() {
   // se ocupó entre la comprobación y el spawn) la ventana se quedaría en el
   // splash para siempre sin decir por qué.
   server.on("exit", (code, signal) => {
+    server = null;
     if (quitting || signal) return;
     dialog.showErrorBox(
       t("serverStoppedTitle"),
@@ -269,6 +301,45 @@ function writeState(win) {
 
 let win = null;
 
+/** Solo estos esquemas se entregan al sistema operativo. */
+const EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+const pendingExternal = new Set();
+
+function isExternalLink(raw) {
+  try {
+    const url = new URL(raw);
+    return EXTERNAL_PROTOCOLS.has(url.protocol) && url.origin !== new URL(ORIGIN).origin;
+  } catch { return false; }
+}
+
+/**
+ * Una sola puerta para cualquier salida de la app: markdown, HTML embebido,
+ * PDFs o una ventana solicitada con target=_blank/window.open.
+ */
+async function confirmExternalLink(url) {
+  if (!isExternalLink(url) || pendingExternal.has(url)) return false;
+  pendingExternal.add(url);
+  try {
+    const { response } = await dialog.showMessageBox(win ?? undefined, {
+      type: "question",
+      title: t("externalLinkTitle"),
+      message: t("externalLinkMessage"),
+      detail: url,
+      buttons: [t("externalLinkOpen"), t("externalLinkCancel")],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (response === 0) {
+      await shell.openExternal(url);
+      return true;
+    }
+    return false;
+  } finally {
+    pendingExternal.delete(url);
+  }
+}
+
 async function createWindow() {
   const s = readState();
 
@@ -294,14 +365,16 @@ async function createWindow() {
   // Enlaces externos al navegador del sistema, no dentro de la app: una
   // ventana de Electron sin barra de direcciones es una ratonera.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(ORIGIN)) shell.openExternal(url);
+    if (isExternalLink(url)) void confirmExternalLink(url);
     return { action: "deny" };
   });
-  win.webContents.on("will-navigate", (e, url) => {
-    if (!url.startsWith(ORIGIN) && !url.startsWith("file://")) {
-      e.preventDefault();
-      shell.openExternal(url);
-    }
+  // `will-frame-navigate` cubre tanto la página principal como los iframes de
+  // archivos HTML. Usar además `will-navigate` duplicaría el diálogo para el
+  // frame principal porque Electron emite ambos eventos.
+  win.webContents.on("will-frame-navigate", (event) => {
+    if (!isExternalLink(event.url)) return;
+    event.preventDefault();
+    void confirmExternalLink(event.url);
   });
 
   for (const ev of ["resize", "move", "close"]) win.on(ev, () => writeState(win));
@@ -312,7 +385,7 @@ async function createWindow() {
   // se pinta antes de que exista servidor al que preguntárselo.
   await win.loadFile(path.join(HERE, "loading.html"), { query: { name: brand.name } });
 
-  if (!(await listening())) startServer();
+  if (!server) startServer();
 
   if (await waitForServer()) {
     // Cerrar la ventana mientras Next compila la primera ruta aborta esta
@@ -523,7 +596,7 @@ function windowIcon() {
   return undefined;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   /*
     El idioma del sistema entra al proyecto AQUÍ y en ningún otro sitio.
     `app.getLocale()` es lo único que sabe qué idioma tiene el sistema
@@ -535,6 +608,10 @@ app.whenReady().then(() => {
     preguntarle al sistema en cada arranque le desharía la elección.
   */
   seedLocale(app.getLocale());
+
+  // Se decide antes de construir menús o ventanas: todos los consumidores de
+  // ORIGIN verán ya el par que pertenece a esta instancia.
+  await chooseOwnedPorts();
 
   brand = vaultConfig();
   applyDockIcon();
@@ -561,6 +638,11 @@ app.whenReady().then(() => {
     cambia es este panel, así que que avise él es exacto y gratis.
   */
   ipcMain.handle("locale:changed", () => { buildMenu(); return true; });
+  // Los enlaces del editor llegan directamente aquí: nunca pasan por el
+  // router de Next, así que una URL externa no puede ocupar el panel de nota.
+  ipcMain.handle("external:open", (_event, url) =>
+    typeof url === "string" ? confirmExternalLink(url) : false,
+  );
 
   ipcMain.handle("dialog:folder", async (_e, title) => {
     const r = await dialog.showOpenDialog(win ?? undefined, {

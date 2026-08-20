@@ -61,7 +61,7 @@ interface DragState {
  * left or right quarter of a pane splits; dropping in the middle moves the tab
  * into that pane.
  */
-export default function Workspace({ initial, seed }: {
+export default function Workspace({ initial, seed, vaultKey }: {
   /**
    * La nota que trae la URL. `null` en /workspace, que monta el mismo
    * workspace sin nota — es adonde va todo lo que no es una nota (terminal,
@@ -70,6 +70,8 @@ export default function Workspace({ initial, seed }: {
   initial: Payload | null;
   /** Pestaña a abrir al montar, de `?open=`. Se aplica una sola vez. */
   seed?: { id: string; title: string } | null;
+  /** Identidad estable del vault; impide restaurar pestañas de otro vault. */
+  vaultKey: string;
 }) {
   const t = useT();
   const [panes, setPanes] = useState<Pane[]>([
@@ -101,7 +103,7 @@ export default function Workspace({ initial, seed }: {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (Array.isArray(s.panes) && s.panes.length) {
+        if (s.vault === vaultKey && Array.isArray(s.panes) && s.panes.length) {
           // Make sure the note in the URL is present and focused. Sin nota en
           // la URL (/workspace) se restaura el layout tal cual: no hay nada
           // que forzar al frente, y la pestaña que se pidió por `?open=` la
@@ -133,17 +135,24 @@ export default function Workspace({ initial, seed }: {
       }
     } catch { /* corrupt layout: start fresh */ }
     setHydrated(true);
-  }, []);
+  }, [vaultKey]);
 
   useEffect(() => {
-    if (hydrated) localStorage.setItem(KEY, JSON.stringify({ panes, ratio, rowRatios }));
-  }, [panes, ratio, rowRatios, hydrated]);
+    if (hydrated) localStorage.setItem(KEY, JSON.stringify({ vault: vaultKey, panes, ratio, rowRatios }));
+  }, [vaultKey, panes, ratio, rowRatios, hydrated]);
 
   // ---------------------------------------------------------------- actions
   const open = useCallback((id: string, title: string, newTab = false) => {
-    setPanes((ps) => ps.map((p) => {
+    setPanes((ps) => {
+      // Una pestaña ya abierta se activa donde esté, incluso si vive en otro
+      // panel. Esto evita duplicar vistas singleton como el grafo.
+      const existing = ps.find((p) => p.tabs.some((t) => t.id === id));
+      if (existing) {
+        setActivePane(existing.key);
+        return ps.map((p) => p.key === existing.key ? { ...p, activeId: id } : p);
+      }
+      return ps.map((p) => {
       if (p.key !== activePane) return p;
-      if (p.tabs.some((t) => t.id === id)) return { ...p, activeId: id };
       // Una pestaña con sesión viva no se reemplaza: se abre una al lado.
       //
       // Reemplazar es el comportamiento normal —abrir notas desde el árbol no
@@ -159,7 +168,8 @@ export default function Workspace({ initial, seed }: {
       const tabs = [...p.tabs];
       tabs[i] = { id, title };
       return { ...p, tabs, activeId: id };
-    }));
+      });
+    });
     // Deliberately no router.push: navigating remounts the workspace, which
     // reset the pane layout and closed the split. The URL is maintained by the
     // effect above instead.
@@ -223,6 +233,29 @@ export default function Workspace({ initial, seed }: {
       return next;
     });
   }, []);
+
+  const openBeside = useCallback((id: string, title: string) => {
+    setPanes((current) => {
+      const existing = current.find((pane) => pane.tabs.some((tab) => tab.id === id));
+      if (existing) {
+        setActivePane(existing.key);
+        return current.map((pane) => pane.key === existing.key ? { ...pane, activeId: id } : pane);
+      }
+      const sourceIndex = Math.max(0, current.findIndex((pane) => pane.key === activePane));
+      const source = current[sourceIndex];
+      const fresh: Pane = { key: newKey(), column: newColumn(), slot: "top", tabs: [{ id, title }], activeId: id };
+      const next = [...current];
+      const lastInColumn = next.reduce((last, pane, index) => pane.column === source.column ? index : last, sourceIndex);
+      next.splice(lastInColumn + 1, 0, fresh);
+      setActivePane(fresh.key);
+      return next;
+    });
+  }, [activePane]);
+
+  useEffect(() => {
+    (globalThis as any).__wikiOpenBeside = openBeside;
+    return () => { if ((globalThis as any).__wikiOpenBeside === openBeside) delete (globalThis as any).__wikiOpenBeside; };
+  }, [openBeside]);
 
   /** Drop a dragged tab: split the target pane, or move the tab into it. */
   const drop = useCallback((d: DragState) => {
@@ -362,12 +395,13 @@ export default function Workspace({ initial, seed }: {
   const focused = panes.find((p) => p.key === activePane)?.activeId ?? null;
   useEffect(() => { publishActive(focused); }, [focused]);
 
-  // Keep the address bar on the focused NOTE. File tabs (pdf/img/canvas/raw)
-  // and the terminal deliberately do not rewrite it: each of those has its
-  // own standalone route, and reloading into it would land outside the
-  // workspace — no other tab, no restored layout, nothing to come back to.
+  // Keep the address bar on the focused NOTE. Virtual/file tabs deliberately
+  // do not rewrite it: reloading a standalone graph/file/terminal route would
+  // land outside the workspace — no tab bar, no restored layout, and nothing
+  // to come back to. The graph used to be missing from this guard, which made
+  // merely focusing its tab turn the next reload into the standalone view.
   useEffect(() => {
-    if (focused && !isFileId(focused) && !isTermId(focused)) {
+    if (focused && !isFileId(focused) && !isTermId(focused) && !isGraphId(focused)) {
       window.history.replaceState(null, "", hrefFor(focused));
     }
   }, [focused]);
@@ -498,6 +532,7 @@ export default function Workspace({ initial, seed }: {
                 {columnIndex === 0 && rowIndex === 0 && <SidebarToggle />}
                 <div
                   className="panetabs"
+                  data-tour="workspace-tabs"
                   ref={(el) => { if (el) tabBars.current.set(p.key, el); else tabBars.current.delete(p.key); }}
                 >
                 {p.tabs.map((tab, ti) => (
@@ -535,6 +570,7 @@ export default function Workspace({ initial, seed }: {
                       setTerminalMenuOpen(false);
                     }}
                     title={tab.id}
+                    data-tour="workspace-tab"
                   >
                     <span className="otab-title">
                       {isPdfId(tab.id) && <span className="otab-kind">PDF</span>}
@@ -628,11 +664,11 @@ export default function Workspace({ initial, seed }: {
       </div>
 
       {tabMenu && createPortal(
-        <div className="ctxmenu" style={{ left: tabMenu.x, top: tabMenu.y }}
+        <div className="ctxmenu" data-tour="tab-context-menu" style={{ left: tabMenu.x, top: tabMenu.y }}
           onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           <div className="ctxhead">{tabMenu.tab.title}</div>
           {!isTermId(tabMenu.tab.id) && !isGraphId(tabMenu.tab.id) && <>
-            <button onClick={async () => {
+            <button data-tour="tab-add-chat" onClick={async () => {
               const ok = await addTabToTerminal(tabMenu.tab);
               setTabMenu(null);
               if (!ok) alert(t("terminal.chooseFirst"));
@@ -647,8 +683,8 @@ export default function Workspace({ initial, seed }: {
               </div>}
             </div>
           </>}
-          <button onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "columns"); setTabMenu(null); }}>{t("workspace.splitRight")}</button>
-          <button disabled={panes.some((pane) => pane.column === panes.find((candidate) => candidate.key === tabMenu.paneKey)?.column && pane.key !== tabMenu.paneKey)}
+          <button data-tour="tab-split-right" onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "columns"); setTabMenu(null); }}>{t("workspace.splitRight")}</button>
+          <button data-tour="tab-split-down" disabled={panes.some((pane) => pane.column === panes.find((candidate) => candidate.key === tabMenu.paneKey)?.column && pane.key !== tabMenu.paneKey)}
             onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "rows"); setTabMenu(null); }}>{t("workspace.splitDown")}</button>
           <button onClick={() => { closeTab(tabMenu.paneKey, tabMenu.tab.id); setTabMenu(null); }}>{t("common.close")}</button>
         </div>, document.body,

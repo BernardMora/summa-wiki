@@ -77,6 +77,7 @@ export default function AgentMenu() {
         title={t("masthead.aiTitle")}
         aria-label={t("masthead.aiTitle")}
         aria-expanded={open}
+        data-tour="agent-menu"
       >
         {/*
           Destellos, el icono que ya significa «IA» en cualquier interfaz de

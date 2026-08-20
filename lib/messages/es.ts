@@ -24,6 +24,7 @@ export const es: Messages = {
   "common.done": "Listo",
   "common.optional": "opcional",
   "common.loading": "Cargando…",
+  "external.confirm": "¿Quieres abrir este enlace en el navegador?",
 
   // ── Masthead ──────────────────────────────────────────────────────────────
   "masthead.searchPlaceholder": "Buscar en el wiki",
@@ -33,6 +34,18 @@ export const es: Messages = {
 
   // ── Ayuda del formato ─────────────────────────────────────────────────────
   "help.title": "Ayuda de formato",
+  "help.exampleTour": "Recorrido y vault de ejemplo",
+  "help.exampleBody": "Vuelve a practicar o restaura el wiki ficticio de Alex.",
+  "help.exampleVault": "Vault de ejemplo",
+  "help.keyboardShortcuts": "Atajos de teclado",
+  "help.findFiles": "Buscar archivos en el vault",
+  "help.macOS": "macOS",
+  "help.windowsLinux": "Windows/Linux",
+  "help.categories": "Categorías",
+  "help.categoriesRules": "Una nota no tiene un campo category:. Las categorías son reglas que coinciden con sus tags, pillar, type, origen o ruta.",
+  "help.categoriesManual": "Para clasificarla desde el frontmatter raw, añade una tag que use la regla de esa categoría:",
+  "help.categoryTagExample": "filosofia",
+  "help.categoriesPin": "Para una excepción explícita, haz clic derecho en el archivo dentro del explorador y fíjalo a una categoría. Los fijados viven en .summa/categories.json.",
   "help.images": "Imágenes",
   "help.captionIntro":
     "El pie de foto es el title de markdown de toda la vida \u2014 entre comillas, dentro del paréntesis:",
@@ -227,13 +240,24 @@ export const es: Messages = {
   // ── Árbol de archivos ─────────────────────────────────────────────────────
   "tree.folderNamePlaceholder": "Nombre de la carpeta",
   "tree.noteTitlePlaceholder": "Título de la nota",
+  "tree.canvasTitlePlaceholder": "Nombre del canvas",
   "tree.moveFailed": "no se pudo mover",
   "tree.deleteFailed": "error al borrar",
   "tree.moving": "Moviendo y repuntando enlaces\u2026",
   "tree.hint": "Clic derecho para crear, renombrar o borrar \u00b7 arrastra para mover",
   "tree.hidden": "Ocultos",
   "tree.newNoteHere": "Nueva nota aquí",
+  "tree.newCanvasHere": "Nuevo canvas aquí",
   "tree.newFolderHere": "Nueva carpeta aquí",
+  "tree.newNote": "Nueva nota",
+  "tree.newCanvas": "Nuevo canvas",
+  "tree.newFolder": "Nueva carpeta",
+  "tree.openGraph": "Abrir grafo",
+  "tree.chooseLocation": "¿Dónde quieres crearlo?",
+  "tree.chooseLocationHint": "Busca y selecciona una carpeta existente del vault.",
+  "tree.rootLocation": "Raíz del vault",
+  "tree.searchFolders": "Buscar carpetas…",
+  "tree.noFoldersFound": "No se encontraron carpetas",
   "tree.openBesideBlocked": "Abre primero una nota; el panel lateral se abre junto a ella.",
   "tree.openBeside": "Abrir al lado",
   "tree.pinTo": "Fijar en \u25b8",
@@ -266,8 +290,10 @@ export const es: Messages = {
   "nav.hide": "Ocultar",
 
   // ── Buscador rápido / selector de enlaces ─────────────────────────────────
-  "qs.placeholder": "Buscar nota por título o ruta\u2026",
+  "qs.placeholder": "Buscar archivo o carpeta por nombre o ruta\u2026",
   "qs.noResults": "Sin resultados",
+  "qs.folder": "Carpeta",
+  "qs.noExtension": "Sin extensión",
   "qs.move": "\u2191\u2193 moverse",
   "qs.open": "\u21b5 abrir",
   "qs.newTab": "\u2318\u21b5 pestaña nueva",
@@ -287,8 +313,10 @@ export const es: Messages = {
   "chrome.download": "Descargar",
 
   // ── Grafo ─────────────────────────────────────────────────────────────────
-  "graph.bothBundles": "Ambos bundles",
-  "graph.allBundles": "Todos los bundles",
+  "graph.category": "Categoría",
+  "graph.allCategories": "Todas las categorías",
+  "graph.origin": "Origen",
+  "graph.wholeWiki": "Todo el wiki",
   "graph.releasePinned": "Los nodos que arrastras se quedan fijos; esto los suelta",
   "graph.openNote": "Abrir nota",
   "graph.exit": "Salir",
@@ -371,6 +399,9 @@ export const es: Messages = {
   "raw.noExtension": "sin extensión",
   "raw.binary": "Es un archivo binario: no hay nada legible que mostrar como texto.",
   "raw.openInBrowser": "Abrir en el navegador",
+  "raw.displayMode": "Modo de visualización HTML",
+  "raw.view": "Vista",
+  "raw.raw": "Código",
 
   // ── Ingesta ───────────────────────────────────────────────────────────────
   "ingest.title": "Traer carpetas al vault",

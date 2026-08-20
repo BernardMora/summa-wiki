@@ -4,9 +4,11 @@ import { getIndex } from "@/lib/server.ts";
 import { identityBranches, CENTRE } from "@/lib/identity.ts";
 import { navGroups } from "@/lib/nav.ts";
 import { readConfig, HAS_VAULT, VAULT, VAULT_SOURCE, vaultExists, ARCH } from "@/src/config.ts";
+import { readSettings } from "@/src/appdata.mjs";
 import { splitBold } from "@/src/architecture.ts";
 import VaultPicker from "@/components/VaultPicker";
 import { getT, getLocale } from "@/lib/i18n.server.ts";
+import NoteWorkspaceWarmup from "@/components/NoteWorkspaceWarmup.tsx";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +70,8 @@ export default function MainPage() {
   const locale = getLocale();
   // Sin vault configurado no hay portada que degradar: se va al asistente,
   // que es una pantalla propia y no una portada vacía con un botón.
+  const machine = readSettings();
+  if (!HAS_VAULT && machine.onboarding.status !== "completed") redirect("/onboarding");
   if (!HAS_VAULT) redirect("/setup");
   if (!vaultExists()) return <NoVault state="missing" />;
 
@@ -93,6 +97,7 @@ export default function MainPage() {
 
   return (
     <>
+      <NoteWorkspaceWarmup />
       <div className="welcome">
         <h1>{t("home.welcome", { name: cfg.name })}</h1>
         {/* La descripción de la arquitectura, no la bajada del vault: esa ya
@@ -245,7 +250,7 @@ export default function MainPage() {
             <h2>{t("home.explore")}</h2>
             <div>
               <ul>
-                <li><Link href="/graph">{t("home.graph")}</Link> — {t("home.graphHint")}</li>
+                <li><Link href={`/workspace?open=graph%3A&title=${encodeURIComponent(t("nav.graph"))}`}>{t("home.graph")}</Link> — {t("home.graphHint")}</li>
                 <li><Link href="/random">{t("home.random")}</Link></li>
                 <li><Link href="#categorias">{t("home.categories")}</Link> — {t("home.categoriesLink")}</li>
                 <li><Link href="/health">{t("home.health")}</Link> — {t("home.healthHint")}</li>

@@ -6,7 +6,7 @@
  * tablas de la interfaz son TypeScript que solo existe después de que Next las
  * compile. Main arranca antes que eso y no puede importarlas.
  *
- * Son veintitrés cadenas y ninguna se comparte con la página —el menú de macOS
+ * Son pocas cadenas y ninguna se comparte con la página —el menú de macOS
  * no dice nada que la interfaz también diga— así que no hay traducción que
  * pueda quedar desincronizada entre las dos tablas. Si algún día se solapan,
  * lo correcto es mover las compartidas a un `.mjs` que ambos lados importen,
@@ -45,6 +45,10 @@ export const MENU = {
     emptyVaultDetail: "No .md files were found inside. You can use it as a new vault, but there will be nothing to read when it opens.",
     emptyVaultUseAnyway: "Use it anyway",
     emptyVaultCancel: "Cancel",
+    externalLinkTitle: "Open external link?",
+    externalLinkMessage: "Do you want to open this link in your browser?",
+    externalLinkOpen: "Open",
+    externalLinkCancel: "Cancel",
   },
   es: {
     file: "Archivo",
@@ -71,6 +75,10 @@ export const MENU = {
     emptyVaultDetail: "No se encontró ningún archivo .md adentro. Puedes usarla como vault nuevo, pero al abrirla no habrá nada que leer.",
     emptyVaultUseAnyway: "Usarla igual",
     emptyVaultCancel: "Cancelar",
+    externalLinkTitle: "¿Abrir enlace externo?",
+    externalLinkMessage: "¿Quieres abrir este enlace en el navegador?",
+    externalLinkOpen: "Abrir",
+    externalLinkCancel: "Cancelar",
   },
 };
 
