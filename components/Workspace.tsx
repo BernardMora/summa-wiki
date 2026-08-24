@@ -8,12 +8,16 @@ import PdfViewer from "./PdfViewer.tsx";
 import GraphView from "./GraphView.tsx";
 import CanvasEditor from "./CanvasEditor.tsx";
 import RawFilePane from "./RawFilePane.tsx";
-import TerminalPane from "./TerminalPane.tsx";
-import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isTermId, isFileId, isGraphId, GRAPH_ID, hrefFor } from "./Tabs.tsx";
+import AgentChat from "./AgentChat.tsx";
+import { publishActive, isPdfId, isImgId, isCanvasId, isRawId, isChatId, isFileId, isGraphId, GRAPH_ID, hrefFor, forgetChatAgent } from "./Tabs.tsx";
 import QuickSwitcher from "./QuickSwitcher.tsx";
 import { useT } from "./I18n";
 import SidebarToggle from "./SidebarToggle.tsx";
-import { queueTerminalInput, registerTerminalWorkspace, terminalTargets } from "./terminalBridge.ts";
+import { queueChatInput, registerChatWorkspace, chatTargets } from "./chatBridge.ts";
+import { subscribeUiActions } from "./acp-ui.ts";
+import { runInNewChat } from "./AgentChat.tsx";
+import { newChatId, rememberChatAgent } from "./Tabs.tsx";
+import { useDefaultAgent } from "./DefaultAgent.tsx";
 
 export interface Tab { id: string; title: string; }
 export interface Pane {
@@ -24,7 +28,7 @@ export interface Pane {
 
 // Definidos una sola vez en Tabs.tsx: la copia que vivía aquí no conocía el
 // grafo y habría producido /note/graph%3A al sincronizar la URL.
-export { isPdfId, isImgId, isCanvasId, isRawId, isTermId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
+export { isPdfId, isImgId, isCanvasId, isRawId, isChatId, isFileId, hrefFor, isGraphId, GRAPH_ID } from "./Tabs.tsx";
 
 interface Ctx {
   open: (id: string, title: string, newTab?: boolean) => void;
@@ -74,6 +78,7 @@ export default function Workspace({ initial, seed, vaultKey }: {
   vaultKey: string;
 }) {
   const t = useT();
+  const defaultAgent = useDefaultAgent();
   const [panes, setPanes] = useState<Pane[]>([
     initial
       ? { key: "p0", column: "c0", slot: "top", tabs: [{ id: initial.id, title: initial.meta.title }], activeId: initial.id }
@@ -95,7 +100,18 @@ export default function Workspace({ initial, seed, vaultKey }: {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; paneKey: string; tab: Tab } | null>(null);
-  const [terminalMenuOpen, setTerminalMenuOpen] = useState(false);
+  /** El submenú de "añadir a…" del menú contextual de una pestaña. */
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  /**
+   * El id de la pestaña de chat cuyo nombre se está escribiendo ahora mismo.
+   *
+   * El id y no el par (panel, id): una pestaña puede cambiar de panel —la
+   * arrastras, o la envías a un panel nuevo desde este mismo menú— y una clave
+   * de panel guardada de antes apuntaría a un sitio donde la pestaña ya no
+   * está. Los ids son únicos entre paneles: `open()` activa la que ya existe
+   * en vez de duplicarla.
+   */
+  const [renaming, setRenaming] = useState<string | null>(null);
 
   // ---------------------------------------------------------------- persistence
   useEffect(() => {
@@ -162,7 +178,9 @@ export default function Workspace({ initial, seed, vaultKey }: {
       // que es la única que hace DELETE). Reemplazar su pestaña no la cerraba,
       // la volvía inalcanzable — con el comando a medio escribir y el proceso
       // vivo, sin nada en la interfaz que lo dijera.
-      if (newTab || !p.activeId || isTermId(p.activeId))
+      // Un chat cuenta como sesión viva por lo mismo que la terminal: el
+      // agente corre en el servidor y puede estar a mitad de un turno.
+      if (newTab || !p.activeId || isChatId(p.activeId))
         return { ...p, tabs: [...p.tabs, { id, title }], activeId: id };
       const i = p.tabs.findIndex((t) => t.id === p.activeId);
       const tabs = [...p.tabs];
@@ -186,10 +204,50 @@ export default function Workspace({ initial, seed, vaultKey }: {
     open(seed.id, seed.title, true);
   }, [hydrated, seed, open]);
 
+  /**
+   * Rename a chat tab.
+   *
+   * Only a chat's title is the tab's to change. Every other tab is named after
+   * something that exists outside the workspace — a note, a PDF, a canvas — and
+   * a tab that said something different from the file it shows would be a label
+   * lying about its contents. A conversation has no such external name: "Chat"
+   * is a placeholder, and the fourth one open is indistinguishable from the
+   * other three.
+   *
+   * Nothing extra is persisted. Tab titles already live in the workspace layout
+   * in `localStorage`, `open()` leaves the title of an already-open tab alone,
+   * and `chatTargets()` reads the same field — so the new name survives a
+   * reload and shows up in "add to chat" without another store to keep in sync.
+   */
+  const renameTab = useCallback((id: string, title: string) => {
+    const name = title.trim();
+    setRenaming(null);
+    // An empty name is a rename that undoes itself: the tab would be a bare ×
+    // with nothing to grab or read. Cancelling is what the user meant.
+    if (!name) return;
+    setPanes((ps) => ps.map((p) => ({
+      ...p,
+      tabs: p.tabs.map((tab) => (tab.id === id ? { ...tab, title: name } : tab)),
+    })));
+  }, []);
+
   const closeTab = useCallback((paneKey: string, id: string) => {
-    // La pty sobrevive a cambiar de pestaña o recargar (server.ts) — cerrarla
-    // de verdad es la única acción que debe matarla.
-    if (isTermId(id)) fetch(`/api/terminal?id=${encodeURIComponent(id.slice(5))}`, { method: "DELETE" });
+    /*
+     * La conversación sobrevive a cambiar de pestaña o recargar (server.ts):
+     * cerrarla con la × es la única acción que debe matarla, y matarla mata al
+     * agente Y a los comandos que haya lanzado, que son procesos aparte y no
+     * morirían con él.
+     *
+     * Se cierran TODOS los harnesses de la pestaña, no solo el seleccionado.
+     * Una pestaña de chat puede tener varias sesiones vivas debajo —una por
+     * cada harness al que se cambió— y cerrar solo la visible dejaría a los
+     * demás corriendo sin ninguna pestaña que los mostrara ni forma de
+     * volverlos a encontrar. `?prefix=` es lo que le pide eso a la ruta.
+     */
+    if (isChatId(id)) {
+      fetch(`/api/acp?prefix=${encodeURIComponent(id)}`, { method: "DELETE" });
+      forgetChatAgent(id);
+    }
     setPanes((ps) => {
       const next = ps.map((p) => {
         if (p.key !== paneKey) return p;
@@ -354,20 +412,43 @@ export default function Workspace({ initial, seed, vaultKey }: {
     return () => { delete (window as any).__wikiOpen; };
   }, [open]);
 
-  useEffect(() => registerTerminalWorkspace({
-    targets: () => panes.flatMap((pane) => pane.tabs.filter((tab) => isTermId(tab.id)).map((tab) => ({ id: tab.id.slice(5), title: tab.title }))),
-    activate: (terminalId) => {
-      const fullId = `term:${terminalId}`;
-      const pane = panes.find((candidate) => candidate.tabs.some((tab) => tab.id === fullId));
+  useEffect(() => registerChatWorkspace({
+    targets: () => panes.flatMap((pane) => pane.tabs.filter((tab) => isChatId(tab.id)).map((tab) => ({ id: tab.id, title: tab.title }))),
+    activate: (chatId) => {
+      const pane = panes.find((candidate) => candidate.tabs.some((tab) => tab.id === chatId));
       if (!pane) return;
-      setPanes((current) => current.map((candidate) => candidate.key === pane.key ? { ...candidate, activeId: fullId } : candidate));
+      setPanes((current) => current.map((candidate) => candidate.key === pane.key ? { ...candidate, activeId: chatId } : candidate));
       setActivePane(pane.key);
     },
   }), [panes]);
 
+  /**
+   * Lo que el agente pide sobre la interfaz, aplicado al workspace.
+   *
+   * Solo se atiende lo que solo el workspace puede hacer: abrir pestañas. Lo
+   * de dentro del grafo —enfocar, filtrar, resaltar— lo escucha `GraphView`
+   * por su cuenta, porque es estado suyo y subirlo hasta aquí obligaría a
+   * volver a bajarlo entero.
+   *
+   * `focus_graph` abre la pestaña del grafo si no estaba, y no hace nada más:
+   * la orden ya quedó guardada en el bus, y la vista la recoge al montarse.
+   * Es lo que hace que «enfoca el grafo en X» funcione a la primera, sin
+   * pedir antes que se abra el grafo.
+   */
+  useEffect(() => subscribeUiActions((action) => {
+    if (action.kind === "open_note") {
+      if (action.beside) openBeside(action.id, action.title);
+      else open(action.id, action.title, true);
+      return;
+    }
+    if (action.kind === "open_graph" || action.kind === "focus_graph") {
+      open(GRAPH_ID, t("nav.graph"), true);
+    }
+  }), [open, openBeside, t]);
+
   useEffect(() => {
     if (!tabMenu) return;
-    const close = () => { setTabMenu(null); setTerminalMenuOpen(false); };
+    const close = () => { setTabMenu(null); setChatMenuOpen(false); };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [tabMenu]);
@@ -375,17 +456,12 @@ export default function Workspace({ initial, seed, vaultKey }: {
   const pathForTab = useCallback(async (tab: Tab) => {
     if (isRawId(tab.id) || isPdfId(tab.id) || isImgId(tab.id)) return tab.id.slice(4);
     if (isCanvasId(tab.id)) return tab.id.slice(7);
-    if (isTermId(tab.id) || isGraphId(tab.id)) return null;
+    if (isChatId(tab.id) || isGraphId(tab.id)) return null;
     const response = await fetch(`/api/note-full?id=${encodeURIComponent(tab.id)}`, { cache: "no-store" });
     if (!response.ok) return null;
     return ((await response.json()) as Payload).meta.vaultPath;
   }, []);
 
-  const addTabToTerminal = useCallback(async (tab: Tab, terminalId?: string) => {
-    const path = await pathForTab(tab);
-    if (!path) return false;
-    return queueTerminalInput(`${path} `, terminalId);
-  }, [pathForTab]);
 
   useEffect(() => {
     document.body.classList.add("workspace");
@@ -401,7 +477,7 @@ export default function Workspace({ initial, seed, vaultKey }: {
   // to come back to. The graph used to be missing from this guard, which made
   // merely focusing its tab turn the next reload into the standalone view.
   useEffect(() => {
-    if (focused && !isFileId(focused) && !isTermId(focused) && !isGraphId(focused)) {
+    if (focused && !isFileId(focused) && !isChatId(focused) && !isGraphId(focused)) {
       window.history.replaceState(null, "", hrefFor(focused));
     }
   }, [focused]);
@@ -567,7 +643,7 @@ export default function Workspace({ initial, seed, vaultKey }: {
                     onContextMenu={(e) => {
                       e.preventDefault(); e.stopPropagation();
                       setTabMenu({ x: e.clientX, y: e.clientY, paneKey: p.key, tab });
-                      setTerminalMenuOpen(false);
+                      setChatMenuOpen(false);
                     }}
                     title={tab.id}
                     data-tour="workspace-tab"
@@ -576,8 +652,28 @@ export default function Workspace({ initial, seed, vaultKey }: {
                       {isPdfId(tab.id) && <span className="otab-kind">PDF</span>}
                       {isImgId(tab.id) && <span className="otab-kind">IMG</span>}
                       {isCanvasId(tab.id) && <span className="otab-kind">CANVAS</span>}
-                      {isTermId(tab.id) && <span className="otab-kind">TERM</span>}
-                      {tab.title}
+                      {isChatId(tab.id) && <span className="otab-kind">CHAT</span>}
+                      {renaming === tab.id ? (
+                        <input
+                          className="otab-rename"
+                          defaultValue={tab.title}
+                          aria-label={t("workspace.rename")}
+                          // The tab is a drag handle and a click target; while
+                          // the input is up it must be neither, or selecting
+                          // text inside it starts dragging the tab out.
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onContextMenu={(e) => e.stopPropagation()}
+                          ref={(el) => el?.select()}
+                          onBlur={(e) => renameTab(tab.id, e.currentTarget.value)}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key === "Enter") renameTab(tab.id, e.currentTarget.value);
+                            // Escape gives up on the edit, so it must not go
+                            // through renameTab and commit what was typed.
+                            if (e.key === "Escape") setRenaming(null);
+                          }}
+                        />
+                      ) : tab.title}
                     </span>
                     <button
                       className="otab-x"
@@ -611,10 +707,10 @@ export default function Workspace({ initial, seed, vaultKey }: {
                   <RawFilePane rel={p.activeId.slice(4)} />
                 ) : isCanvasId(p.activeId) ? (
                   <CanvasEditor path={p.activeId.slice(7)} />
-                ) : isTermId(p.activeId) ? (
-                  // Keyed por id: cada pestaña es su propia conexión/pty: no
+                ) : isChatId(p.activeId) ? (
+                  // Keyed por id: cada pestaña es su propia conversación y no
                   // deben compartir instancia al reordenar u ocultar paneles.
-                  <TerminalPane key={p.activeId} id={p.activeId.slice(5)} />
+                  <AgentChat key={p.activeId} tabId={p.activeId} />
                 ) : isImgId(p.activeId) ? (
                   <div className="imgview">
                     <div className="imgbar">
@@ -667,22 +763,65 @@ export default function Workspace({ initial, seed, vaultKey }: {
         <div className="ctxmenu" data-tour="tab-context-menu" style={{ left: tabMenu.x, top: tabMenu.y }}
           onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           <div className="ctxhead">{tabMenu.tab.title}</div>
-          {!isTermId(tabMenu.tab.id) && !isGraphId(tabMenu.tab.id) && <>
-            <button data-tour="tab-add-chat" onClick={async () => {
-              const ok = await addTabToTerminal(tabMenu.tab);
+          {!isChatId(tabMenu.tab.id) && !isGraphId(tabMenu.tab.id) && <>
+            {/* Sin submenú de agentes: se abre con el harness por omisión, el
+                mismo que el botón dentro de la nota. Ver `AskAgent`. */}
+            <button onClick={async () => {
+              const response = await fetch(`/api/note-full?id=${encodeURIComponent(tabMenu.tab.id)}`, { cache: "no-store" });
+              if (!response.ok) return;
+              const note = (await response.json()) as Payload;
+              const chatId = newChatId();
+              rememberChatAgent(chatId, defaultAgent);
+              runInNewChat(chatId, t("chat.askAboutPrompt", { title: note.meta.title }), undefined, [{
+                id: note.id, title: note.meta.title, path: note.meta.pathRel,
+              }]);
+              open(chatId, t("chat.tabTitle"), true);
               setTabMenu(null);
-              if (!ok) alert(t("terminal.chooseFirst"));
-            }}>{t("terminal.addToChat")}</button>
+            }}>{t("chat.askAbout")}</button>
+            <button data-tour="tab-add-chat" onClick={async () => {
+              let path = "";
+              if (isRawId(tabMenu.tab.id) || isPdfId(tabMenu.tab.id) || isImgId(tabMenu.tab.id)) {
+                path = tabMenu.tab.id.slice(4);
+              } else if (isCanvasId(tabMenu.tab.id)) {
+                path = tabMenu.tab.id.slice(7);
+              } else if (!isChatId(tabMenu.tab.id) && !isGraphId(tabMenu.tab.id)) {
+                const response = await fetch(`/api/note-full?id=${encodeURIComponent(tabMenu.tab.id)}`, { cache: "no-store" });
+                if (response.ok) path = ((await response.json()) as any).meta.pathRel;
+              }
+              if (!path) path = tabMenu.tab.id;
+              
+              const ok = queueChatInput(undefined, "", { id: tabMenu.tab.id, title: tabMenu.tab.title, path });
+              setTabMenu(null);
+              if (!ok) alert(t("chat.chooseFirst"));
+            }}>{t("chat.addToChat")}</button>
             <div className="ctxsub">
-              <button onClick={() => setTerminalMenuOpen((value) => !value)}>{t("terminal.addTo")}</button>
-              {terminalMenuOpen && <div className="ctxsubmenu">
-                {terminalTargets().length === 0 && <div className="ctxhead">{t("terminal.noneOpen")}</div>}
-                {terminalTargets().map((target) => <button key={target.id} onClick={async () => {
-                  await addTabToTerminal(tabMenu.tab, target.id); setTabMenu(null);
+              <button onClick={() => setChatMenuOpen((value) => !value)}>{t("chat.addTo")}</button>
+              {chatMenuOpen && <div className="ctxsubmenu">
+                {chatTargets().length === 0 && <div className="ctxhead">{t("chat.noneOpen")}</div>}
+                {chatTargets().map((target) => <button key={target.id} onClick={async () => {
+                  let path = "";
+                  if (isRawId(tabMenu.tab.id) || isPdfId(tabMenu.tab.id) || isImgId(tabMenu.tab.id)) {
+                    path = tabMenu.tab.id.slice(4);
+                  } else if (isCanvasId(tabMenu.tab.id)) {
+                    path = tabMenu.tab.id.slice(7);
+                  } else if (!isChatId(tabMenu.tab.id) && !isGraphId(tabMenu.tab.id)) {
+                    const response = await fetch(`/api/note-full?id=${encodeURIComponent(tabMenu.tab.id)}`, { cache: "no-store" });
+                    if (response.ok) path = ((await response.json()) as any).meta.pathRel;
+                  }
+                  if (!path) path = tabMenu.tab.id;
+
+                  queueChatInput(target.id, "", { id: tabMenu.tab.id, title: tabMenu.tab.title, path });
+                  setTabMenu(null);
                 }}>{target.title}</button>)}
               </div>}
             </div>
           </>}
+          {isChatId(tabMenu.tab.id) && (
+            <button onClick={() => {
+              setRenaming(tabMenu.tab.id);
+              setTabMenu(null);
+            }}>{t("workspace.rename")}</button>
+          )}
           <button data-tour="tab-split-right" onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "columns"); setTabMenu(null); }}>{t("workspace.splitRight")}</button>
           <button data-tour="tab-split-down" disabled={panes.some((pane) => pane.column === panes.find((candidate) => candidate.key === tabMenu.paneKey)?.column && pane.key !== tabMenu.paneKey)}
             onClick={() => { splitTab(tabMenu.paneKey, tabMenu.tab, "rows"); setTabMenu(null); }}>{t("workspace.splitDown")}</button>

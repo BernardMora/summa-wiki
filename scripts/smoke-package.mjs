@@ -23,7 +23,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -65,9 +66,21 @@ function locate() {
 
 const { app: APP, exe: EXE } = locate();
 
-// Un puerto poco habitual, no el 4321: la idea es no chocar con un `npm run
-// dev` que el desarrollador tenga abierto mientras empaqueta.
-const PORT = 43219;
+// An out-of-the-way port, deliberately outside the block the desktop shell
+// probes (DEFAULT_PORT .. DEFAULT_PORT + 100, see src/ports.mjs): the point is
+// not to collide with a `npm run dev` — or with the installed app — that the
+// packager happens to have open.
+const PORT = 43911;
+
+/**
+ * A user-data directory of this run's own, so the smoke test sees a FIRST RUN.
+ *
+ * Without it the test inherits the settings of whoever is packaging, and on the
+ * one machine where the app is developed those settings always name a vault —
+ * so the first-run screen, the one path every new user takes, was the only one
+ * never exercised. That is the gap issue #9 came through.
+ */
+const USER_DATA = mkdtempSync(path.join(tmpdir(), "summa-smoke-"));
 
 function fail(msg, detail = "") {
   console.error(`\n  ✗ ${msg}`);
@@ -89,9 +102,9 @@ const { serverEnv, SERVER_ARGV } = await import(
 );
 
 /** ¿Responde el servidor? Cualquier respuesta HTTP vale: se prueba el arranque. */
-async function ping() {
+async function ping(route = "/") {
   try {
-    const r = await fetch(`http://127.0.0.1:${PORT}/`, { redirect: "manual" });
+    const r = await fetch(`http://127.0.0.1:${PORT}${route}`, { redirect: "manual" });
     return r.status;
   } catch {
     return null;
@@ -109,8 +122,8 @@ console.log("  • arrancando el servidor empaquetado…");
 // WIKI_NODE se quita del entorno de partida a propósito: si quien empaqueta lo
 // tiene exportado, la prueba usaría su node en vez del Electron del paquete, y
 // dejaría sin comprobar justo el camino que recorre el usuario.
-const { WIKI_NODE, ...baseEnv } = process.env;
-const env = serverEnv({ isPackaged: true, port: PORT, baseEnv });
+const { WIKI_NODE, ...inherited } = process.env;
+const env = serverEnv({ isPackaged: true, port: PORT, baseEnv: { ...inherited, WIKI_USER_DATA: USER_DATA } });
 
 const server = spawn(EXE, SERVER_ARGV, {
   cwd: APP,
@@ -168,5 +181,20 @@ if (status >= 500) {
   fail(`El servidor respondió ${status}.`, log);
 }
 
+/*
+ * The first-run screen, which is the one route a new user cannot avoid.
+ *
+ * Pinging `/` is not enough to cover it: the redirect into onboarding is
+ * streamed, so `/` answers 200 whether the onboarding route resolves in the
+ * package or 404s. Asking for it directly is what turns "the server started"
+ * into "the app a stranger opens has a first screen".
+ */
+const onboarding = await ping("/onboarding");
+if (onboarding !== 200) {
+  stop();
+  fail(`La pantalla de primer arranque respondió ${onboarding ?? "nada"} (se esperaba 200).`, log);
+}
+
 stop();
-console.log(`  ✓ el servidor empaquetado responde (HTTP ${status})`);
+rmSync(USER_DATA, { recursive: true, force: true });
+console.log(`  ✓ el servidor empaquetado responde (HTTP ${status}) y sirve el primer arranque`);

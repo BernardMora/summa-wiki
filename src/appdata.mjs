@@ -65,7 +65,7 @@ export function settingsPath() {
 
 /**
  * @typedef {object} AiSettings
- * @property {"claude"|"antigravity"|"opencode"|"codex"|null} agent
+ * @property {string|null} agent Stable ACP preset id; validated at the API boundary.
  * @property {string} model
  * @property {boolean} configured
  */
@@ -142,8 +142,10 @@ function safeOnboarding(value) {
 /** @returns {AiSettings} */
 function safeAi(value) {
   if (!value || typeof value !== "object") return { ...DEFAULTS.ai };
-  const agents = new Set(["claude", "antigravity", "opencode", "codex"]);
-  const agent = agents.has(value.agent) ? value.agent : null;
+  const rawAgent = typeof value.agent === "string" && value.agent.trim() ? value.agent.trim() : null;
+  // Migrate the only legacy id that changed when the ACP registry replaced the
+  // terminal registry. Other ids stayed stable.
+  const agent = rawAgent === "claude" ? "claude-code" : rawAgent;
   return {
     agent,
     model: typeof value.model === "string" ? value.model : "",
@@ -262,6 +264,33 @@ export function rememberVault(abs) {
   const vault = path.resolve(abs);
   const recents = [vault, ...readSettings().recents.filter((r) => r !== vault)].slice(0, 10);
   return writeSettings({ vault, recents });
+}
+
+/**
+ * Is this a first run that should go through onboarding?
+ *
+ * One rule and not two copies, for the same reason vault resolution lives here:
+ * two processes decide it. `app/page.tsx` uses it to redirect to `/onboarding`
+ * from the server, and `electron/main.js` uses it to LOAD that address instead
+ * of the front page.
+ *
+ * The desktop navigating straight there matters more than it looks. The server
+ * redirect happens after the layout has begun streaming, so Next does not
+ * answer 307: it answers 200 with the entire front page and a one-second `meta
+ * refresh`. That works, but for that second a first run shows an empty
+ * encyclopedia — zero articles across 23 categories — which is exactly what a
+ * newcomer reads as a broken app. Loading `/onboarding` up front means the
+ * first screen that ever exists is the right one.
+ *
+ * Read from disk on every call rather than cached in a module constant: the
+ * state changes while the process lives — opening the example vault changes it
+ * — and a cached answer would send someone back into onboarding after they left
+ * it.
+ *
+ * @returns {boolean}
+ */
+export function needsOnboarding() {
+  return resolveVault().path === null && readSettings().onboarding.status !== "completed";
 }
 
 /**

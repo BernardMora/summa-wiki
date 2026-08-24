@@ -14,7 +14,7 @@
  *
  * @param {object} o
  * @param {boolean} o.isPackaged Si corre desde el .exe instalado.
- * @param {number} o.port Puerto del servidor de páginas; la pty usa port + 1.
+ * @param {number} o.port Puerto del servidor de páginas; los agentes usan port + 1.
  * @param {NodeJS.ProcessEnv} [o.baseEnv] Entorno de partida; por defecto el actual.
  */
 export function serverEnv({ isPackaged, port, baseEnv = process.env }) {

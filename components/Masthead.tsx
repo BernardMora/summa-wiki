@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AgentMenu from "./AgentMenu.tsx";
 import { useT } from "./I18n";
-import { openInWorkspace, newTermId } from "./Tabs.tsx";
 
 interface Hit { id: string; title: string; path: string; type: string; bundle: string; }
 
@@ -58,15 +57,6 @@ export default function Masthead({ name, tagline }: { name: string; tagline: str
 
       <div className="masthead-actions">
         <AgentMenu />
-        <button
-          className="themebtn terminal-icon-btn"
-          data-tour="new-terminal"
-          title={t("masthead.newTerminal")}
-          aria-label={t("masthead.newTerminal")}
-          onClick={() => openInWorkspace(newTermId(), "Terminal", true)}
-        >
-          <svg viewBox="0 0 18 18" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1.8" y="2.4" width="14.4" height="13.2" rx="1.8"/><path d="m4.7 6.2 2.4 2.1-2.4 2.1M9.2 11.1h3.7"/></svg>
-        </button>
       </div>
 
       <div className="searchwrap" ref={box}>

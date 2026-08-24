@@ -15,7 +15,6 @@ needs once the index points it at the right files.
 ```bash
 ./bin/wiki index                       # rebuild index.json
 ./bin/wiki search <query> [filters]    # ranked search
-./bin/wiki show <slug>                 # metadata, links, backlinks, provenance
 ./bin/wiki related <slug> --depth 2    # graph neighbourhood
 ./bin/wiki orphans                     # notes with no inbound links
 ./bin/wiki health [--all]              # spec section 9 validation

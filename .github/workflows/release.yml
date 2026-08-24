@@ -1,10 +1,11 @@
 # Publicar una versión para las tres plataformas.
 #
-# Por qué existe: node-pty es un módulo nativo y Electron trae su propio Node,
-# así que un paquete de Windows hecho desde un Mac es un paquete que nadie
-# probó en Windows. Compilar cada plataforma EN esa plataforma no es una
-# preferencia de estilo: es la única forma de que el binario que se descarga
-# alguien sea el mismo que pasó las pruebas.
+# Por qué existe: cada plataforma empaqueta su propio binario de Electron —y
+# las dependencias nativas que Next arrastra— así que un paquete de Windows
+# hecho desde un Mac es un paquete que nadie probó en Windows. Compilar cada
+# plataforma EN esa plataforma no es una preferencia de estilo: es la única
+# forma de que el binario que se descarga alguien sea el mismo que pasó las
+# pruebas.
 #
 # Sustituye a `package:linux:docker`, que existía porque no había otra manera
 # de tocar Linux desde un portátil de Apple, y que nunca pudo producir el
@@ -35,7 +36,7 @@ jobs:
   #
   # Compilarlo cuatro veces nunca tuvo sentido: la salida de `next build` es
   # JavaScript independiente de plataforma. Lo que sí es específico de cada SO
-  # —el binario de Electron y node-pty— lo resuelve electron-builder, no Next.
+  # —el binario de Electron y sus nativos— lo resuelve electron-builder, no Next.
   #
   # El supuesto que queda por confirmar es que esa salida cruza de SO, no solo
   # de ruta. Cruzar de ruta ya está probado: el build graba su ruta absoluta en

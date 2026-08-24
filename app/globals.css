@@ -601,6 +601,12 @@ body.hide-prov .prov-human { background: none; box-shadow: none; }
 .create-location { width: min(460px, calc(100vw - 32px)); padding: 20px; }
 .create-location-backdrop { z-index: 1200; }
 body:has(.create-location-backdrop) .structurehelp { visibility: hidden; }
+/* A real modal owns the interaction until it closes. Leaving the tour above
+   or below it produces two competing overlays and instructions for controls
+   the user cannot reach. The guide returns automatically when the modal is
+   dismissed. */
+body:has(.create-location-backdrop) .tour-card,
+body:has(.create-location-backdrop) .tour-spotlight { display: none; }
 .create-location h2 { margin: 0 0 8px; font-size: 18px; }
 .create-location p { margin: 0 0 14px; color: var(--muted); line-height: 1.45; }
 .create-location > input { width: 100%; padding: 8px 10px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); }
@@ -697,10 +703,6 @@ body.resizing.resizing-rows { cursor: row-resize; }
    caja propia habría duplicado el anclaje, la sombra y —lo que de verdad se
    olvida— el `no-drag` que hace clicable un control dentro de la barra
    arrastrable de la app de escritorio. */
-/* 344 y no 288: la fila pasó de dos botones a tres cuando se sumó reanudar, y
-   «Reanudar la última» es la etiqueta más larga del panel. Con el ancho viejo
-   partía en dos renglones y desalineaba la fila entera. */
-.aimenu { width: 344px; }
 /* Reanudar es la acción secundaria de la fila —no abre nada nuevo, vuelve a
    algo que ya existe— y no compite con las dos de arrancar. */
 .aiagent .cfgmodes .airesume { color: var(--muted); }
@@ -729,6 +731,10 @@ body.resizing.resizing-rows { cursor: row-resize; }
   background: var(--panel-blue); color: var(--fg); border-color: var(--line);
 }
 .cfgmodes { display: flex; gap: 4px; }
+/* Los siete agentes de ACP en una rejilla que se envuelve, no en la fila de
+   `.cfgmodes`: son nombres propios de largo desigual y en una sola línea el
+   menú se estiraría hasta el ancho del más largo por siete. */
+.cfgmodes.aichat { flex-wrap: wrap; margin-bottom: 6px; }
 .cfgmodes button {
   flex: 1; font: inherit; font-size: 12px; padding: 4px 0; cursor: pointer;
   border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--muted);
@@ -976,6 +982,672 @@ body.resizing.resizing-rows { cursor: row-resize; }
    estirarse a lo ancho de la portada. */
 .welcome .vaultpick { max-width: 420px; margin: 18px auto 0; }
 
+/* --------------------------------------------------- agent chat (ACP) */
+/* The visual vocabulary comes from beautifului.dev: stacked surfaces instead
+   of outlined boxes, 6/8/10px corners, a one-pixel ring in place of a
+   `border`, and shadows in two very low layers. What is NOT copied are its
+   colors: those are fixed dark OKLCH values, and this app has four palettes
+   plus a light mode, so every surface is derived with `color-mix` from the
+   appearance tokens. Switching palette restyles the whole chat without
+   touching a single rule here. */
+:root {
+  /* Surfaces, back to front. The ladder mirrors the reference
+     (page < canvas < inset < surface < field) but stays relative to the
+     theme: it darkens the paper in light mode and lightens it in dark.
+     `--chat-lift` carries that direction. */
+  --chat-lift: #000;
+  --chat-canvas: var(--surface-app);
+  --chat-inset: color-mix(in srgb, var(--surface-content) 96%, var(--chat-lift));
+  --chat-surface: color-mix(in srgb, var(--surface-content) 92%, var(--chat-lift));
+  --chat-field: color-mix(in srgb, var(--surface-content) 97%, var(--chat-lift));
+  --chat-hover: color-mix(in srgb, var(--surface-content) 88%, var(--chat-lift));
+
+  /* A 1px ring stands in for a border. Kept separate from the app's line
+     color because it has to read softer than `1px solid var(--line)`, and
+     because a shadow does not take part in layout. */
+  --chat-ring: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 62%, transparent);
+  --chat-ring-strong: 0 0 0 1px color-mix(in srgb, var(--border-default) 55%, transparent);
+  --chat-shadow-card: var(--chat-ring), 0 1px 2px rgb(0 0 0 / .05), 0 2px 6px rgb(0 0 0 / .04);
+  --chat-shadow-raised: var(--chat-ring-strong), 0 2px 10px rgb(0 0 0 / .09);
+  --chat-shadow-overlay: var(--chat-ring-strong), 0 8px 28px rgb(0 0 0 / .16);
+  --chat-shadow-field: inset 0 1px 2px rgb(0 0 0 / .05);
+
+  /* Chat-local radii. They do not read `--control-radius` because two presets
+     drive it to 0 (`archive`, `terminal`), and a conversation still has to
+     read as a conversation. Those presets are honored in the block below. */
+  --chat-r-chip: 6px;
+  --chat-r-control: 8px;
+  --chat-r-card: 10px;
+  --chat-r-bubble: 14px;
+
+  /* Status tints, at 14% as in the reference. */
+  --chat-ok: #2f9e63;
+  --chat-ok-tint: color-mix(in srgb, var(--chat-ok) 14%, transparent);
+  --chat-bad: var(--danger);
+  --chat-bad-tint: color-mix(in srgb, var(--danger) 14%, transparent);
+  --chat-accent-tint: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --chat-lift: #fff; --chat-ok: #4ade80; }
+}
+:root[data-theme="dark"] { --chat-lift: #fff; --chat-ok: #4ade80; }
+
+/* The angular presets outrank the reference's taste: choosing `archive` or
+   `terminal` is choosing square corners across the whole app. */
+:root[data-preset="archive"], :root[data-preset="terminal"] {
+  --chat-r-chip: 0; --chat-r-control: 0; --chat-r-card: 0; --chat-r-bubble: 0;
+}
+
+.articleagentactions { display: flex; gap: 6px; margin: 6px 0 12px; }
+.chatmentions { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 14px 8px; }
+.chatmentions > span {
+  padding: 3px 9px; font-size: 11.5px; letter-spacing: -.01em;
+  background: var(--chat-surface); border-radius: 999px; box-shadow: var(--chat-ring);
+}
+.mentionat { color: var(--link); }
+
+/* This replaces the embedded terminal as the primary surface. It fills the
+   panel and splits the height three ways: a fixed bar on top, the transcript
+   growing in the middle, the composer pinned at the bottom. Only the
+   transcript scrolls — losing the input on the way down would mean losing the
+   way to answer. */
+.chat {
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
+  background: var(--chat-canvas);
+  font-family: var(--font-ui); letter-spacing: -.01em;
+}
+
+/* ------------------------------------------------- settings, in the field */
+/* The row that used to be a bar across the top of the panel. It sits inside
+   `.chatcomposer` now, under the text, sharing the field's rounded corners —
+   so the controls read as belonging to the prompt being written rather than
+   to the panel's chrome. See the comment where `.chatfoot` is rendered. */
+.chatfoot {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 6px 8px 7px; border-top: 1px solid color-mix(in srgb, var(--border-subtle) 45%, transparent);
+}
+.chatbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  flex: 1 1 auto; min-width: 0; font-size: 12px;
+}
+.chatopt { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.chatopt select {
+  font: inherit; font-size: 11.5px; max-width: 220px; padding: 4px 6px;
+  border: 0; border-radius: var(--chat-r-chip);
+  background: var(--chat-surface); color: var(--fg); box-shadow: var(--chat-ring);
+}
+.chatopt select:hover { background: var(--chat-hover); }
+
+.harnesspicker { position: relative; color: var(--fg); }
+.harnesspicker summary {
+  display: flex; align-items: center; gap: 7px; min-width: 138px; padding: 5px 9px;
+  border: 0; border-radius: var(--chat-r-control);
+  background: var(--chat-surface); box-shadow: var(--chat-ring);
+  font-size: 12px; font-weight: 500; cursor: pointer; list-style: none;
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.harnesspicker summary:hover { background: var(--chat-hover); box-shadow: var(--chat-ring-strong); }
+/* Open reads as pressed. It is the state signal the chevron no longer carries
+   — see `.harnesschev` — and it is the one that does not move anything. */
+.harnesspicker[open] summary { background: var(--chat-hover); box-shadow: var(--chat-ring-strong); }
+.harnesspicker summary::-webkit-details-marker { display: none; }
+/*
+ * The indicator is a double chevron, drawn, and it never moves.
+ *
+ * It was the "⌄" character rotated 180° on open. Two things were wrong with
+ * that. The glyph's ink sits below the middle of its em box, so rotating it
+ * about any origin also TRANSLATES it — hence the `transform-origin: 50% 35%`
+ * fudge that was there, and hence the arrow visibly jumping up and down on
+ * every click. And the direction it settled on was the opposite of every other
+ * control in the same row: the native selects next to it point down and stay
+ * pointing down, while this one pointed up when closed.
+ *
+ * A drawn double chevron answers both. It is a pop-up menu, not a disclosure —
+ * the menu overlays upward rather than expanding in flow — and up-and-down is
+ * exactly the mark the platform uses for that. Being direction-agnostic, it
+ * has nothing to flip, so there is no motion left to look wrong.
+ */
+.harnesschev {
+  margin-left: auto; flex: 0 0 auto; width: 9px; height: 13px;
+  color: var(--muted); opacity: .75;
+}
+.harnesspicker summary:hover .harnesschev, .harnesspicker[open] .harnesschev { opacity: 1; }
+.harnesslogo { width: 16px; height: 16px; flex: 0 0 16px; object-fit: contain; }
+/* Opens UPWARD. It used to drop below the summary, which was right while the
+   picker lived at the top of the panel; from the composer, downward is off the
+   bottom of the window. */
+.harnessmenu {
+  position: absolute; z-index: 5; bottom: calc(100% + 5px); left: 0; width: max-content; min-width: 100%;
+  padding: 4px; border: 0; border-radius: var(--chat-r-card);
+  background: var(--chat-field); box-shadow: var(--chat-shadow-overlay);
+}
+/* Each row is TWO controls: the name switches this chat, the star chooses what
+   new chats open with. They are kept visually as one row and separately
+   clickable, because they answer different questions. */
+.harnessrow { display: flex; align-items: center; gap: 2px; }
+/* Both rules outrank the generic `.harnessmenu button` above, and both have to:
+   that rule sets `width: 100%`, which the star inherited — two items each
+   asking for the full row made the flex line shrink them proportionally, so
+   the stars landed at a different x on every row instead of in a column. */
+.harnessmenu .harnessrow > button:first-child { flex: 1 1 auto; min-width: 0; }
+.harnessmenu .harnessstar {
+  flex: 0 0 26px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: var(--chat-r-chip); background: transparent;
+  font-size: 13px; line-height: 1; color: var(--muted); cursor: pointer;
+  opacity: 0; transition: opacity var(--motion-fast), color var(--motion-fast), background var(--motion-fast);
+}
+/* The empty stars stay out of the way until the menu is being used; the one
+   that is already the default is always visible, because it is the answer to
+   "which one is it?" and hiding it would make the menu look like it has none. */
+.harnessmenu:hover .harnessstar, .harnessstar:focus-visible { opacity: 1; }
+.harnessstar.on { opacity: 1; color: var(--accent); cursor: default; }
+button.harnessstar:hover { background: var(--chat-hover); color: var(--accent); }
+.harnesshint {
+  margin: 4px 4px 2px; padding: 5px 6px 1px; max-width: 264px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 45%, transparent);
+  font-size: 10.5px; line-height: 1.45; color: var(--muted);
+}
+.harnessmenu button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  border: 0; border-radius: var(--chat-r-chip); background: transparent; color: var(--fg); font: inherit;
+  font-size: 12px; text-align: left; white-space: nowrap; cursor: pointer;
+}
+.harnessmenu button:hover, .harnessmenu button:focus-visible { background: var(--chat-hover); }
+.harnessmenu button.selected { background: var(--chat-accent-tint); color: var(--fg); }
+
+/*
+ * El historial de conversaciones, montado sobre el mismo desplegable que el
+ * selector de harness: reutiliza `.harnesspicker` y `.harnessmenu` entero
+ * —posición, sombra, apertura hacia arriba, chevron— y solo añade lo que de
+ * verdad es distinto. Copiar el bloque habría dejado dos menús que se separan
+ * al primer retoque.
+ */
+.historypicker summary { min-width: 0; gap: 5px; }
+.historyglyph { font-size: 13px; line-height: 1; color: var(--muted); }
+/* El rótulo desaparece cuando la fila va apretada; el reloj basta para saber
+   qué es, y el `title` lo dice con palabras. */
+@media (max-width: 560px) { .historylabel { display: none; } }
+.historymenu { width: 330px; max-width: min(330px, calc(100vw - 40px)); }
+/* La lista tiene su propio scroll y el pie no: `.harnesshint` explica de dónde
+   salen estas conversaciones, y con veinte filas encima nunca se leería. */
+.historylist { max-height: 264px; overflow-y: auto; overscroll-behavior: contain; }
+.historymenu .historylist button {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  white-space: normal; text-align: left;
+}
+/* Una línea. El título de Codex es el primer mensaje entero, y dejarlo fluir
+   daría filas de cinco renglones que hacen ilegible la lista. */
+.historytitle {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.historywhen { flex: 0 0 auto; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* The model, when it is informative rather than selectable. Rendered as a
+   quiet label and not as a field: it has to read as a fact, not as a disabled
+   control. */
+.chatmodel {
+  font-size: 11px; color: var(--muted); font-style: normal;
+  padding: 3px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-content) 94%, var(--chat-lift));
+}
+.chatusage { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* Slash commands, stuck just above the composer — where someone who has just
+   typed `/` is already looking. Height-capped because an agent can announce
+   dozens of them (Codex announces 76). */
+.chatcmds {
+  display: flex; flex-direction: column; max-height: 240px; overflow-y: auto;
+  margin: 0 12px; padding: 4px; border-radius: var(--chat-r-card);
+  background: var(--chat-field); box-shadow: var(--chat-shadow-overlay);
+}
+.chatcmds > span { display: contents; }
+.chatcmds button {
+  display: flex; gap: 10px; align-items: baseline; width: 100%;
+  padding: 6px 9px; font: inherit; font-size: 12px; text-align: left;
+  background: none; border: 0; border-radius: var(--chat-r-chip); cursor: pointer; color: var(--fg);
+}
+.chatcmds button:hover, .chatcmds button.active { background: var(--chat-hover); }
+.chatcmds code {
+  flex: 0 0 auto; font-family: var(--mono); font-size: 11px; font-weight: 500;
+  padding: 1px 6px; border-radius: 5px; background: var(--chat-surface);
+}
+.chatcmds span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+
+/* ---------------------------------------------------------- transcript */
+/* `overflow-anchor: none` is load-bearing, not tidiness: with anchoring on,
+   the browser picks an element mid-transcript and holds ITS position while the
+   answer streams in below, so the programmatic scroll-to-bottom is undone on
+   the next reflow and the last lines stay clipped under the composer. */
+.chatscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 16px 22px; scrollbar-width: thin; overflow-anchor: none; }
+.chatflow { display: flow-root; }
+.chatscroll::-webkit-scrollbar { width: 8px; }
+.chatscroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent; background-clip: padding-box;
+  border-radius: 8px; background-color: color-mix(in srgb, var(--border-default) 45%, transparent);
+}
+.chatprose { margin: 0 0 8px; white-space: normal; overflow-wrap: anywhere; }
+.chatprose:last-child { margin-bottom: 0; }
+
+/* Markdown rendered as real elements (see `Rich`): inline code, headings,
+   lists, quotes and rules, all keyed to the same chat tokens so they follow
+   every palette and light mode. No colors are hardcoded. */
+.chatinlinecode {
+  font-family: var(--mono); font-size: .92em;
+  padding: .05em .35em; border-radius: var(--chat-r-chip);
+  background: var(--chat-inset); box-shadow: var(--chat-ring);
+}
+.chatmd-h { margin: 12px 0 6px; font-weight: 650; line-height: 1.3; border: 0; padding: 0; }
+.chatmd-h:first-child { margin-top: 0; }
+h1.chatmd-h { font-size: 1.3em; }
+h2.chatmd-h { font-size: 1.18em; }
+h3.chatmd-h { font-size: 1.06em; }
+h4.chatmd-h, h5.chatmd-h, h6.chatmd-h { font-size: 1em; color: var(--muted); }
+.chatmd-list { margin: 6px 0 8px; padding-left: 1.35em; }
+.chatmd-list:last-child { margin-bottom: 0; }
+.chatmd-list li { margin: 2px 0; }
+.chatmd-list li > .chatprose { margin: 0; }
+.chatmd-list .chatmd-list { margin: 2px 0; }
+.chatmd-quote {
+  margin: 6px 0 8px; padding: 2px 0 2px 12px; color: var(--muted);
+  border-left: 2px solid color-mix(in srgb, var(--border-default) 60%, transparent);
+}
+.chatmd-quote > :last-child { margin-bottom: 0; }
+.chatmd-hr { margin: 12px 0; border: 0; border-top: 1px solid var(--border-subtle); }
+
+/* Every block enters with a minimal rise. It is what separates a transcript
+   that appears all at once from one that feels live. */
+.chatmsg, .chattool, .chatplan, .chatthought, .chaterror, .chattoolgroup {
+  animation: chat-in 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes chat-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* The person's turn is a bubble aligned right; the agent's is prose with no
+   box. That asymmetry answers, without color or labels, the same question the
+   `<!-- ai -->` markers answer in notes: who wrote this. Both used to be boxes,
+   and telling them apart meant reading the color. */
+.chatmsg { max-width: 46em; margin-bottom: 16px; font-size: 13px; line-height: 1.65; }
+.chatuser {
+  width: fit-content; max-width: min(38em, 88%); margin-left: auto;
+  padding: 9px 13px; border-radius: var(--chat-r-bubble);
+  background: var(--chat-surface); box-shadow: var(--chat-shadow-card);
+}
+.chatmessageimages {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
+  margin: -3px -7px 7px;
+}
+.chatmessageimages:has(> :only-child) { grid-template-columns: minmax(0, 280px); }
+.chatmessageimages img {
+  display: block; width: 100%; max-height: 280px; object-fit: contain;
+  border-radius: calc(var(--chat-r-bubble) - 4px); background: var(--chat-canvas);
+  box-shadow: var(--chat-ring);
+}
+.chatmessageimages + .chatprose { margin-top: 2px; }
+.chatagent { padding-left: 1px; }
+
+/* Reasoning. Collapsed it is a faint line with a spark in front; expanded, an
+   indented block against a rail. It never competes with the answer. */
+.chatthought, .chatstderr { margin-bottom: 12px; font-size: 12px; }
+.chatthought > summary, .chatstderr > summary {
+  display: flex; align-items: center; gap: 7px; width: fit-content;
+  cursor: pointer; font-size: 11.5px; font-weight: 500; color: var(--muted);
+  padding: 3px 9px 3px 7px; border-radius: 999px; list-style: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.chatthought > summary::-webkit-details-marker,
+.chatstderr > summary::-webkit-details-marker { display: none; }
+.chatthought > summary::before { content: "✦"; font-size: 10px; color: var(--accent); }
+.chatstderr > summary::before { content: "▸"; font-size: 9px; transition: transform var(--motion-fast); }
+.chatstderr[open] > summary::before { transform: rotate(90deg); }
+.chatthought > summary:hover, .chatstderr > summary:hover { background: var(--chat-surface); color: var(--fg); }
+.chatthought[open] {
+  padding: 4px 0 4px 12px; margin-left: 7px;
+  border-left: 1.5px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.chatthought[open] > summary { margin: 0 0 6px -19px; }
+.chatthought .chatprose { color: var(--muted); font-style: normal; line-height: 1.6; }
+.chatstderr pre { font-size: 11px; color: var(--muted); }
+
+/* The working indicator. A sweep across the text rather than a spinner: it
+   takes up exactly the space of the sentence and adds no new element to the
+   conversation. */
+.chatwait {
+  margin: 6px 0 14px; font-size: 12px; font-weight: 500; width: fit-content;
+  background: linear-gradient(90deg, var(--muted) 20%, var(--fg) 45%, var(--muted) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: chat-shimmer 1.6s linear infinite;
+}
+@keyframes chat-shimmer { from { background-position: 120% 0; } to { background-position: -60% 0; } }
+
+/* The empty state. Centered and quiet: it is a hint, not content, and must not
+   compete with the first message that lands right above it. */
+.chatempty {
+  max-width: 30em; margin: 10vh auto; text-align: center;
+  font-size: 12.5px; line-height: 1.65; color: var(--muted);
+}
+.chatempty p { margin: 0; }
+.chatempty p:first-child { font-size: 14px; font-weight: 500; color: var(--fg); }
+.chatempty::before {
+  content: "✦"; display: block; margin-bottom: 12px;
+  font-size: 20px; color: color-mix(in srgb, var(--accent) 75%, transparent);
+}
+.chatempty .cfghint { margin-top: 8px; font-size: 11.5px; }
+
+.chatcode, .chatterm, .chatdiff pre, .chatstderr pre {
+  margin: 8px 0; padding: 10px 12px; font-family: var(--mono); font-size: 11.5px;
+  line-height: 1.55; white-space: pre; overflow-x: auto;
+  background: var(--chat-inset); border: 0; border-radius: var(--chat-r-control);
+  box-shadow: var(--chat-ring);
+}
+
+/* A tool call, shaped like the reference's "tool chip": a low card with a
+   status dot, the verb, and the argument in mono. The state is legible from
+   the dot alone, without expanding anything. */
+.chattool {
+  margin-bottom: 10px; padding: 9px 12px; font-size: 12px;
+  background: var(--chat-inset); border: 0; border-radius: var(--chat-r-card);
+  box-shadow: var(--chat-shadow-card);
+}
+.chattoolhead { display: flex; align-items: center; gap: 9px; overflow-wrap: anywhere; font-weight: 500; }
+/* When the card is a disclosure, the head is its summary: make it read as
+   clickable and drop the native triangle in favour of the chevron below. */
+summary.chattoolhead { cursor: pointer; list-style: none; }
+summary.chattoolhead::-webkit-details-marker { display: none; }
+/* The disclosure indicator is drawn in an SVG view box, not a font glyph.
+   Its optical center therefore stays fixed through the open/closed rotation. */
+.chatdisclosure {
+  order: 10; flex: 0 0 20px; display: grid; place-items: center;
+  width: 20px; height: 20px; margin: -3px -4px -3px 0;
+  border-radius: 50%; color: var(--muted);
+  transition: color var(--motion-fast), background var(--motion-fast);
+}
+.chatdisclosure svg {
+  display: block; width: 14px; height: 14px;
+  transition: transform 160ms cubic-bezier(.2, .8, .2, 1);
+}
+.chatdisclosure path {
+  fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+summary.chattoolhead:hover .chatdisclosure { color: var(--fg); background: var(--chat-hover); }
+details.chattool[open] > summary.chattoolhead .chatdisclosure svg,
+details.chattoolgroup[open] > summary.chattoolhead .chatdisclosure svg { transform: rotate(180deg); }
+/* The status dot replaces the colored left border: on a card with 10px corners
+   a 3px edge reads as a rendering defect, not as semantics. */
+.chattoolhead::before {
+  content: ""; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-default);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-default) 18%, transparent);
+}
+.chattool[data-status="pending"] > .chattoolhead::before,
+.chattool[data-status="in_progress"] > .chattoolhead::before,
+.chattoolgroup[data-status="in_progress"] > .chattoolhead::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--chat-accent-tint);
+  animation: chat-pulse 1.4s ease-in-out infinite;
+}
+.chattool[data-status="completed"] > .chattoolhead::before,
+.chattoolgroup[data-status="completed"] > .chattoolhead::before {
+  background: var(--chat-ok); box-shadow: 0 0 0 3px var(--chat-ok-tint);
+}
+.chattool[data-status="failed"] > .chattoolhead::before,
+.chattoolgroup[data-status="failed"] > .chattoolhead::before {
+  background: var(--chat-bad); box-shadow: 0 0 0 3px var(--chat-bad-tint);
+}
+@keyframes chat-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+/* The tool class, pushed to the end of the row and set in small caps: it is
+   metadata, and sitting in front of the verb it only delayed the reading. */
+.chattoolkind {
+  order: 9; margin-left: auto; flex: 0 0 auto;
+  font-size: 9px; text-transform: uppercase; letter-spacing: .07em; font-weight: 600;
+  color: var(--muted); padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-content) 90%, var(--chat-lift));
+}
+.chattool .chatcode, .chattool .chatterm { background: var(--chat-canvas); }
+.chatraw { margin-top: 7px; }
+.chatraw > summary { cursor: pointer; font-size: 11px; color: var(--muted); }
+.chatraw > summary:hover { color: var(--fg); }
+/* Capped: the `rawOutput` fallback can carry an entire directory listing, and
+   expanding it should not push the conversation out of view. */
+.chatraw .chatterm { max-height: 260px; overflow-y: auto; }
+.chattool .chatprose { margin-top: 7px; font-size: 12px; color: var(--muted); }
+
+/* A run of consecutive tool calls, folded into ONE line. Same chip language as
+   a single card, but flat: no fill and no shadow, so a fifteen-call run reads
+   as one quiet line of metadata instead of a slab competing with the answer. */
+.chattoolgroup {
+  margin-bottom: 10px; font-size: 12px;
+  background: none; border: 0; border-radius: var(--chat-r-card); box-shadow: none;
+}
+.chattoolgroup > summary.chattoolhead {
+  padding: 5px 10px; border-radius: var(--chat-r-card); color: var(--muted); font-weight: 500;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.chattoolgroup > summary.chattoolhead:hover { background: var(--chat-hover); color: var(--fg); }
+/* The tally holds the row; the running call's title is what may be sacrificed
+   when the pane is narrow. */
+.chattallytext { flex: 0 0 auto; }
+.chattallynow {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 11px; opacity: .8;
+}
+.chattoolgroup[data-status="in_progress"] > summary.chattoolhead { color: var(--fg); }
+/* Open, the cards sit indented against a rail: the run stays legible as one
+   block, and the indent says where it ends without a second border. */
+.chattoolgroupbody {
+  margin: 6px 0 0 10px; padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
+}
+.chattoolgroupbody > .chattool:last-child { margin-bottom: 2px; }
+
+/* The diff. The path is a mono chip, as in the reference, rather than a loose
+   line of text that blends into the diff body itself. */
+.chatdiff { margin: 8px 0; }
+.chatdiffpath {
+  display: inline-block; font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  padding: 2px 8px; border-radius: var(--chat-r-chip);
+  background: var(--chat-surface); box-shadow: var(--chat-ring);
+  overflow-wrap: anywhere;
+}
+.chatdiff pre { margin-top: 5px; background: var(--chat-canvas); }
+.chatdiff .add { background: var(--chat-ok-tint); color: color-mix(in srgb, var(--chat-ok) 80%, var(--fg)); }
+.chatdiff .del { background: var(--chat-bad-tint); color: color-mix(in srgb, var(--danger) 80%, var(--fg)); }
+
+/* The plan, shaped like the reference's task rows: one capsule per step, state
+   on the left. No bullets — a bulleted list cannot separate what is done from
+   what is running without reading it word by word. */
+.chatplan { margin-bottom: 14px; font-size: 12.5px; }
+.chatplan > strong { display: block; margin-bottom: 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.chatplan ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.chatplan li {
+  display: flex; align-items: center; gap: 9px; padding: 7px 12px;
+  border-radius: 999px; background: var(--chat-inset); box-shadow: var(--chat-ring);
+}
+.chatplan li::before {
+  content: "○"; flex: 0 0 auto; width: 1em; font-size: 11px; color: var(--muted); text-align: center;
+}
+.chatplan li[data-status="completed"] { color: var(--muted); text-decoration: none; opacity: .72; }
+.chatplan li[data-status="completed"]::before { content: "✓"; color: var(--chat-ok); font-weight: 700; }
+.chatplan li[data-status="in_progress"] { font-weight: 600; box-shadow: var(--chat-ring-strong); }
+.chatplan li[data-status="in_progress"]::before { content: "●"; color: var(--accent); animation: chat-pulse 1.4s ease-in-out infinite; }
+
+.chaterror { margin-bottom: 12px; border-radius: var(--chat-r-card); }
+.chaterror code { font-family: var(--mono); font-size: 11px; }
+
+/*
+ * El aviso de «no está instalado», que es un procedimiento y no un mensaje.
+ *
+ * Los pasos se numeran de verdad con un `<ol>` en vez de escribir «1.» en el
+ * texto: así el número lo pone el navegador, no la traducción, y no hay dos
+ * idiomas que puedan discrepar en cómo se enumera.
+ */
+.chatmissing p { margin: 6px 0 0; }
+.chatmissing .cfgrow { margin-top: 10px; }
+.chatinstallsteps {
+  margin: 10px 0 0; padding-left: 20px;
+  font-size: 12px; line-height: 1.55; color: var(--fg);
+}
+.chatinstallsteps li { margin-bottom: 7px; }
+.chatinstallsteps li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Los párrafos que `Rich` mete dentro de un paso no deben abrir hueco: el
+   hueco lo pone ya el `li`. */
+.chatinstallsteps li > p:first-child { margin-top: 0; }
+.chatinstallsteps li > p:last-child { margin-bottom: 0; }
+/* `.newbtn` pide el 100% del ancho porque nació para los botones de una
+   columna estrecha; aquí es un botón junto a un bloque de código. */
+.chatinstallcopy { width: auto; margin: 4px 0 0; padding: 4px 10px; font-size: 11px; }
+/* El rojo de `.warnbox strong` es para el titular. La negrita que `Rich` pinta
+   dentro de un paso es énfasis normal —«pulsa **Reintentar**»— y en rojo se
+   lee como una segunda alarma. */
+.chatmissing .chatinstallsteps strong, .chatmissing .cfghint strong { color: inherit; }
+.chatmissing .cfghint .chatprose { margin: 0; }
+/* Es un enlace vestido de botón, así que hay que apagar lo que un `<a>` trae y
+   un `<button>` no: el subrayado, el color de enlace y el `display: inline`,
+   que dejaría el texto sin centrar dentro del relleno. */
+.chat .cfgrow a.chatinstallgo {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--fg); text-decoration: none;
+}
+.chat .cfgrow a.chatinstallgo:hover { background: var(--chat-hover); text-decoration: none; }
+.chatinstallgo span { font-size: 11px; opacity: .7; }
+
+/* The permission sits GLUED to the composer and outside the scroll area: the
+   turn is halted waiting on the answer, and something blocking cannot end up
+   buried under the history. It lifts as a card — shadow and corners — instead
+   of tinting a band: the band read as a warning, and this is a question that
+   has to be answered before anything continues. */
+.chatperm {
+  position: relative; z-index: 1; margin: 0 12px 4px; padding: 13px 15px; font-size: 12.5px;
+  background: var(--chat-field); border: 0; border-radius: var(--chat-r-card);
+  box-shadow: var(--chat-shadow-raised), 0 0 0 1px var(--chat-accent-tint);
+  animation: chat-in 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.chatperm p { margin: 0 0 10px; font-weight: 500; }
+
+/* `.newbtn` is born full-width because its home is the sidebar, a single
+   column. Here the options belong on one row — they are alternatives to the
+   SAME question — and stacked full-width they read as three consecutive
+   steps. */
+.chat .cfgrow { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.chat .cfgrow .newbtn {
+  width: auto; margin: 0; padding: 6px 14px; font-size: 12px; font-weight: 500;
+  border: 0; border-radius: var(--chat-r-control);
+  background: var(--chat-surface); color: var(--fg); box-shadow: var(--chat-ring-strong);
+}
+.chat .cfgrow .newbtn:hover:not(:disabled) { background: var(--chat-hover); }
+.chat .cfgrow .newbtn.danger { color: var(--danger); background: transparent; }
+.chat .cfgrow .newbtn.danger:hover { background: var(--chat-bad-tint); color: var(--danger); }
+/* Allowing is the primary action and goes solid; the rest stay sober. All
+   three used to be the same button, so choosing meant reading all of them.
+   The foreground is `--surface-content`, the app's convention for a solid
+   accent button (see `.tour-next`): the accent is dark on light paper and
+   light on dark paper, so the paper color is always the readable contrast. */
+.chatperm .cfgrow .newbtn:first-child { background: var(--accent); color: var(--surface-content); box-shadow: none; }
+.chatperm .cfgrow .newbtn:first-child:hover { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+
+/* ------------------------------------------------------------- composer */
+/* The "prompt bar": a single rounded field with the send button INSIDE it,
+   bottom right. As a sibling the button stayed pinned to the bottom while the
+   field grew upward, leaving it stranded at mid-height. */
+.chatbox { display: block; padding: 10px 12px 12px; background: var(--chat-canvas); border: 0; }
+.chatcomposer {
+  position: relative; border-radius: var(--chat-r-bubble);
+  background: var(--chat-field);
+  box-shadow: var(--chat-ring-strong), var(--chat-shadow-field);
+  transition: box-shadow var(--motion-fast);
+}
+.chatcomposer:focus-within {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--chat-accent-tint), var(--chat-shadow-field);
+}
+.chatattachments {
+  display: flex; gap: 7px; padding: 10px 12px 3px; overflow-x: auto;
+  scrollbar-width: thin;
+}
+.chatattachment {
+  position: relative; flex: 0 0 58px; width: 58px; height: 58px; margin: 0;
+  border-radius: var(--chat-r-control); background: var(--chat-canvas);
+  box-shadow: var(--chat-ring); overflow: visible;
+}
+.chatattachment img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+  border-radius: inherit;
+}
+.chatattachment button {
+  position: absolute; top: -5px; right: -5px; display: grid; place-items: center;
+  width: 19px; height: 19px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--fg); color: var(--surface-content); box-shadow: 0 1px 4px rgb(0 0 0 / .24);
+  font: 600 14px/1 var(--font-ui); cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.chatattachment button:hover { background: var(--danger); transform: scale(1.06); }
+.chatattachmenterror {
+  margin: 5px 14px 0; color: var(--danger); font-size: 11.5px; line-height: 1.4;
+}
+.chatinput { display: grid; min-width: 0; background: transparent; border-radius: inherit; }
+.chatinputhighlight, .chatinput textarea { grid-area: 1 / 1; }
+.chatinputhighlight {
+  z-index: 0; min-height: 46px; max-height: 168px; padding: 12px 14px 10px;
+  overflow: hidden; white-space: break-spaces; overflow-wrap: break-word; word-break: normal; tab-size: 4;
+  font: inherit; font-size: 13px; line-height: 1.55; letter-spacing: normal; color: var(--fg);
+  border: 0;
+}
+.chatbox textarea {
+  z-index: 1; min-width: 0; min-height: 46px; max-height: 168px; padding: 12px 14px 10px;
+  /* Every text-flow property here MUST equal `.chatinputhighlight` above:
+     the transparent textarea holds the caret and selection while the overlay
+     draws the visible glyphs, so if the two wrap or space text differently the
+     selection drifts off the letters. `break-spaces` (not `pre-wrap`) is the
+     key one: `pre-wrap` collapses whitespace at the END of a wrapped line, so
+     a run of trailing spaces vanished from the overlay while the textarea kept
+     them for the caret — leaving the caret stranded to the right of the text.
+     `break-spaces` preserves and wraps trailing spaces, matching the textarea. */
+  white-space: break-spaces; overflow-wrap: break-word; word-break: normal; tab-size: 4; letter-spacing: normal;
+  font: inherit; font-size: 13px; line-height: 1.55; resize: none;
+  border: 0; border-radius: inherit; outline: 0;
+  background: transparent; color: transparent; caret-color: var(--fg);
+}
+/* Past the cap the field scrolls instead of growing further, so a long draft
+   never eats the transcript. The overlay is kept in sync via `onScroll`. */
+.chatbox textarea { overflow-y: auto; }
+.chatbox textarea::-webkit-scrollbar { width: 8px; }
+.chatbox textarea::-webkit-scrollbar-thumb {
+  border: 2px solid transparent; background-clip: padding-box;
+  border-radius: 8px; background-color: color-mix(in srgb, var(--border-default) 45%, transparent);
+}
+.chatbox textarea::placeholder { color: var(--muted); }
+
+/* Send and stop share a position and a shape: a round button anchored to the
+   bottom right of the field. Round rather than rectangular so it cannot be
+   mistaken for the permission button row sitting directly above it. */
+.chatsend {
+  flex: 0 0 auto;
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--accent); color: var(--surface-content); font-size: 14px; line-height: 1;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .25);
+  transition: background var(--motion-fast), opacity var(--motion-fast), transform var(--motion-fast);
+}
+.chatsend:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+.chatsend:active:not(:disabled) { transform: scale(.94); }
+.chatsend:disabled {
+  cursor: default; background: var(--chat-surface); color: var(--muted);
+  box-shadow: var(--chat-ring);
+}
+.chatsend.danger { background: var(--danger); color: #fff; }
+.chatsend.danger:hover { background: color-mix(in srgb, var(--danger) 85%, var(--fg)); }
+/* The label stays in the DOM for screen readers; on screen the glyph says it.
+   `aria-label` alone would not do: the button is also a test target. */
+.chatsend .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chatmsg, .chattool, .chatplan, .chatthought, .chaterror, .chatperm, .chattoolgroup { animation: none; }
+  .chatwait { animation: none; -webkit-text-fill-color: var(--muted); color: var(--muted); }
+  .chattoolhead::before, .chatplan li[data-status="in_progress"]::before { animation: none; }
+  .chatsend:active:not(:disabled) { transform: none; }
+  .chatdisclosure svg, .chatattachment button { transition: none; }
+}
+
 /* ---------------------------------------------------------------- open tabs */
 .tabstrip {
   display: flex; gap: 2px; align-items: stretch; flex-wrap: nowrap;
@@ -998,6 +1670,14 @@ body.resizing.resizing-rows { cursor: row-resize; }
 .otab:hover { background: var(--panel-blue); }
 .otab.on { background: var(--bg); color: var(--fg); font-weight: 600; border-bottom: 1px solid var(--bg); }
 .otab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Renaming a chat happens in the tab itself, so the input has to be the label
+   and not a box on top of it: same size, same weight, same place. Anything
+   taller would resize the whole tab row for as long as the edit lasts. */
+.otab-rename {
+  font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--link); border-radius: 2px;
+  padding: 0 3px; margin: -1px 0; width: 12ch; min-width: 0; outline: none;
+}
 .otab-x {
   border: 0; background: none; color: var(--muted); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 2px;
@@ -1132,16 +1812,45 @@ body.resizing.resizing-rows { cursor: row-resize; }
   .editor-history { margin-left: 0; }
 }
 
-/* ---------------------------------------------------------------- contents rail */
+/* ----------------------------------------------------- article navigation rails */
 .artrow { display: flex; gap: 22px; align-items: flex-start; }
 .artrow > article { flex: 1 1 auto; min-width: 0; }
+.linkrail {
+  flex: 0 0 190px; position: sticky; top: 108px; align-self: flex-start;
+  max-height: calc(100vh - 150px); overflow-y: auto;
+  border-right: 1px solid var(--line-soft); padding-right: 10px;
+}
+.linkrail.closed { flex-basis: 34px; border-right: 0; padding-right: 0; overflow: hidden; }
+.linkrailtoggle {
+  width: 100%; text-align: right; font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--muted); background: none; border: 0; cursor: pointer;
+  padding: 2px 4px 6px; text-transform: uppercase; letter-spacing: .04em;
+}
+.linkrailtoggle:hover { color: var(--fg); }
+.linkbranch + .linkbranch { margin-top: 12px; }
+.linkbranch h3 {
+  margin: 0 0 4px; color: var(--muted); font: 600 10.5px/1.35 var(--sans);
+  letter-spacing: .035em; text-transform: uppercase;
+}
+.linkbranch ul { margin: 0 0 0 6px; padding: 0 0 0 9px; border-left: 1px solid var(--line-soft); list-style: none; }
+.linkbranch li { position: relative; margin: 0; padding: 0; }
+.linkbranch li::before {
+  content: ""; position: absolute; top: .82em; left: -9px; width: 7px;
+  border-top: 1px solid var(--line-soft);
+}
+.linkbranch a {
+  display: block; padding: 3px 4px; overflow: hidden; color: var(--muted);
+  font-size: 12.2px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap;
+}
+.linkbranch a:hover { color: var(--link); text-decoration: none; background: var(--panel-grey); }
+.linkbranch p { margin: 2px 4px; color: var(--muted); font-size: 11.5px; }
 .toc {
   flex: 0 0 210px; position: sticky; top: 108px; align-self: flex-start;
   max-height: calc(100vh - 150px); overflow-y: auto;
   border-left: 1px solid var(--line-soft); padding-left: 10px;
 }
 .toc.closed { flex-basis: 34px; border-left: 0; padding-left: 0; }
-@media (max-width: 1100px) { .toc { display: none; } }
+@media (max-width: 1100px) { .toc, .linkrail { display: none; } }
 .toctoggle {
   width: 100%; text-align: left; font: inherit; font-size: 11px; font-weight: 600;
   color: var(--muted); background: none; border: 0; cursor: pointer;
@@ -1182,6 +1891,11 @@ body.resizing.resizing-rows { cursor: row-resize; }
   border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 2px;
 }
 .graphfilter { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; }
+/* Lo que resaltó el agente en el grafo. Va en el color de acento, el mismo del
+   halo que dibuja el lienzo, para que el botón y los nodos se lean como una
+   sola cosa y no como dos avisos distintos. */
+.graphlit { border: 1px solid var(--accent, #d97706); color: var(--accent, #d97706); background: transparent; border-radius: 4px; padding: 1px 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.graphlit:hover { background: var(--accent, #d97706); color: var(--bg); }
 .graphlegend { display: flex; gap: 9px; flex-wrap: wrap; margin-left: auto; color: var(--muted); font-size: 11px; }
 .graphlegend button { display: flex; align-items: center; gap: 3px; padding: 1px 3px; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
 .graphlegend button:hover { color: var(--fg); }
@@ -1291,6 +2005,7 @@ body.resizing.resizing-rows { cursor: row-resize; }
 /* The note route owns the viewport so pane tab bars never scroll away under
    the masthead. Only pane content scrolls. */
 body.workspace .content { height: calc(100vh - 62px); overflow: hidden; padding: 0; }
+body.workspace { height: 100vh; overflow: hidden; }
 body.workspace .side { max-height: calc(100vh - 62px); }
 body.workspace.masthead-hidden .content { height: 100vh; }
 body.workspace.masthead-hidden .side { top: 0; max-height: 100vh; }
@@ -1360,7 +2075,30 @@ body.dragging-tab { cursor: grabbing; user-select: none; }
 .dropzone.bottom{ left: 0; right: 0; bottom: 0; height: 50%; }
 .dropzone.center{ inset: 0; background: rgba(150, 120, 255, .26); }
 
-.imgview { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.imgview { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.markdown-file-editor { flex: 1; min-height: 0; overflow: hidden; }
+.markdown-file-editor > div, .markdown-file-editor .cm-editor { height: 100%; }
+.markdown-file-editor .cm-editor .cm-scroller { overflow-y: auto; overflow-x: hidden; }
+.markdown-file-controls {
+  position: absolute; z-index: 12; top: 10px; right: 14px;
+  display: flex; align-items: center; gap: 9px; font-size: 11.5px;
+}
+.markdown-view-toggle {
+  display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line-soft);
+  border-radius: 9px; background: color-mix(in srgb, var(--bg) 94%, transparent);
+  box-shadow: var(--shadow-sm); backdrop-filter: blur(8px);
+}
+.markdown-view-toggle button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.markdown-view-toggle button:hover { color: var(--fg); background: var(--panel-grey); }
+.markdown-view-toggle button.on { color: var(--fg); background: var(--panel-blue); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+.markdown-view-toggle svg {
+  width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
 .imgbar {
   display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex: 0 0 auto;
   padding: 7px 14px; background: var(--bg); border-bottom: 1px solid var(--line-soft);
@@ -1387,10 +2125,10 @@ body.dragging-tab { cursor: grabbing; user-select: none; }
    vuelve a mostrarse; el caso de panel dividido ya lo gobierna showToc en
    React, así que no hace falta esconderlo con CSS. */
 body.workspace .artrow { display: flex; }
-body.workspace .toc { position: sticky; top: 0; max-height: calc(100vh - 190px); }
+body.workspace .toc, body.workspace .linkrail { position: sticky; top: 0; max-height: calc(100vh - 190px); }
 /* La consulta de ancho vive antes en el archivo, así que se repite aquí para
    que no la gane la regla de arriba. */
-@media (max-width: 1100px) { body.workspace .toc { display: none; } }
+@media (max-width: 1100px) { body.workspace .toc, body.workspace .linkrail { display: none; } }
 
 /* Sticky offsets are viewport-relative by default. Inside a pane the scroll
    container is .panescroll, so anything sticky there must anchor at 0 or it
@@ -1606,28 +2344,24 @@ body.dragging-tab .otab { cursor: grabbing; }
 /* --------------------------------------------- páginas propias de pestaña */
 /*
  * /canvas?p=... y /terminal son adonde recarga una pestaña de canvas o de
- * terminal: fuera del workspace de pestañas, dentro del <article> normal de
- * .content. Sin este bloque, la nota "está sola" — sin pestañas — y el
+ * editor de canvas: fuera del workspace de pestañas, dentro del <article>
+ * normal de .content. Sin este bloque, la nota "está sola" — sin pestañas — y el
  * contenido se queda con su min-height propio en vez de llenar la página,
  * porque .content solo da min-height, no una altura definida contra la que
  * height:100%/flex:1 pueda resolver. Cancela el padding de .content como ya
  * hace .tabstrip, y fija una altura real de viewport para que el hijo
- * flex:1 (.cvwrap o .termhost) sí tenga contra qué crecer.
+ * flex:1 (.cvwrap) sí tenga contra qué crecer.
  */
-.canvaspage, .termpage {
+.canvaspage {
   display: flex; flex-direction: column; min-height: 0;
   margin: -20px -30px 0; padding: 18px 30px 14px;
   height: calc(100vh - 62px); box-sizing: border-box;
 }
-.canvaspage-head, .termpage-head { flex: 0 0 auto; margin-bottom: 10px; }
-.canvaspage .cvwrap, .termpage .termhost { flex: 1; }
+.canvaspage-head { flex: 0 0 auto; margin-bottom: 10px; }
+.canvaspage .cvwrap { flex: 1; }
 @media (max-width: 850px) {
-  .canvaspage, .termpage { margin: -18px -16px 0; padding: 16px 16px 14px; }
+  .canvaspage { margin: -18px -16px 0; padding: 16px 16px 14px; }
 }
-
-/* ------------------------------------------------------------- terminal */
-.termhost { flex: 1; min-height: 0; padding: 6px 0 0 8px; }
-.termhost .xterm-viewport { overflow-y: auto; }
 
 /* ------------------------------------------------------- editor de canvas */
 .cvwrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -1736,4 +2470,22 @@ textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none;
 .pdflink:hover {
   background: rgba(51, 102, 204, .18);
   box-shadow: inset 0 0 0 1px var(--link);
+}
+/* Iniciar sesión, que ocurre FUERA de la app. El comando es lo que importa, así
+   que se le da el peso de un bloque de código: seleccionable, monoespaciado, y
+   con scroll propio en vez de partirse — una línea partida se pega mal.
+   El comando de instalación se pinta igual porque es el mismo encargo: una
+   línea que hay que llevarse entera a una terminal. */
+.chatmanualauth code.chatauthcmd, .chatmissing code.chatauthcmd {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  user-select: all;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }

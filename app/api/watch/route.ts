@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { invalidate, VAULT } from "@/lib/server.ts";
-import { EXCLUDE_DIRS, isExcluded } from "@/src/config.ts";
+import { EXCLUDE_DIRS } from "@/src/config.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * el singleton con lista de suscriptores.
  *
  * Vive bajo `Symbol.for` en `globalThis` por la misma razón que
- * `lib/termSessions.ts`: en desarrollo Next reevalúa el módulo con cada
+ * `lib/acpSessions.ts`: en desarrollo Next reevalúa el módulo con cada
  * recompilación, y un `let` de nivel de módulo dejaría watchers huérfanos
  * acumulándose sesión tras sesión, cada uno con su handle del kernel.
  */
@@ -41,9 +41,15 @@ const hub: Hub = g[KEY];
 function noise(rel: string): boolean {
   if (!rel) return true;
   const segs = rel.split("/");
-  if (segs.some((s) => EXCLUDE_DIRS.has(s))) return true;
+  // `assets` no entra al índice, pero sí aparece en el árbol y debe refrescarse.
+  // El resto son dependencias, caches o metadatos masivos que el árbol normal
+  // tampoco recorre.
+  if (segs.some((s) => EXCLUDE_DIRS.has(s) && s !== "assets")) return true;
   if (segs.some((s) => s.startsWith("."))) return true;      // .DS_Store, .git, .next
-  if (isExcluded(rel)) return true;                          // 05-Projects/*, dot-dirs
+  // No se usa `isExcluded` aquí. Esa función decide qué entra al índice
+  // semántico, no qué aparece en el árbol: 05-Projects/*, README.md y otros
+  // archivos no indexados siguen siendo archivos visibles y sus altas,
+  // movimientos y bajas tienen que refrescar la interfaz.
   const base = segs[segs.length - 1];
   // Temporales de editores y del propio /api/fs (rename en dos pasos).
   if (/(^~|~$|\.swp$|\.tmp$|\.__rename__$|^\d+$)/.test(base)) return true;

@@ -1,6 +1,7 @@
 import type { Architecture } from "./architecture.ts";
 import { writeSkill, localNote, type SkillWrite } from "./skills.ts";
 import type { Locale } from "./locales.mjs";
+import { DEFAULT_PORT } from "./ports.mjs";
 
 /**
  * La skill que audita el vault.
@@ -347,7 +348,7 @@ export function auditSkill(arch: Architecture, port: number, locale: Locale = "e
 export function writeAuditSkill(
   vault: string,
   arch: Architecture,
-  port = 4321,
+  port = DEFAULT_PORT,
   locale: Locale = "en",
 ): SkillWrite {
   return writeSkill(vault, "audit", auditSkill(arch, port, locale));

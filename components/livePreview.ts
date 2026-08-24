@@ -26,9 +26,38 @@ export const frontmatterVisible = Facet.define<boolean, boolean>({
   combine: (values) => values[0] ?? false,
 });
 
+export interface ImageLabels {
+  selectPath: string;
+  floatLeft: string;
+  floatRight: string;
+  fullWidth: string;
+  plain: string;
+  captionPlaceholder: string;
+}
+
+/**
+ * The words the image widget puts on screen.
+ *
+ * They arrive through a facet rather than being written here because this
+ * module is the editor's rendering layer, not a place that knows the user's
+ * language — the same reason `linkResolver` is a facet. Before this, the one
+ * string the widget had was hardcoded Spanish, which is exactly what stops
+ * being harmless the moment there are six of them.
+ */
+export const imageLabels = Facet.define<ImageLabels, ImageLabels>({
+  combine: (values) => values[0] ?? {
+    selectPath: "Select the path",
+    floatLeft: "Float left",
+    floatRight: "Float right",
+    fullWidth: "Full width",
+    plain: "Plain image",
+    captionPlaceholder: "Caption",
+  },
+});
+
 const MARKS = new Set([
   "HeaderMark", "EmphasisMark", "CodeMark", "StrikethroughMark",
-  "QuoteMark", "LinkMark", "URL", "CodeInfo",
+  "QuoteMark", "LinkMark", "CodeInfo",
 ]);
 
 const STYLED: Record<string, string> = {
@@ -370,6 +399,59 @@ export function parseCaption(title: string | undefined): Thumb | null {
   return { caption: rest.trim(), side, width };
 }
 
+/**
+ * Rewrites the title of one image in the document.
+ *
+ * Everything an image's layout is made of — which side it floats to, whether it
+ * spans the column, how wide it is, what the caption says — lives in the title
+ * string of `![alt](path "title")`. The widget covers that markdown completely,
+ * and clicking it only ever selected the PATH, so once an image was in the note
+ * there was no way to reach the one string that decides how it looks: pasting a
+ * screenshot gave you a full-width block image and no way to make it anything
+ * else (issue #12).
+ *
+ * The range is re-read from the document instead of trusted: a widget can
+ * outlive an edit that moved it, and rewriting on a stale range would replace
+ * whatever text happens to sit there now. If the slice is no longer an image,
+ * nothing happens.
+ */
+function rewriteImage(
+  view: EditorView,
+  from: number,
+  to: number,
+  change: (thumb: Thumb | null) => Thumb | null,
+): void {
+  if (to > view.state.doc.length) return;
+  const slice = view.state.sliceDoc(from, to);
+  const m = new RegExp(`^${IMG_RE.source}$`).exec(slice);
+  if (!m) return;
+
+  const next = change(parseCaption(m[3]));
+  let title = "";
+  if (next) {
+    const directives = [
+      next.side === "left" ? "[izq]" : next.side === "none" ? "[ancho]" : "",
+      next.width ? `[w=${next.width}]` : "",
+    ].filter(Boolean).join("");
+    // A quote inside the title would close it early and leave the rest of the
+    // caption loose in the markdown.
+    title = `${directives}${directives && next.caption ? " " : ""}${next.caption}`.replaceAll('"', "'");
+  }
+  /*
+   * The quotes are written whenever there IS a thumbnail, even when the title
+   * inside them is empty — the presence of a title is what makes an image a
+   * thumbnail in the first place (see `parseCaption`).
+   *
+   * Right is the default side, so a right-floated thumbnail with no caption
+   * yet has nothing to say: it serialised to no title at all, parsed back as a
+   * plain block image, and the button did nothing at all when clicked. An
+   * empty title is legal markdown and reads the same in every renderer.
+   */
+  const insert = `![${m[1]}](${m[2]}${next ? ` "${title}"` : ""})`;
+  if (insert === slice) return;
+  view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length } });
+}
+
 class ImageWidget extends WidgetType {
   constructor(
     private readonly src: string,
@@ -379,41 +461,117 @@ class ImageWidget extends WidgetType {
     private readonly hrefTo: number,
     /** null = imagen sin pie, que se dibuja como siempre. */
     private readonly thumb: Thumb | null,
+    /** Range of the whole `![…](…)`, so its title can be rewritten. */
+    private readonly from: number,
+    private readonly to: number,
   ) { super(); }
 
   toDOM(view: EditorView) {
+    const label = view.state.facet(imageLabels);
     const img = document.createElement("img");
     img.src = this.src;
     img.alt = this.alt;
     img.className = "cm-img";
-    img.title = "Clic para seleccionar la ruta";
+    img.title = label.selectPath;
     const select = (e: Event) => {
       e.preventDefault();
-      // Selecting the path puts the cursor on that line, which reveals the
-      // raw markdown — so the path ends up selected and editable.
       view.dispatch({ selection: { anchor: this.hrefFrom, head: this.hrefTo }, scrollIntoView: true });
       view.focus();
     };
     img.addEventListener("mousedown", select);
-    if (!this.thumb) return img;
+
+    const wrap = document.createElement("span");
+    wrap.className = "cm-imgwrap";
+
+    /*
+     * The layout bar. Same shape as the table menu a few classes up, and for
+     * the same reason: the markdown these buttons write is discoverable in the
+     * formatting help, but nobody discovers a caption directive by guessing
+     * that a quoted string after the path is where layout lives.
+     */
+    const bar = document.createElement("span");
+    bar.className = "cm-imgbar";
+    const side = this.thumb?.side ?? null;
+    const button = (label: string, title: string, on: boolean, apply: (t: Thumb | null) => Thumb | null) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.title = title;
+      if (on) b.className = "on";
+      // mousedown, not click: CodeMirror moves the selection on mousedown, and
+      // a caret landing inside the image range re-renders the widget out from
+      // under the click that was about to fire.
+      b.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        rewriteImage(view, this.from, this.to, apply);
+        view.focus();
+      });
+      bar.appendChild(b);
+    };
+    // A plain block image has no title at all; giving it one is what turns it
+    // into a thumbnail, so each button has to be able to create the thumb.
+    const asThumb = (s: Thumb["side"]) => (t: Thumb | null): Thumb =>
+      ({ caption: t?.caption ?? "", width: t?.width, side: s });
+    button("⇤", label.floatLeft, side === "left", asThumb("left"));
+    button("⇥", label.floatRight, side === "right", asThumb("right"));
+    button("⬍", label.fullWidth, side === "none", asThumb("none"));
+    button("▢", label.plain, side === null, () => null);
+
+    if (!this.thumb) {
+      wrap.appendChild(img);
+      wrap.appendChild(bar);
+      return wrap;
+    }
 
     const fig = document.createElement("figure");
     fig.className = `cm-thumb cm-thumb-${this.thumb.side}`;
     if (this.thumb.width) fig.style.width = `${this.thumb.width}px`;
     fig.appendChild(img);
-    if (this.thumb.caption) {
-      const cap = document.createElement("figcaption");
-      cap.className = "cm-thumbcap";
-      cap.textContent = this.thumb.caption;
-      // El pie también selecciona la ruta: es parte de la misma imagen, y
-      // hacerlo inerte obligaría a apuntar justo a la foto para editarla.
-      cap.addEventListener("mousedown", select);
-      fig.appendChild(cap);
-    }
-    return fig;
+
+    /*
+     * The caption is edited in place, exactly like a table cell: the widget
+     * that HIDES a piece of markdown owes the user a way to change it, and a
+     * figcaption you can type into is the shortest one. It writes back on blur
+     * and on Enter, never on every keystroke — a dispatch per character would
+     * rebuild the widget and take the caret with it.
+     */
+    const cap = document.createElement("figcaption");
+    cap.className = "cm-thumbcap";
+    cap.contentEditable = "true";
+    cap.spellcheck = false;
+    cap.textContent = this.thumb.caption;
+    if (!this.thumb.caption) cap.dataset.placeholder = label.captionPlaceholder;
+    const commit = () => {
+      const text = (cap.textContent ?? "").trim();
+      if (text === this.thumb!.caption) return;
+      rewriteImage(view, this.from, this.to, (t) => ({ ...(t ?? { side: "right" }), caption: text }));
+    };
+    /*
+     * ⚠ The mousedown must not reach CodeMirror, and this is not a nicety.
+     *
+     * CodeMirror moves the document selection on mousedown anywhere in its
+     * content. A selection change rebuilds this widget, and if anything the
+     * widget renders depends on the selection, the rebuild swaps out the very
+     * figcaption the browser was about to focus — the click lands, the caret
+     * never arrives, and the next keystroke goes to the document. Keeping the
+     * event here means `eq()` sees no change and CodeMirror reuses this node.
+     */
+    cap.addEventListener("mousedown", (e) => e.stopPropagation());
+    cap.addEventListener("blur", commit);
+    cap.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); cap.blur(); }
+      if (e.key === "Escape") { cap.textContent = this.thumb!.caption; cap.blur(); }
+      e.stopPropagation();
+    });
+    fig.appendChild(cap);
+    fig.appendChild(bar);
+    wrap.appendChild(fig);
+    return wrap;
   }
   eq(o: ImageWidget) {
     return o.src === this.src && o.hrefFrom === this.hrefFrom && o.hrefTo === this.hrefTo
+      && o.from === this.from && o.to === this.to
       && JSON.stringify(o.thumb) === JSON.stringify(this.thumb);
   }
   ignoreEvent() { return false; }
@@ -443,6 +601,32 @@ class VideoWidget extends WidgetType {
 
 const PROV_RE = /<!--\s*(\/?)(ai|human)\s*-->/g;
 const TASK_RE = /^(\s*)([-*+]|\d+[.)])(\s+)\[([ xX])\]/;
+
+/**
+ * A list item, and how deeply it is nested.
+ *
+ * Markdown expresses nesting as leading whitespace, and whitespace in a
+ * proportional font is nearly invisible: two spaces of indentation moved a
+ * nested bullet about seven pixels, which is what "the dash does not indent"
+ * meant (issues #14 and #15). The editor was showing the SOURCE of a list and
+ * calling it a list.
+ *
+ * Depth is counted in units of two spaces, with a tab worth one unit, because
+ * that is what `indentLines` in editorCommands.ts inserts and removes. Reading
+ * the depth from something other than what the indent command writes would let
+ * a Tab press change the text without changing what is on screen.
+ */
+const LIST_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)/;
+
+/** A quoted line, including nested `> >`. */
+const QUOTE_RE = /^[ \t]*((?:>[ \t]?)+)/;
+
+/** How many nesting steps a run of leading whitespace is worth. */
+function indentDepth(indent: string): number {
+  let columns = 0;
+  for (const ch of indent) columns += ch === "\t" ? 2 : 1;
+  return Math.floor(columns / 2);
+}
 // El tercer grupo es el `title` de markdown, que aquí hace de pie de foto.
 const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g;
 const VIDEO_RE = /<(iframe|video)\b[^>]*\bsrc="([^"]+)"[^>]*><\/\1>/gi;
@@ -511,7 +695,12 @@ function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet }
         const cls = STYLED[node.name];
         if (cls) items.push({ from: node.from, to: node.to, deco: Decoration.mark({ class: cls }) });
         if (node.name === "Table") return false;   // handled by tableField below
-        if (MARKS.has(node.name) && node.to > node.from) {
+        // `URL` también es el nodo que Lezer asigna a una URL desnuda. Solo
+        // debe ocultarse cuando es el destino de `[texto](url)`; dentro de un
+        // párrafo o un `<autolink>` es el texto visible del enlace. Ocultarlo
+        // siempre hacía que pegar `https://…` pareciera no haber hecho nada.
+        const hiddenLinkDestination = node.name === "URL" && node.node.parent?.name === "Link";
+        if ((MARKS.has(node.name) || hiddenLinkDestination) && node.to > node.from) {
           items.push({ from: node.from, to: node.to, deco: Decoration.replace({}), atomic: true });
         }
       },
@@ -547,13 +736,63 @@ function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet }
         }
       }
 
+      /*
+       * Quotes and lists are BLOCK shapes, and a block shape is a property of
+       * the line, not of a span inside it.
+       *
+       * Both were styled as marks only — a quote got italic grey text and a
+       * list got nothing at all — so with their markers hidden a quote was
+       * indistinguishable from emphasised prose (issue #11) and a list was
+       * indistinguishable from lines that happen to start with a dash
+       * (issues #14, #15). The rule that decides the shape is the same one the
+       * markdown parser uses, so it is read off the line text rather than off
+       * the syntax tree: `> ` and `- ` are exactly what the user typed.
+       */
+      const quoted = QUOTE_RE.exec(line.text);
+      if (quoted) {
+        // Nesting is the count of `>`, so `> > x` draws two bars.
+        const depth = (quoted[1].match(/>/g) ?? []).length;
+        items.push({
+          from: line.from, to: line.from,
+          deco: Decoration.line({ class: "cm-quoteline", attributes: { style: `--cm-depth:${depth}` } }),
+        });
+      }
+
+      const listed = !quoted && LIST_RE.exec(line.text);
+      if (listed) {
+        const depth = indentDepth(listed[1]);
+        /*
+         * The literal indentation is hidden and replaced by padding on the
+         * line. Keeping both would indent twice, and the padding is what makes
+         * a nesting step visible: two spaces of a proportional font are not.
+         *
+         * Atomic, so one arrow press crosses it. A non-atomic invisible range
+         * is the failure this file already documents twice — the caret appears
+         * not to move, then jumps.
+         */
+        if (listed[1]) {
+          items.push({
+            from: line.from, to: line.from + listed[1].length,
+            deco: Decoration.replace({}), atomic: true,
+          });
+        }
+        items.push({
+          from: line.from, to: line.from,
+          // The hanging indent belongs to the line too: without it a bullet
+          // that wraps puts its second line under the marker instead of under
+          // the text, which reads as a new item.
+          deco: Decoration.line({ class: "cm-listline", attributes: { style: `--cm-depth:${depth}` } }),
+        });
+      }
+
       // Checkboxes: always interactive, even on the active line — ticking one
       // is a deliberate edit, not a formatting reveal.
       const m = TASK_RE.exec(line.text);
       if (m) {
         const [, indent, bullet, gap, state] = m;
         // Hide the list bullet: the checkbox already reads as a list item.
-        // Indentation is preserved so nesting still shows.
+        // Nesting is drawn by the `cm-listline` decoration above, which every
+        // list line gets, tasks included.
         const bulletFrom = line.from + indent.length;
         const bulletTo = bulletFrom + bullet.length + gap.length;
         items.push({ from: bulletFrom, to: bulletTo, deco: Decoration.replace({}), atomic: true });
@@ -578,7 +817,7 @@ function build(view: EditorView): { deco: DecorationSet; atomic: DecorationSet }
         items.push({
           from: s, to: e,
           deco: Decoration.replace({
-            widget: new ImageWidget(url, im[1], hrefFrom, hrefFrom + im[2].length, parseCaption(im[3])),
+            widget: new ImageWidget(url, im[1], hrefFrom, hrefFrom + im[2].length, parseCaption(im[3]), s, e),
           }),
         });
       }
@@ -798,6 +1037,31 @@ export const livePreviewTheme = EditorView.theme({
   ".cm-fence": { fontFamily: "ui-monospace, Menlo, monospace", fontSize: "0.9em" },
   ".cm-link": { color: "var(--link)", cursor: "pointer" },
   ".cm-quote": { color: "var(--muted)", fontStyle: "italic" },
+  /*
+   * The quote bar, drawn on the LINE.
+   *
+   * `.cm-line` already carries `padding: 0 6px`, so the border sits at the very
+   * left of the editor and the text is pushed clear of it. One bar per level of
+   * `>`, which is why the padding is a multiple of the depth: nested quotes are
+   * rare but they used to be invisible, exactly like the first level was.
+   */
+  ".cm-quoteline": {
+    borderLeft: "3px solid var(--line)",
+    paddingLeft: "calc(11px + var(--cm-depth, 1) * 9px)",
+  },
+  /*
+   * A list line: one indentation step per nesting level, plus a hanging indent
+   * so a wrapped item lines up under its own text and not under its marker.
+   *
+   * The literal leading whitespace is hidden by the decoration that adds this
+   * class, so the padding here is the ONLY thing expressing nesting — change
+   * one without the other and a nested item either loses its indentation or
+   * gets it twice.
+   */
+  ".cm-listline": {
+    paddingLeft: "calc(6px + var(--cm-depth, 0) * 1.6em + 1.5em)",
+    textIndent: "-1.5em",
+  },
   ".cm-task": { marginRight: "6px", verticalAlign: "middle", cursor: "pointer" },
   ".cm-task-done": { color: "var(--muted)", textDecoration: "line-through" },
   // Mismo motivo que .cm-tablewrap: el margen de un widget no entra en la altura
@@ -818,7 +1082,32 @@ export const livePreviewTheme = EditorView.theme({
     padding: "4px", borderRadius: "2px", fontSize: "12.5px", lineHeight: "1.45",
   },
   ".cm-thumb .cm-img": { padding: "0", width: "100%", borderRadius: "0" },
-  ".cm-thumbcap": { color: "var(--muted)", padding: "5px 3px 2px" },
+  ".cm-thumbcap": { color: "var(--muted)", padding: "5px 3px 2px", outline: "none", cursor: "text" },
+  // An empty caption has nothing to click on, and an image whose caption you
+  // cannot see is an image whose caption you cannot start writing.
+  ".cm-thumbcap:empty::before": { content: "attr(data-placeholder)", opacity: ".55" },
+  /*
+   * The wrapper exists to hang the layout bar off, and it has to be relative
+   * for the absolute bar to land on the image — but it must not become a box of
+   * its own: `display: contents` would drop it from the layout entirely and
+   * take the positioning context with it, so it is inline-block for a plain
+   * image and lets the floated figure keep its own geometry.
+   */
+  ".cm-imgwrap": { position: "relative", display: "inline-block", maxWidth: "100%" },
+  ".cm-imgwrap .cm-thumb": { margin: "0" },
+  ".cm-imgbar": {
+    display: "none", position: "absolute", zIndex: "20", top: "8px", right: "8px",
+    gap: "2px", padding: "3px", border: "1px solid var(--line)", background: "var(--bg)",
+    boxShadow: "0 6px 22px rgba(0,0,0,.18)", borderRadius: "var(--control-radius)",
+  },
+  ".cm-imgwrap:hover .cm-imgbar": { display: "flex" },
+  ".cm-imgbar button": {
+    display: "grid", placeItems: "center", font: "inherit", fontSize: "13px", lineHeight: "1",
+    width: "26px", height: "24px", padding: "0", border: "0", background: "transparent",
+    color: "var(--fg)", cursor: "pointer", borderRadius: "var(--control-radius)",
+  },
+  ".cm-imgbar button:hover": { background: "var(--panel-grey)" },
+  ".cm-imgbar button.on": { background: "color-mix(in srgb, var(--link) 16%, transparent)", color: "var(--link)" },
   ".cm-thumb-right": { float: "right", margin: "4px 0 8px 16px", clear: "right" },
   ".cm-thumb-left": { float: "left", margin: "4px 16px 8px 0", clear: "left" },
   // `[ancho]`: sin flotar, centrada y a todo lo ancho — para diagramas y

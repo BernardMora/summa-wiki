@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { AGENTS, useAgentModels, useInstalledAgents } from "../agent-session.ts";
+import { useEffect, useState } from "react";
+import { ACP_PRESETS } from "@/src/acp/presets.ts";
+import { useInstalledAcpAgents } from "../acp-installed.ts";
 import { appearanceAttributes, PRESETS, resolveAppearance, type AppearanceMode, type PresetId } from "@/src/appearance/catalog.ts";
 
 type Stage = "welcome" | "ai" | "demo" | "vault" | "done";
-type AgentId = "claude" | "antigravity" | "opencode" | "codex";
+type AgentId = string;
 
 interface Initial {
   onboarding: { status: string; stage: Stage; lesson: string | null; completed: string[]; skipped: string[]; design: PresetId; mode: AppearanceMode };
@@ -21,7 +22,7 @@ const copy = {
     vault: "Tu propio vault", back: "Atrás", next: "Siguiente", skip: "Omitir", detected: "Detectado", missing: "No detectado",
     noAi: "Continuar sin IA", use: "Usar", model: "Modelo", install: "Cómo instalar", retry: "Volver a comprobar",
     openDemo: "Abrir el vault de ejemplo", resetDemo: "Restablecer el demo", create: "Crear un vault nuevo", existing: "Abrir un vault existente",
-    installTitle: "Instala el agente fuera de Summa y vuelve a comprobar", installBody: "Usa la documentación oficial del proveedor para instalar e iniciar sesión. Summa nunca ejecutará el instalador por ti.",
+    installTitle: "Instala el agente fuera de Summa y vuelve a comprobar", installBody: "Usa la documentación oficial del proveedor para instalar e iniciar sesión. Summa nunca ejecutará el instalador por ti.", agentOptions: "El agente anunciará sus modelos, modos y opciones al abrir la primera conversación.",
   },
   en: {
     welcome: "Welcome to Summa Wiki", intro: "Your files, context, and agents in one local workspace.", start: "Set up Summa", design: "Choose a design", designHint: "The demo and your new vault will use it. You can customize it later.", mode: "Color mode", light: "Light", dark: "Dark", system: "Auto",
@@ -30,15 +31,8 @@ const copy = {
     vault: "Your own vault", back: "Back", next: "Next", skip: "Skip", detected: "Detected", missing: "Not detected",
     noAi: "Continue without AI", use: "Use", model: "Model", install: "How to install", retry: "Check again",
     openDemo: "Open the example vault", resetDemo: "Reset the demo", create: "Create a new vault", existing: "Open an existing vault",
-    installTitle: "Install the agent outside Summa, then check again", installBody: "Use the provider's official documentation to install and sign in. Summa will never run the installer for you.",
+    installTitle: "Install the agent outside Summa, then check again", installBody: "Use the provider's official documentation to install and sign in. Summa will never run the installer for you.", agentOptions: "The agent will announce its models, modes, and options when the first conversation opens.",
   },
-};
-
-const docs: Record<AgentId, string> = {
-  claude: "https://docs.anthropic.com/en/docs/claude-code/overview",
-  antigravity: "https://antigravity.google/docs/cli",
-  opencode: "https://opencode.ai/docs",
-  codex: "https://developers.openai.com/codex/cli",
 };
 
 const presetCopy: Record<PresetId, { es: [string, string]; en: [string, string] }> = {
@@ -52,13 +46,13 @@ const presetCopy: Record<PresetId, { es: [string, string]; en: [string, string] 
 export default function Onboarding({ initial }: { initial: Initial }) {
   const [locale, setLocale] = useState<"es" | "en">(initial.locale);
   const [stage, setStage] = useState<Stage>(initial.onboarding.stage === "done" ? "welcome" : initial.onboarding.stage);
-  const [agent, setAgent] = useState<AgentId | null>(initial.ai.agent);
-  const [model, setModel] = useState(initial.ai.model);
+  const [agent, setAgent] = useState<AgentId | null>(
+    initial.ai.agent === "claude" ? "claude-code" : initial.ai.agent,
+  );
   const [design, setDesign] = useState<PresetId>(initial.onboarding.design ?? "summa-classic");
   const [mode, setMode] = useState<AppearanceMode>(initial.onboarding.mode ?? "system");
   const [busy, setBusy] = useState(false);
-  const { installed } = useInstalledAgents();
-  const { models, loading } = useAgentModels(agent ?? "claude");
+  const { installed } = useInstalledAcpAgents();
   const t = copy[locale];
   const stages: Stage[] = ["ai", "demo", "vault"];
   const progress = Math.max(0, stages.indexOf(stage));
@@ -91,7 +85,7 @@ export default function Onboarding({ initial }: { initial: Initial }) {
   }
 
   async function saveAi(configured: boolean) {
-    await fetch("/api/onboarding/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent, model, configured }) });
+    await fetch("/api/onboarding/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent, model: "", configured }) });
     await saveState("demo");
   }
 
@@ -108,7 +102,6 @@ export default function Onboarding({ initial }: { initial: Initial }) {
   }
 
   const selectedInstalled = agent ? installed(agent) : false;
-  const modelOptions = useMemo(() => models, [models]);
 
   return <main className="onboarding-screen">
     <div className="onboarding-top">
@@ -131,12 +124,12 @@ export default function Onboarding({ initial }: { initial: Initial }) {
     {stage === "ai" && <section className="onboarding-panel">
       <p className="eyebrow">01 · IA</p><h1>{t.ai}</h1><p>{t.aiIntro}</p>
       <div className="agent-cards">
-        {AGENTS.map((a) => { const has = installed(a.id); return <button key={a.id} className={`agent-card${agent === a.id ? " selected" : ""}`} onClick={() => { setAgent(a.id); setModel(""); }}>
+        {ACP_PRESETS.map((a) => { const has = installed(a.id); return <button key={a.id} className={`agent-card${agent === a.id ? " selected" : ""}`} onClick={() => setAgent(a.id)}>
           <strong>{a.name}</strong><span className={has ? "available" : "unavailable"}>{has === null ? "…" : has ? `● ${t.detected}` : `○ ${t.missing}`}</span>
         </button>; })}
       </div>
-      {agent && selectedInstalled && <div className="onboarding-field"><label>{t.model}</label>{loading ? <p className="model-loading">{locale === "es" ? "Consultando modelos disponibles…" : "Loading available models…"}</p> : <div className="model-cards">{modelOptions.map((m) => <button key={m.id || "default"} className={model === m.id ? "selected" : ""} onClick={() => setModel(m.id)}><strong>{m.label || (locale === "es" ? "Predeterminado del CLI" : "CLI default")}</strong><small>{m.id || (locale === "es" ? "Usa la configuración actual del agente" : "Uses the agent's current configuration")}</small></button>)}</div>}</div>}
-      {agent && selectedInstalled === false && <div className="install-box"><strong>{t.installTitle}</strong><p>{t.installBody}</p><a href={docs[agent]} target="_blank" rel="noreferrer">{t.install}: {AGENTS.find((a) => a.id === agent)?.name} ↗</a><button onClick={() => location.reload()}>{t.retry}</button></div>}
+      {agent && selectedInstalled && <div className="onboarding-field"><p>{t.agentOptions}</p></div>}
+      {agent && selectedInstalled === false && <div className="install-box"><strong>{t.installTitle}</strong><p>{t.installBody}</p><a href={ACP_PRESETS.find((a) => a.id === agent)?.docs} target="_blank" rel="noreferrer">{t.install}: {ACP_PRESETS.find((a) => a.id === agent)?.name} ↗</a><button onClick={() => location.reload()}>{t.retry}</button></div>}
       <div className="onboarding-actions"><button onClick={() => saveState("welcome")}>{t.back}</button><button onClick={() => saveAi(false)}>{t.noAi}</button><button className="onboarding-primary" disabled={!agent || !selectedInstalled} onClick={() => saveAi(true)}>{t.next} →</button></div>
     </section>}
 

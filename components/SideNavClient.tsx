@@ -62,6 +62,12 @@ export default function SideNavClient({ groups, name, tagline, hasIcon }: {
   }, [locationPrompt?.kind]);
   useEffect(() => { localStorage.setItem("wiki.sideview", view); }, [view]);
 
+  useEffect(() => {
+    const showFiles = () => changeView("files");
+    window.addEventListener("summa:show-file-tree", showFiles);
+    return () => window.removeEventListener("summa:show-file-tree", showFiles);
+  }, []);
+
   /** Cambiar de vista no desmonta el árbol ni pierde la posición del usuario. */
   function changeView(next: "cat" | "files") {
     const current = viewRef.current;

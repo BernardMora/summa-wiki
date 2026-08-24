@@ -5,6 +5,7 @@ import { splitBold } from "./match.ts";
 import { writeAuditSkill } from "./audit-skill.ts";
 import { SKILLS_HOME, SKILL_ADAPTERS } from "./skills.ts";
 import type { Locale } from "./locales.mjs";
+import { DEFAULT_PORT } from "./ports.mjs";
 
 /**
  * Crear un vault: escribir en disco la arquitectura que el usuario eligió.
@@ -347,7 +348,7 @@ export function createVault(
   dir: string,
   name: string,
   arch: Architecture,
-  agent: string = "claude",
+  agent: string = "claude-code",
   locale: Locale = "en",
 ): ScaffoldResult {
   const x = TEXT[locale] ?? TEXT.en;
@@ -400,7 +401,7 @@ export function createVault(
 
   // 4. El router de la raíz para el agente elegido.
   const root = rootAgentsFile(arch, name, x);
-  if (agent === "antigravity" || agent === "codex") {
+  if (["antigravity", "codex", "kiro", "hermes", "mistral-vibe"].includes(agent)) {
     write("AGENTS.md", root);
   } else if (agent === "opencode") {
     write("OPENCODE.md", root);
@@ -420,7 +421,7 @@ export function createVault(
   // para los cuatro agentes, no solo para el que se eligió aquí. Elegir Claude en
   // el asistente no es motivo para dejar el vault inutilizable desde `agy`
   // mañana.
-  const audit = writeAuditSkill(dir, arch, 4321, locale);
+  const audit = writeAuditSkill(dir, arch, DEFAULT_PORT, locale);
   created.push(audit.canonical);
   for (const a of audit.adapters) {
     if (a.kind === "native") continue;           // el canon, ya contado

@@ -1,19 +1,18 @@
-# Configuración de empaquetado.
+# Packaging configuration.
 #
-# Vive fuera de package.json porque electron-builder valida su esquema contra
-# una lista cerrada de claves y rechaza el truco de `"//": "comentario"` que se
-# usa en el resto del proyecto. La alternativa era dejar sin explicar por qué se
-# excluyen 331 MB, y una exclusión sin motivo escrito es una exclusión que
-# alguien revierte dentro de seis meses "por si acaso". Mismo razonamiento que
-# next.config.mjs: el formato se elige para poder documentar la decisión.
+# This lives outside package.json because electron-builder validates its schema
+# against a closed list of keys and rejects the `"//": "comment"` trick used
+# everywhere else in this project. The alternative was leaving 346 MB of
+# exclusions unexplained, and an exclusion with no written reason is one
+# somebody reverts in six months "just in case". Same reasoning as
+# next.config.mjs: the format is chosen so the decision can be documented.
 
 appId: com.summawiki.app
 productName: Summa Wiki
 
-# En false a propósito, no por descuido. Next escribe en disco en tiempo de
-# ejecución y dentro de un .asar el sistema de archivos es de solo lectura.
-# Empaquetar con asar exige mover esas escrituras a userData primero; hasta
-# entonces esto se queda como está.
+# false on purpose, not by oversight. Next writes to disk at runtime, and
+# inside a .asar the filesystem is read-only. Packaging with asar first
+# requires moving those writes to userData; until then this stays as it is.
 asar: false
 
 directories:
@@ -30,46 +29,71 @@ files:
   - package.json
   - node_modules/**/*
 
-  # Las cuatro exclusiones valen 331 MB de los 579 que pesaba Resources.
-  # Ninguna es una optimización fina: las cuatro son cosas que solo hacen falta
-  # al CONSTRUIR, y que se colaban porque el glob de node_modules las arrastra.
+  # These five exclusions are worth 346 MB of the 579 that Resources weighed.
+  # None of them is a fine-grained optimisation: all five are things needed
+  # only at BUILD time, or for a code path this app does not take, that the
+  # node_modules glob drags in.
   #
-  #   cache/          182 MB. La caché incremental de Next. Se regenera sola.
-  #   @next/swc-*     124 MB. El compilador. El servidor de producción sirve la
-  #                   build, no compila — es la misma razón por la que el
-  #                   `output: standalone` de Next tampoco lo incluye, y por la
-  #                   que next.config tiene que ser .mjs y no .ts.
-  #   pdfjs-dist       40 MB. No lo importa una sola línea del código: el visor
-  #                   se sirve vendorizado desde public/.
-  #   @napi-rs         25 MB. La dependencia opcional con la que pdfjs
-  #                   renderiza en Node. Aquí se renderiza en el navegador.
+  #   cache/          182 MB. Next's incremental cache. It regenerates itself.
+  #   @next/swc-*     124 MB. The compiler. The production server serves the
+  #                   build, it does not compile — the same reason Next's own
+  #                   `output: standalone` leaves it out, and the reason
+  #                   next.config has to be .mjs and not .ts.
+  #   pdfjs-dist       40 MB. Not one line of code imports it: the viewer is
+  #                   served vendored from public/.
+  #   @napi-rs         25 MB. The optional dependency pdfjs renders with in
+  #                   Node. Here it renders in the browser.
+  #   @img/sharp-*     15 MB. Next's optional native image optimiser, pulled in
+  #                   for `next/image`. This app has no `next/image` import and
+  #                   no `images` config; images are served as bytes by
+  #                   `app/api/asset/route.ts` through plain `fs`, so the
+  #                   optimiser is never reached. Verified by deleting it from
+  #                   node_modules and booting the production build: every page
+  #                   200s and a 1.5 MB WebP still serves. It is the same case
+  #                   as @napi-rs one line up — an optional native dependency
+  #                   for a path we don't take — and dropping it leaves the
+  #                   package with no native modules at all, which is what the
+  #                   macOS notarization item in ROADMAP.md wants.
   #
-  # Quien toque esta lista, que corra `npm run smoke` en las TRES plataformas.
-  # Un recorte de más rompe el arranque del paquete, no el código, y eso solo
-  # se ve después de empaquetar.
+  # BEFORE CHANGING THIS LIST: an over-aggressive cut breaks the packaged app's
+  # startup, never the code, so it cannot be seen without packaging. Run
+  # `npm run smoke`, which boots the packaged server and fails if a path does
+  # not resolve.
+  #
+  # Whether you need all three platforms depends on what you cut:
+  #   - A package whose NAME varies per platform (@next/swc-*, @napi-rs,
+  #     @img/sharp-*) needs all three, because a glob that matches on one may
+  #     miss on another and the failure is silent until that platform runs.
+  #   - Anything else needs one, and the CI release workflow smoke-tests all
+  #     three before publishing anyway.
+  # The @img cut below was verified on macOS; the glob is a prefix that matches
+  # every platform's subpackage, so the remaining risk is a runtime require we
+  # did not find, not a glob that failed to match.
   - '!.next-build/cache/**'
   - '!node_modules/@next/swc-*/**'
   - '!node_modules/pdfjs-dist/**'
   - '!node_modules/@napi-rs/**'
+  - '!node_modules/@img/**'
+  - '!node_modules/sharp/**'
 
-  # 77 MB de source maps. Solo sirven para que un stack trace apunte al
-  # TypeScript original de una dependencia, y nadie depura node_modules desde
-  # una app instalada. Se excluyen aquí y no en .next-build: las de la propia
-  # build sí las quiere quien reporte un fallo del cliente.
+  # 77 MB of source maps. They only make a stack trace point at a dependency's
+  # original TypeScript, and nobody debugs node_modules from an installed app.
+  # Excluded here and not in .next-build: the build's own maps are wanted by
+  # whoever reports a client-side bug.
   - '!node_modules/**/*.map'
 
-# Borrador: el Release se publica solo cuando las cuatro plataformas
-# terminaron. Un release que aparece con el .dmg y sin el .exe es peor que uno
-# que tarda cinco minutos más.
+# Draft: the Release is published only once all four platforms have finished. A
+# release that shows up with the .dmg and without the .exe is worse than one
+# that takes five more minutes.
 publish:
   - provider: github
     releaseType: draft
 
-# Windows NO declara icono a propósito: `build/icon.ico` es el candidato de
-# máxima prioridad que electron-builder busca por convención, y ese .ico está
-# armado a mano desde los PNG del repositorio y verificado píxel a píxel.
-# Declarar `icon: build/icon.png` aquí lo pisaría con una conversión del PNG de
-# 512, que es peor arte y encima silenciosamente.
+# Windows deliberately declares NO icon: `build/icon.ico` is the
+# highest-priority candidate electron-builder looks for by convention, and that
+# .ico is assembled by hand from the repository's PNGs and verified pixel by
+# pixel. Declaring `icon: build/icon.png` here would override it with a
+# conversion of the 512 PNG — worse art, and silently so.
 win:
   target: nsis
 
@@ -78,11 +102,11 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
 
-# mac y linux sí hay que nombrarlos, porque sus archivos no caen donde la
-# convención mira: el .icns se llama "Summa Wiki.icns" y no `icon.icns`, y para
-# linux hace falta el directorio de PNG por tamaño. Sin declararlos,
-# electron-builder no falla — avisa "application icon is not set" y empaqueta
-# con el átomo de Electron, que es como salió el .app hasta ahora.
+# mac and linux do have to be named, because their files do not land where the
+# convention looks: the .icns is called "Summa Wiki.icns" and not `icon.icns`,
+# and linux needs the directory of PNGs by size. Without declaring them
+# electron-builder does not fail — it warns "application icon is not set" and
+# packages with Electron's atom, which is how the .app shipped until now.
 mac:
   icon: build/Summa Wiki.icns
   target:

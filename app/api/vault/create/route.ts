@@ -7,6 +7,7 @@ import { createVault } from "@/src/scaffold.ts";
 import { validateCreate, blocking } from "@/src/validate.ts";
 import { getLocale } from "@/lib/i18n.server.ts";
 import { readSettings } from "@/src/appdata.mjs";
+import { ACP_PRESETS } from "@/src/acp/presets.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +35,10 @@ export async function POST(req: Request) {
   const raw = body && typeof body.path === "string" ? body.path.trim() : "";
   const name = body && typeof body.name === "string" ? body.name.trim() : "";
   const packId = body && typeof body.architecture === "string" ? body.architecture : "";
-  const requestedAgent = body && typeof body.agent === "string" ? body.agent : "claude";
-  const agent = ["claude", "antigravity", "opencode", "codex"].includes(requestedAgent)
+  const requestedAgent = body && typeof body.agent === "string" ? body.agent : "claude-code";
+  const agent = ACP_PRESETS.some((preset) => preset.id === requestedAgent)
     ? requestedAgent
-    : "claude";
+    : "claude-code";
 
   const problems = validateCreate(name, raw);
   const errors = blocking(problems);

@@ -1,87 +1,60 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseAgentPaths, AGENT_BINARIES } from "../src/agents.ts";
+import { cleanEnv, parseCommandPaths, parsePresetPaths } from "../src/agents.ts";
+import { ACP_PRESETS } from "../src/acp/presets.ts";
 
-/**
- * El sondeo de agentes no se puede probar de punta a punta: levanta una shell
- * de login del usuario, y en CI no hay ninguno de los cuatro CLIs instalado.
- * Lo que sí se puede probar —y donde están todos los fallos reales— es el
- * parseo de lo que esa shell devuelve.
- */
-
-test("una salida limpia se reparte por id de agente", () => {
-  const out = [
+test("the ACP probe derives ids and commands from the single registry", () => {
+  const output = [
+    "Restored session: ignored shell noise",
+    "claude-agent-acp\t/usr/local/bin/claude-agent-acp",
     "claude\t/usr/local/bin/claude",
-    "agy\t/home/u/.local/bin/agy",
+    "codex-acp\t/home/u/.nvm/bin/codex-acp",
+    "codex\t/home/u/.nvm/bin/codex",
     "opencode\t/home/u/.opencode/bin/opencode",
-    "codex\t/home/u/.local/bin/codex",
+    "bunx\t/opt/homebrew/bin/bunx",
+    "agy\t/home/u/.local/bin/agy",
+    "hermes\t/home/u/.local/bin/hermes",
   ].join("\n");
 
-  assert.deepEqual(parseAgentPaths(out, false), {
-    claude: "/usr/local/bin/claude",
-    // `agy`, no `antigravity`: el id de la interfaz y el binario NO coinciden,
-    // y es justo el caso que un mapa ingenuo se salta.
-    antigravity: "/home/u/.local/bin/agy",
-    opencode: "/home/u/.opencode/bin/opencode",
-    codex: "/home/u/.local/bin/codex",
-  });
+  const paths = parsePresetPaths(output, false);
+  assert.equal(paths["claude-code"], "/usr/local/bin/claude-agent-acp");
+  assert.equal(paths.codex, "/home/u/.nvm/bin/codex-acp");
+  assert.equal(paths.antigravity, "/opt/homebrew/bin/bunx");
+  assert.equal(paths.hermes, "/home/u/.local/bin/hermes");
+  assert.equal(paths.kiro, null);
+  assert.equal(paths["mistral-vibe"], null);
+  assert.deepEqual(Object.keys(paths), ACP_PRESETS.map((preset) => preset.id));
 });
 
-test("un binario ausente deja la ruta vacía y da null", () => {
-  const out = "claude\t/usr/local/bin/claude\nagy\t\nopencode\t\ncodex\t";
-  const paths = parseAgentPaths(out, false);
-  assert.equal(paths.claude, "/usr/local/bin/claude");
-  assert.equal(paths.antigravity, null);
-  assert.equal(paths.opencode, null);
-  assert.equal(paths.codex, null);
+test("an adapter is missing when its wrapped harness is missing", () => {
+  const output = "bunx\t/opt/homebrew/bin/bunx\n";
+  assert.equal(parsePresetPaths(output, false).antigravity, null);
 });
 
-/**
- * La regresión que motivó separar esta función. Una zsh interactiva imprime su
- * propio ruido antes de obedecer, y esa línea llega mezclada con los resultados
- * en el mismo stdout.
- */
-test("el ruido de una shell interactiva no se cuela", () => {
-  const out = [
-    "Restored session: Sun Aug 16 18:02:57 PDT 2026",
-    "claude\t/usr/local/bin/claude",
-    "agy\t",
-    "opencode\t",
-    "codex\t",
-  ].join("\n");
-  assert.deepEqual(parseAgentPaths(out, false), {
-    claude: "/usr/local/bin/claude",
-    antigravity: null,
-    opencode: null,
-    codex: null,
-  });
+test("relative and platform-incompatible command paths are rejected", () => {
+  assert.equal(parseCommandPaths("agent\tagent", { x: "agent" }, false).x, null);
+  assert.equal(parseCommandPaths("agent\t./agent", { x: "agent" }, false).x, null);
+  assert.equal(
+    parseCommandPaths("agent\tC:\\Users\\u\\agent.cmd", { x: "agent" }, true).x,
+    "C:\\Users\\u\\agent.cmd",
+  );
+  assert.equal(parseCommandPaths("agent\t/usr/local/bin/agent", { x: "agent" }, true).x, null);
 });
 
-test("una ruta relativa se rechaza: no se puede lanzar", () => {
-  assert.equal(parseAgentPaths("claude\tclaude", false).claude, null);
-  assert.equal(parseAgentPaths("claude\t./claude", false).claude, null);
-});
+test("the launch environment removes npm and nested Claude Code state", () => {
+  const env = cleanEnv({
+    NODE_ENV: "test",
+    HOME: "/Users/u",
+    PATH: "/usr/bin",
+    npm_config_prefix: "/Users/u/.local",
+    npm_lifecycle_event: "desktop",
+    CLAUDE_CODE_CHILD_SESSION: "1",
+    ANTHROPIC_API_KEY: "sk-x",
+  } as NodeJS.ProcessEnv);
 
-test("en Windows valen las rutas con letra de unidad y nada más", () => {
-  const win = parseAgentPaths("claude\tC:\\Users\\u\\AppData\\npm\\claude.cmd", true);
-  assert.equal(win.claude, "C:\\Users\\u\\AppData\\npm\\claude.cmd");
-
-  // `Get-Command` también resuelve alias y funciones de PowerShell: devuelven
-  // un nombre, no una ruta, y lanzarlos desde la terminal incrustada falla.
-  assert.equal(parseAgentPaths("claude\tclaude", true).claude, null);
-
-  // Una ruta de Unix en modo Windows tampoco: si eso llega, algo se cruzó.
-  assert.equal(parseAgentPaths("claude\t/usr/local/bin/claude", true).claude, null);
-});
-
-test("una salida vacía deja los cuatro en null, no lanza", () => {
-  assert.deepEqual(parseAgentPaths("", false), {
-    claude: null, antigravity: null, opencode: null, codex: null,
-  });
-});
-
-test("cada id declarado tiene binario, y el mapa cubre los cuatro", () => {
-  const ids = Object.keys(AGENT_BINARIES);
-  assert.deepEqual(ids.sort(), ["antigravity", "claude", "codex", "opencode"]);
-  assert.deepEqual(Object.keys(parseAgentPaths("", false)).sort(), ids.sort());
+  assert.equal(env.npm_config_prefix, undefined);
+  assert.equal(env.npm_lifecycle_event, undefined);
+  assert.equal(env.CLAUDE_CODE_CHILD_SESSION, undefined);
+  assert.equal(env.ANTHROPIC_API_KEY, "sk-x");
+  assert.equal(env.HOME, "/Users/u");
 });

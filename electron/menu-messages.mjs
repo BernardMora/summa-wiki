@@ -21,7 +21,7 @@ export const MENU = {
   en: {
     file: "File",
     openNote: "Open note…",
-    newTerminal: "New terminal",
+    newChat: "New chat",
     openVault: "Open vault…",
     newVault: "New vault…",
     recentVaults: "Recent vaults",
@@ -53,7 +53,7 @@ export const MENU = {
   es: {
     file: "Archivo",
     openNote: "Abrir nota…",
-    newTerminal: "Nueva terminal",
+    newChat: "Nuevo chat",
     openVault: "Abrir vault…",
     newVault: "Nuevo vault…",
     recentVaults: "Vaults recientes",

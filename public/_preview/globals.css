@@ -1,0 +1,2214 @@
+:root {
+  --bg: #ffffff;
+  --page-bg: #f8f9fa;
+  --fg: #202122;
+  --muted: #54595d;
+  --line: #a2a9b1;
+  --line-soft: #c8ccd1;
+  --link: #3366cc;
+  --link-visited: #795cb2;
+  --link-red: #d73333;
+  --panel-blue: #f6f9fc;
+  --panel-blue-head: #ccdff2;
+  --panel-green: #f5fbf5;
+  --panel-green-head: #cfe8cf;
+  --panel-grey: #f8f9fa;
+  --panel-grey-head: #dddddd;
+  --ai-bg: #f3f0ff;
+  --ai-line: #8b74e8;
+  --human-bg: #fff8e0;
+  --human-line: #d4a72c;
+  /* Núcleo: distinto de los tres paneles a propósito, para que los seis
+     artículos del marco no se confundan con una categoría más. */
+  --core-bg: #fdf6ec;
+  --core-head: #f0dfc4;
+  --core-line: #b8842b;
+  --serif: "Linux Libertine", Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --sel: rgba(60,110,220,.22);
+  color-scheme: light;
+}
+
+/* ───────────────────────────────────────────── Primer recorrido / demo */
+/* La pantalla vive DENTRO de `.shell`; ocultarla aquí también ocultaba el
+   onboarding entero y dejaba únicamente el fondo de la ventana. El panel es
+   fixed e inset:0, así que cubre el workspace sin tener que borrar su ancestro. */
+body.onboarding-active .masthead { visibility: hidden; }
+body.onboarding-active { background: var(--surface-app); }
+
+.onboarding-screen {
+  position: fixed; inset: 0; z-index: 1000; overflow: auto;
+  color: #2d251f; background:
+    linear-gradient(rgba(117,83,57,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(117,83,57,.045) 1px, transparent 1px), #f7f2ea;
+  background-size: 32px 32px;
+  font-family: var(--font-ui, ui-sans-serif, system-ui, sans-serif);
+}
+.onboarding-top { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 22px 34px; background: rgba(247,242,234,.88); backdrop-filter: blur(12px); }
+.onboarding-brand { font-family: Georgia, serif; font-size: 17px; }
+.onboarding-progress { display: flex; gap: 7px; }
+.onboarding-progress span, .tour-dots span { width: 34px; height: 5px; border-radius: 9px; background: #d9cfc2; }
+.onboarding-progress span.on, .tour-dots span.on { background: #825a3d; }
+.onboarding-locale { justify-self: end; display: flex; gap: 4px; }
+.onboarding-locale button { border: 1px solid #d7ccbf; background: #fffaf4; color: #6b5b4f; border-radius: 99px; padding: 5px 9px; }
+.onboarding-locale button.on { background: #825a3d; color: white; }
+.onboarding-hero, .onboarding-panel { width: min(860px, calc(100vw - 48px)); margin: 8vh auto 60px; }
+.onboarding-hero { text-align: center; display: grid; justify-items: center; }
+.onboarding-logo { width: 104px; height: 104px; display: block; margin-bottom: 24px; border-radius: 22px; }
+.eyebrow { margin: 0 0 10px !important; color: #986b4b; letter-spacing: .16em; font-size: 11px !important; font-weight: 700; text-transform: uppercase; }
+.onboarding-hero h1, .onboarding-panel h1 { font: italic 46px/1.1 Georgia, serif; margin: 0 0 14px; color: #2d251f; }
+.onboarding-hero > p:not(.eyebrow), .onboarding-panel > p:not(.eyebrow) { max-width: 650px; color: #6d6259; font-size: 17px; line-height: 1.6; }
+.onboarding-primary { background: #825a3d !important; color: white !important; border-color: #825a3d !important; box-shadow: 0 8px 22px rgba(76,48,30,.15); }
+.onboarding-hero .onboarding-primary { margin-top: 22px; padding: 12px 22px; border-radius: 99px; }
+.onboarding-design { width: 100%; margin: 28px 0 12px; text-align: left; }
+.onboarding-design h2 { margin: 0 0 4px; font: 600 17px var(--font-ui, ui-sans-serif, system-ui, sans-serif); }
+.onboarding-design > p { margin: 0 0 13px; color: var(--text-secondary); font-size: 13px; }
+.design-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+.design-cards button { display: grid; grid-template-columns: 38px 1fr; grid-template-rows: auto auto; align-items: center; gap: 2px 9px; min-height: 78px; padding: 11px; text-align: left; color: var(--text-primary); background: var(--surface-content); border: 1px solid var(--border-subtle); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); }
+.design-cards button.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.design-cards button .preset-swatch { grid-row: 1 / 3; }
+.design-cards button small { color: var(--text-secondary); line-height: 1.25; }
+.mode-heading { margin-top: 20px !important; }
+.mode-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 150px)); gap: 9px; }
+.mode-cards button { display: flex; align-items: center; gap: 9px; padding: 9px 12px; color: var(--text-primary); background: var(--surface-content); border: 1px solid var(--border-subtle); border-radius: var(--control-radius); }
+.mode-cards button.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.mode-preview { width: 25px; height: 25px; flex: 0 0 auto; border: 1px solid var(--border-default); border-radius: 50%; }
+.mode-light { background: #f7f2ea; }.mode-dark { background: #171c1f; }.mode-system { background: linear-gradient(135deg, #f7f2ea 0 50%, #171c1f 50%); }
+.agent-cards, .vault-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 28px 0; }
+.agent-card { min-height: 92px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; padding: 17px; border: var(--border-width) solid var(--button-border); border-radius: var(--panel-radius); background: var(--button-bg); color: var(--text-primary); box-shadow: var(--panel-shadow); text-decoration: none; }
+.agent-card:hover, .agent-card.selected { border-color: var(--accent); background: var(--surface-selected); box-shadow: inset 0 0 0 var(--border-width) var(--accent), var(--panel-shadow); }
+.agent-card .available { color: var(--accent); }.agent-card .unavailable { color: var(--danger); }
+.agent-card span { margin-top: 12px; font-size: 12px; }
+.onboarding-field { display: grid; gap: 7px; margin: 20px 0; }.onboarding-field select { max-width: 460px; padding: 10px; color: #2d251f; border: 1px solid #d8cec1; border-radius: 8px; background: #fffaf4; color-scheme: light; }.onboarding-field select option { color: #2d251f; background: #fffaf4; }
+.model-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.model-cards button { display: grid; gap: 5px; min-height: 68px; padding: 11px 13px; text-align: left; color: var(--text-primary); background: var(--surface-content); border: 1px solid var(--border-subtle); border-radius: var(--panel-radius); }
+.model-cards button.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.model-cards small, .model-loading { color: var(--text-secondary); }
+.install-box, .example-preview { border: 1px solid #d8cec1; background: rgba(255,252,247,.9); border-radius: 14px; padding: 20px; margin: 20px 0; }
+.install-box a { color: #825a3d; }.install-box button { margin-left: 14px; }
+.example-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; padding: 30px; }.example-preview strong { display: block; font: italic 34px Georgia, serif; }.example-preview span { color: #76685d; }.example-preview li { margin: 8px 0; }
+.onboarding-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 30px; }.onboarding-actions button { padding: 9px 15px; border: 1px solid #d8cec1; background: #fffaf4; border-radius: 99px; color: #574a40; }
+
+.tour-spotlight { position: fixed; z-index: 890; pointer-events: none; border: 2px solid var(--accent); border-radius: calc(var(--control-radius) + 5px); background: transparent; box-shadow: 0 0 0 9999px rgb(0 0 0 / .58), 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 28px color-mix(in srgb, var(--accent) 55%, transparent); transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease; }
+.tour-card { position: fixed; bottom: 24px; z-index: 900; width: min(390px, calc(100vw - 32px)); padding: 17px; color: var(--text-primary); font-family: var(--font-ui); background: color-mix(in srgb, var(--surface-content) 96%, transparent); border: 1px solid var(--border-default); border-radius: var(--panel-radius); box-shadow: var(--shadow-popup); backdrop-filter: blur(14px); transition: left .2s ease, right .2s ease; }
+.tour-card.dragging { transition: none; will-change: transform; }
+.tour-card-right { right: 24px; }.tour-card-left { left: 24px; }
+.tour-head { display: flex; justify-content: space-between; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; cursor: grab; user-select: none; touch-action: none; }.tour-card.dragging .tour-head { cursor: grabbing; }.tour-head button { border: 0; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.tour-dots { display: flex; gap: 5px; margin: 12px 0 17px; }.tour-dots span { flex: 1; width: auto; height: 3px; background: var(--border-subtle); }.tour-dots span.on { background: var(--accent); }
+.tour-card h2 { margin: 0 0 8px; color: var(--text-primary); font: italic 24px var(--font-display, Georgia, serif); }.tour-card p { color: var(--text-secondary); line-height: 1.5; }.tour-warning, .tour-status { margin-top: 10px; padding: 10px; color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--control-radius); background: var(--surface-muted); font-size: 12px; }
+.tour-status { color: var(--accent); }
+.tour-tip { margin: 10px 0 0; padding-top: 10px; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); font-size: 12px; }
+.tour-do { padding: 8px 12px; border: 1px solid var(--accent); background: transparent; color: var(--accent); border-radius: var(--control-radius); }
+.tour-actions { display: flex; gap: 7px; justify-content: flex-end; margin-top: 16px; }.tour-actions button { padding: 7px 10px; color: var(--text-primary); border: 1px solid var(--border-default); border-radius: var(--control-radius); background: var(--surface-muted); }.tour-actions button:disabled { opacity: .45; }.tour-actions .tour-next { background: var(--accent); color: var(--surface-content); border-color: var(--accent); }
+.tour-restore { position: fixed; right: 20px; bottom: 20px; z-index: 900; padding: 9px 14px; border: 1px solid var(--border-default); border-radius: var(--control-radius); background: var(--accent); color: var(--surface-content); box-shadow: var(--shadow-popup); }
+
+@media (max-width: 680px) {
+  .onboarding-top { padding: 16px; }.onboarding-brand { display: none; }.onboarding-top { grid-template-columns: 1fr auto; }.onboarding-progress { justify-self: start; }
+  .onboarding-hero h1, .onboarding-panel h1 { font-size: 36px; }.agent-cards, .vault-choices, .example-preview, .design-cards, .model-cards { grid-template-columns: 1fr; }.onboarding-actions { flex-wrap: wrap; }
+  .tour-card-left, .tour-card-right { left: 16px; right: 16px; }
+}
+
+/* El preset elegido en bienvenida se aplica inmediatamente. Estas reglas
+   hacen que el onboarding consuma el mismo vocabulario visual del workspace. */
+.onboarding-screen { color: var(--text-primary); background-color: var(--surface-app); }
+.onboarding-screen {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border-subtle) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border-subtle) 22%, transparent) 1px, transparent 1px);
+}
+.onboarding-top { color: var(--text-primary); background: color-mix(in srgb, var(--surface-app) 88%, transparent); border-bottom: var(--border-width) solid color-mix(in srgb, var(--border-subtle) 45%, transparent); }
+.onboarding-brand { font-family: var(--font-heading); }
+.onboarding-progress span { background: var(--border-subtle); }
+.onboarding-progress span.on { background: var(--accent); }
+.onboarding-locale button {
+  padding-top: var(--control-padding-y); padding-bottom: var(--control-padding-y);
+  color: var(--text-secondary); background: var(--button-bg); border: var(--border-width) solid var(--button-border);
+  border-radius: var(--control-radius); box-shadow: var(--button-shadow);
+}
+.onboarding-locale button:hover { color: var(--text-primary); background: var(--button-hover); }
+.onboarding-locale button.on { color: var(--surface-content); background: var(--accent); border-color: var(--accent); }
+.eyebrow { color: var(--accent); }
+.onboarding-hero h1, .onboarding-panel h1 { color: var(--text-primary); font-family: var(--font-heading); }
+.onboarding-hero > p:not(.eyebrow), .onboarding-panel > p:not(.eyebrow) { color: var(--text-secondary); }
+.onboarding-primary {
+  color: var(--surface-content) !important; background: var(--accent) !important;
+  border-color: var(--accent) !important; border-radius: var(--control-radius) !important;
+  box-shadow: var(--button-shadow) !important;
+}
+.onboarding-primary:hover { filter: brightness(1.08); }
+.onboarding-primary:disabled { opacity: .45; filter: none; }
+.design-cards button, .mode-cards button, .model-cards button, .agent-card, .install-box, .example-preview, .onboarding-actions button {
+  color: var(--text-primary); background: var(--button-bg); border-color: var(--button-border);
+  border-width: var(--border-width); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow);
+}
+.design-cards button:hover, .mode-cards button:hover, .model-cards button:hover, .agent-card:hover, .onboarding-actions button:hover { background: var(--button-hover); }
+.design-cards button.selected, .mode-cards button.selected, .model-cards button.selected, .agent-card.selected {
+  color: var(--text-primary); background: var(--surface-selected); border-color: var(--accent);
+  box-shadow: inset 0 0 0 var(--border-width) var(--accent), var(--panel-shadow);
+}
+.agent-card .available { color: var(--accent); }.agent-card .unavailable { color: var(--danger); }
+.onboarding-field select {
+  color: var(--text-primary); background: var(--surface-content); border-color: var(--button-border);
+  border-width: var(--border-width); border-radius: var(--control-radius); color-scheme: inherit;
+}
+.onboarding-field select option { color: var(--text-primary); background: var(--surface-content); }
+.install-box, .example-preview { background: var(--surface-content); }
+.install-box a { color: var(--accent); }
+.install-box button { color: var(--text-primary); background: var(--button-bg); border-color: var(--button-border); border-width: var(--border-width); box-shadow: var(--button-shadow); }
+.example-preview strong { font-family: var(--font-heading); }.example-preview span { color: var(--text-secondary); }
+.onboarding-actions button { border-radius: var(--control-radius); box-shadow: var(--button-shadow); }
+
+/* Semantic bridge: appearance recipes override these without requiring every
+   mature component selector to change in the same release. */
+:root {
+  --bg: var(--surface-content); --page-bg: var(--surface-app); --fg: var(--text-primary);
+  --muted: var(--text-secondary); --line: var(--border-default); --line-soft: var(--border-subtle);
+  --link: var(--accent); --link-visited: var(--accent-visited); --link-red: var(--danger);
+  --panel-blue: var(--surface-hover); --panel-blue-head: var(--surface-selected);
+  --panel-grey: var(--surface-muted); --panel-grey-head: var(--surface-selected);
+  --sans: var(--font-ui); --serif: var(--font-heading); --mono: var(--font-code);
+}
+/* System preference, unless a theme was explicitly chosen. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1b1d; --page-bg: #101012; --fg: #eaecf0; --muted: #a2a9b1;
+    --line: #4b4d50; --line-soft: #3a3c3f;
+    --link: #88a5e8; --link-visited: #b697e8; --link-red: #ff6c6c;
+    --panel-blue: #1c2432; --panel-blue-head: #2a3b53;
+    --panel-green: #1b2620; --panel-green-head: #2b3f30;
+    --panel-grey: #202024; --panel-grey-head: #303034;
+    --ai-bg: #241f3a; --ai-line: #7d6ad0;
+    --core-bg: #2a2318; --core-head: #3d3122; --core-line: #d4a24a;
+    --human-bg: #302914; --human-line: #a3862f;
+    --sel: rgba(120,150,220,.34);
+    color-scheme: dark;
+  }
+}
+/* Explicit choice always wins over the media query. */
+:root[data-theme="dark"] {
+    --bg: #1b1b1d; --page-bg: #101012; --fg: #eaecf0; --muted: #a2a9b1;
+    --line: #4b4d50; --line-soft: #3a3c3f;
+    --link: #88a5e8; --link-visited: #b697e8; --link-red: #ff6c6c;
+    --panel-blue: #1c2432; --panel-blue-head: #2a3b53;
+    --panel-green: #1b2620; --panel-green-head: #2b3f30;
+    --panel-grey: #202024; --panel-grey-head: #303034;
+    --ai-bg: #241f3a; --ai-line: #7d6ad0;
+    --core-bg: #2a2318; --core-head: #3d3122; --core-line: #d4a24a;
+    --human-bg: #302914; --human-line: #a3862f;
+    --sel: rgba(120,150,220,.34);
+    color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
+
+/* Keep the mature component vocabulary as aliases. This declaration must sit
+   after the legacy light/dark compatibility blocks so a chosen palette wins. */
+:root {
+  --bg: var(--surface-content); --page-bg: var(--surface-app); --fg: var(--text-primary);
+  --muted: var(--text-secondary); --line: var(--border-default); --line-soft: var(--border-subtle);
+  --link: var(--accent); --link-visited: var(--accent-visited); --link-red: var(--danger);
+  --panel-blue: var(--surface-hover); --panel-blue-head: var(--surface-selected);
+  --panel-grey: var(--surface-muted); --panel-grey-head: var(--surface-selected);
+  --sans: var(--font-ui); --serif: var(--font-heading); --mono: var(--font-code);
+}
+
+button, input, select, textarea { border-radius: var(--control-radius); transition: background var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast); }
+.panel, .pane, .setupcard, .archcard, .confirmbox, .warnbox { border-radius: var(--panel-radius); }
+:root[data-buttons="solid"] button.primary,
+:root[data-buttons="solid"] .newbtn.primary,
+:root[data-buttons="solid"] .bar button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { background: var(--page-bg); color: var(--fg); font: 14px/1.6 var(--font-ui); }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.broken { color: var(--link-red); cursor: not-allowed; }
+a.xbundle { color: var(--muted); border-bottom: 1px dotted var(--muted); cursor: help; }
+a.xbundle::after { content: " \29C9"; font-size: .85em; }
+
+/* ---------------------------------------------------------------- header */
+.masthead {
+  background: var(--bg); border-bottom: 1px solid var(--line-soft);
+  padding: 13px 22px 9px; display: flex; align-items: flex-start; gap: 0;
+  position: sticky; top: 0; z-index: 50;
+}
+.masthead.hidden { display: none; }
+.masthead-actions { display: flex; align-items: center; gap: 4px; align-self: center; margin-left: auto; margin-right: 8px; }
+.masthead-actions .themebtn { width: 30px; height: 28px; margin-left: 0; padding: 0; display: grid; place-items: center; }
+.terminal-icon-btn svg { width: 17px; height: 17px; }
+.masthead-hide { align-self: center; width: 28px; height: 28px; margin-left: 12px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.masthead-hide:hover { background: var(--panel-grey); color: var(--fg); }
+.masthead-restore {
+  position: fixed; z-index: 80; top: 6px; right: 8px; width: 30px; height: 26px; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--bg);
+  color: var(--muted); cursor: pointer; box-shadow: var(--shadow-sm);
+}
+.masthead-restore:hover { color: var(--fg); background: var(--panel-grey); }
+/* Ventana de escritorio sin barra de título (titleBarStyle: hiddenInset).
+   El atributo lo pone electron/preload.cjs, así que en el navegador nada de
+   esto aplica. La sangría deja pasar los semáforos de macOS; sin la región
+   arrastrable la ventana no se podría mover, porque ya no hay barra que
+   agarrar. Todo lo interactivo tiene que volver a no-drag: dentro de una
+   región de arrastre no llegan los clics. */
+[data-desktop="mac"] .masthead {
+  padding-left: 92px;
+  -webkit-app-region: drag;
+}
+[data-desktop] .masthead a,
+[data-desktop] .masthead input,
+[data-desktop] .masthead button,
+[data-desktop] .masthead select { -webkit-app-region: no-drag; }
+
+.wordmark { display: block; line-height: 1.08; }
+.wordmark .name {
+  display: block; font-family: var(--serif); font-size: 26px;
+  letter-spacing: .02em; color: var(--fg); font-variant: small-caps;
+}
+.wordmark .tag { display: block; font-size: 11.5px; color: var(--muted); }
+.searchwrap { position: relative; width: min(440px, 42vw); }
+.searchwrap form { display: flex; }
+.searchwrap input {
+  flex: 1; min-width: 0; padding: 6px 9px; font: inherit; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 2px 0 0 2px;
+  background: var(--bg); color: var(--fg);
+}
+.searchwrap input:focus { outline: none; border-color: var(--link); }
+.searchwrap button {
+  border: 1px solid var(--line); border-left: 0; border-radius: 0 2px 2px 0;
+  background: var(--page-bg); color: var(--fg); padding: 0 14px; cursor: pointer; font-size: 13px;
+}
+.suggest {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 40; background: var(--bg);
+  border: 1px solid var(--line); max-height: 62vh; overflow-y: auto;
+  box-shadow: 0 4px 14px rgba(0,0,0,.14);
+}
+.suggest a { display: block; padding: 6px 10px; color: var(--fg); border-bottom: 1px solid var(--line-soft); }
+.suggest a:hover { background: var(--panel-blue); text-decoration: none; }
+.suggest small { display: block; color: var(--muted); font-size: 11.5px; }
+
+/* ---------------------------------------------------------------- tabs */
+.tabs {
+  background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 0 22px; display: flex; gap: 2px; align-items: flex-end;
+}
+.tabs button, .tabs a {
+  font: inherit; font-size: 13px; padding: 6px 14px; cursor: pointer;
+  background: var(--page-bg); border: 1px solid var(--line-soft); border-bottom: 0;
+  border-radius: 3px 3px 0 0; color: var(--link); position: relative; top: 1px;
+}
+.tabs .on { background: var(--bg); border-bottom: 1px solid var(--bg); color: var(--fg); font-weight: 600; }
+.tabs .right { margin-left: auto; display: flex; gap: 2px; }
+
+/* ---------------------------------------------------------------- layout */
+:root { --sidew: 195px; }
+.shell { display: grid; grid-template-columns: var(--sidew) minmax(0, 1fr); align-items: start; position: relative; }
+@media (max-width: 850px) { .shell { grid-template-columns: 1fr; } .side { display: none; } }
+
+.side {
+  padding: 16px 10px 60px; font-size: 12.7px; overflow-x: hidden;
+  position: sticky; top: 62px; max-height: calc(100vh - 62px); overflow-y: auto;
+  min-width: 0;
+}
+.side-footer {
+  position: fixed; left: 0; bottom: 0; z-index: 46; width: var(--sidew); min-width: 0;
+  display: flex; justify-content: flex-end; align-items: center; gap: 3px; padding: 8px 10px;
+  color: var(--fg); background: var(--page-bg); border-top: 1px solid var(--line-soft);
+  border-right: 1px solid var(--line-soft);
+}
+.side-footer .themebtn { display: grid; place-items: center; width: 30px; height: 30px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--muted); }
+.side-footer .themebtn:hover { color: var(--fg); background: var(--panel-grey); }
+.side-footer .cfgpanel { position: fixed; top: auto; right: auto; bottom: 52px; left: 8px; }
+:root[data-side="collapsed"] .side-footer { display: none; }
+@media (max-width: 850px) { .side-footer { display: none; } }
+
+/*
+ * Colapsada pierde el padding, y por eso llega a cero de verdad.
+ *
+ * Llevar `--sidew` a 0 no bastaba: con `box-sizing: border-box` el ancho usado
+ * de una caja nunca baja de su padding + borde, así que quedaba una franja de
+ * 20px (10 + 10) con los textos de la navegación cortados asomando por encima
+ * del contenido. Ni `min-width: 0` ni `overflow: hidden` la quitan — el padding
+ * no es contenido, y ninguna de las dos reglas lo toca.
+ *
+ * `display: none` tampoco sirve, aunque parezca lo obvio: saca a `.side` del
+ * grid, y entonces `.content` pasa a ser el primer item y aterriza en la
+ * columna de `var(--sidew)` —cero— con el artículo entero en una palabra por
+ * línea. La barra tiene que seguir OCUPANDO su columna; lo que sobra es el
+ * relleno.
+ *
+ * El atributo lo pone el mismo componente que mueve la variable (Resizer), en
+ * el mismo acto, para que no puedan describir estados distintos.
+ */
+:root[data-side="collapsed"] .side {
+  padding-left: 0; padding-right: 0; border-left: 0; border-right: 0;
+}
+.side .logo {
+  width: 88px; height: 88px; margin: 0 auto 8px; border-radius: 50%;
+  background: var(--panel-grey); border: 1px solid var(--line-soft);
+  display: grid; place-items: center;
+  font-family: var(--serif); font-size: 40px; color: var(--muted);
+  overflow: hidden;
+}
+/* Con foto, el recuadro es solo el marco: la imagen lo llena y se recorta al
+   círculo. `cover` y no `contain` porque la foto que ponga el usuario no tiene
+   por qué ser cuadrada, y encajarla dejaría franjas. */
+.side .logo.haspic { background: none; }
+.side .logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.side .sidename { text-align: center; font-family: var(--serif); font-variant: small-caps; font-size: 15px; }
+.side .sidetag { text-align: center; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+.side h4 {
+  margin: 15px 0 4px; padding: 3px 6px; font-size: 11.5px; font-weight: 600;
+  background: var(--panel-grey-head); border-radius: 2px;
+}
+.side ul { list-style: none; margin: 0; padding: 0 0 0 6px; }
+.side li { margin: 3px 0; }
+
+.content {
+  background: var(--bg); border-left: 1px solid var(--line-soft);
+  min-height: calc(100vh - 92px); padding: 20px 30px 90px;
+}
+@media (max-width: 850px) { .content { border-left: 0; padding: 18px 16px 90px; } }
+
+/* ---------------------------------------------------------------- panels */
+.panel { border: 1px solid var(--line-soft); margin: 0 0 16px; }
+.panel > h2 {
+  margin: 0; padding: 5px 10px; font-size: 14px; font-family: var(--sans);
+  border-bottom: 1px solid var(--line-soft); font-weight: 700;
+}
+.panel > div { padding: 10px 12px; }
+.panel.blue { background: var(--panel-blue); } .panel.blue > h2 { background: var(--panel-blue-head); }
+.panel.green { background: var(--panel-green); } .panel.green > h2 { background: var(--panel-green-head); }
+.panel.grey { background: var(--panel-grey); } .panel.grey > h2 { background: var(--panel-grey-head); }
+.panel ul { margin: 0; padding-left: 20px; }
+.panel li { margin: 3px 0; }
+.panel p { margin: 0 0 8px; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+.welcome { text-align: center; padding: 4px 0 20px; }
+.welcome h1 { font-family: var(--serif); font-size: 32px; font-weight: 400; margin: 0 0 8px; border: 0; }
+.welcome p { margin: 0 0 4px; font-size: 15px; }
+.welcome .counts { color: var(--muted); font-size: 13px; }
+
+.featured { display: flex; gap: 12px; align-items: flex-start; }
+.featured .thumb {
+  width: 108px; height: 108px; flex: 0 0 auto; border: 1px solid var(--line-soft);
+  background: var(--panel-grey); display: grid; place-items: center;
+  font-family: var(--serif); font-size: 34px; color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- article */
+article h1 {
+  font-family: var(--serif); font-size: 29px; font-weight: 400;
+  margin: 0 0 .2em; padding-bottom: 4px; border-bottom: 1px solid var(--line-soft);
+}
+article h2 {
+  font-family: var(--serif); font-size: 21px; font-weight: 400;
+  margin: 25px 0 8px; padding-bottom: 3px; border-bottom: 1px solid var(--line-soft);
+}
+article h3 { font-size: 16px; margin: 19px 0 6px; }
+article p, article li { font-family: var(--font-content); font-size: 14.2px; }
+article > p, article > ul, article > ol, article > blockquote { max-width: var(--content-measure); }
+article img { max-width: 100%; height: auto; }
+article pre {
+  background: var(--panel-grey); border: 1px solid var(--line-soft);
+  padding: 10px 12px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px;
+}
+article code { font-family: var(--mono); font-size: .92em; }
+article pre code { background: none; }
+article blockquote {
+  border-left: 3px solid var(--line-soft); margin: 12px 0; padding: 2px 14px; color: var(--muted);
+}
+article table { border-collapse: collapse; font-size: 13px; margin: 10px 0; display: block; overflow-x: auto; }
+article th, article td { border: 1px solid var(--line-soft); padding: 5px 9px; text-align: left; }
+article th { background: var(--panel-grey); }
+
+.infoline { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; }
+.infoline span + span::before { content: " \00B7 "; }
+
+.prov-ai { background: var(--ai-bg); border-left: 3px solid var(--ai-line); padding: 2px 12px; margin: 10px 0; }
+.prov-human { background: var(--human-bg); box-shadow: inset 0 -2px 0 var(--human-line); padding: 0 2px; }
+body.hide-prov .prov-ai { background: none; border-left: none; padding: 0; margin: 0; }
+body.hide-prov .prov-human { background: none; box-shadow: none; }
+
+.catgroup { margin-bottom: 12px; }
+.catgroup h3 { font-family: var(--serif); font-size: 16px; font-weight: 400; margin: 0 0 3px; }
+.dim { color: var(--muted); font-size: 12px; }
+
+/* ---------------------------------------------------------------- editor */
+.bar {
+  position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg);
+  border-top: 1px solid var(--line); padding: 7px 16px; display: flex;
+  gap: 9px; align-items: center; font-size: 12.5px; z-index: 30;
+}
+.bar button {
+  font: inherit; font-size: 12.5px; padding: 4px 11px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--page-bg); color: var(--fg); cursor: pointer;
+}
+.bar button.primary { background: var(--link); border-color: var(--link); color: #fff; }
+.bar button:disabled { opacity: .45; cursor: default; }
+.warn { color: var(--link-red); font-weight: 600; }
+.cm-editor { border: 0; height: auto; }
+.cm-editor .cm-scroller { overflow: visible; }
+.cm-editor.cm-focused { outline: none; }
+
+/*
+ * Panel de búsqueda (⌘F / Ctrl+F) dentro de una nota o un archivo.
+ *
+ * CodeMirror lo trae sin estilo propio, así que sale con los controles crudos
+ * del navegador: fondo blanco fijo, tipografía del sistema, y en modo oscuro
+ * una franja luminosa encima del texto.
+ *
+ * `position: sticky` y no `static`: `.cm-scroller` lleva `overflow: visible`
+ * —la nota crece y quien hace scroll es el panel, no el editor—, así que un
+ * panel en el flujo normal se va hacia arriba con el documento y desaparece en
+ * cuanto buscas algo que está más abajo. Pegado arriba se queda a la vista
+ * mientras saltas de coincidencia en coincidencia.
+ */
+.cm-editor .cm-panels {
+  position: sticky; top: 0; z-index: 8;
+  background: var(--panel-blue); color: var(--fg);
+  border-bottom: 1px solid var(--line-soft);
+}
+.cm-editor .cm-panels.cm-panels-top { border-top: 0; }
+.cm-editor .cm-search { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 9px; }
+.cm-editor .cm-search input[type="text"] {
+  font: inherit; font-size: 12.7px; padding: 3px 7px;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  background: var(--bg); color: var(--fg); min-width: 160px;
+}
+.cm-editor .cm-search input[type="text"]:focus { outline: 1px solid var(--panel-blue-head); }
+.cm-editor .cm-search button {
+  font: inherit; font-size: 12px; padding: 3px 9px; cursor: pointer;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  background: var(--bg); color: var(--fg);
+}
+.cm-editor .cm-search button:hover { background: var(--panel-blue-head); }
+.cm-editor .cm-search label { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 3px; }
+.cm-editor .cm-panel.cm-search [name="close"] {
+  position: absolute; top: 4px; right: 6px;
+  border: 0; background: none; font-size: 16px; line-height: 1; color: var(--muted); padding: 2px 5px;
+}
+/* La coincidencia bajo el cursor tiene que distinguirse de las demás; con el
+   mismo tono no se sabe cuál de las doce está seleccionada. */
+.cm-editor .cm-searchMatch { background: rgba(255, 200, 0, .32); border-radius: 2px; }
+.cm-editor .cm-searchMatch-selected { background: rgba(255, 145, 0, .62); }
+
+/* ---------------------------------------------------------------- file tree */
+.side-sticky-tools {
+  position: sticky; top: -16px; z-index: 8; margin: 0 -10px;
+  padding: 8px 10px 0; background: var(--page-bg); border-bottom: 1px solid var(--line-soft);
+}
+.viewtoggle { display: flex; gap: 3px; margin-bottom: 3px; }
+.viewtoggle button {
+  flex: 1; font: inherit; font-size: 11.5px; padding: 3px 6px; cursor: pointer;
+  border: 1px solid var(--line-soft); background: var(--page-bg);
+  color: var(--link); border-radius: 2px;
+}
+.viewtoggle button.on { background: var(--bg); color: var(--fg); font-weight: 600; border-color: var(--line); }
+
+.tree { font-size: 12.4px; line-height: 1.5; }
+.tree .row {
+  /* relative: las guías de indentación se posicionan contra la fila */
+  position: relative;
+  display: flex; align-items: center; gap: 3px; padding: 1px 3px;
+  border-radius: 2px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tree .row:hover { background: var(--panel-grey-head); }
+.tree .row.sel { background: var(--panel-blue-head); }
+.tree .caret { width: 11px; flex: 0 0 auto; color: var(--muted); font-size: 9px; }
+.tree .name { overflow: hidden; text-overflow: ellipsis; }
+.tree .dir > .name { font-weight: 600; }
+.tree .file .name { color: var(--link); }
+.tree .other .name { color: var(--muted); }
+
+/* Guía de indentación: un segmento por fila que, apilado con los de las filas
+   vecinas, forma la línea continua que recorre el contenido de una carpeta.
+   `top: -1px` cierra la costura entre filas consecutivas — sin él la línea se
+   ve punteada en pantallas no-Retina. */
+.tree .guide {
+  position: absolute; top: -1px; bottom: -1px; width: 1px;
+  background: var(--line-soft); pointer-events: none;
+}
+/* La rama que lleva a la nota abierta, más marcada: dice dónde estás sin
+   tener que seguir el resaltado hasta arriba. */
+.tree .guide.on { background: var(--muted); opacity: .55; }
+
+.ficon { width: 14px; height: 14px; flex: 0 0 auto; }
+/* Las carpetas siguen al tema; los archivos llevan el color de su lenguaje. */
+.ficon-dir { color: var(--muted); }
+.tree .row.sel .ficon-dir, .tree .row.dir:hover .ficon-dir { color: var(--fg); }
+
+/* Editor de archivos arbitrarios.
+ *
+ * Aquí CodeMirror scrollea POR DENTRO, al revés que el editor de notas. Aquel
+ * crece con el contenido y deja scrollear a la página (de ahí las reglas
+ * globales `height: auto` / `overflow: visible` de arriba); un archivo de
+ * código quiere altura fija, gutter pegado y virtualización.
+ *
+ * Sin devolverle el `overflow` al scroller pasaba esto: CodeMirror no
+ * scrolleaba nunca, así que medía su viewport como la altura del panel y
+ * renderizaba solo ~59 de 252 líneas, mientras el contenido se desbordaba
+ * visible hasta 4.910 px. El fondo del editor cubría únicamente sus 728 px
+ * — las primeras ~37 líneas — y el resto caía sobre el fondo de la página:
+ * se veía como si ese bloque estuviera seleccionado.
+ *
+ * El selector lleva `.cm-editor` de más a propósito: la regla global tiene la
+ * misma especificidad que `.codepane .cm-scroller` y aparece antes, así que
+ * empatar no basta — hay que ganar.
+ */
+.codewrap { flex: 1; min-height: 0; overflow: hidden; }
+.htmlpreview { flex: 1; min-height: 0; overflow: hidden; background: #fff; }
+.htmlpreview iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+.fileviewtoggle { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line-soft); border-radius: 3px; }
+.fileviewtoggle button {
+  border: 0; border-radius: 2px; padding: 2px 8px; color: var(--muted);
+  background: transparent; font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.fileviewtoggle button:hover { color: var(--fg); }
+.fileviewtoggle button.on { color: var(--fg); background: var(--panel-blue); font-weight: 600; }
+.codepane { height: 100%; }
+.codepane .cm-editor { height: 100%; font-size: 12.5px; }
+.codepane .cm-editor .cm-scroller { overflow: auto; font-family: var(--mono); line-height: 1.55; }
+.codepane .cm-gutters { border-right: 1px solid var(--line-soft); }
+.newbtn {
+  width: 100%; margin: 8px 0 4px; font: inherit; font-size: 12px; padding: 4px;
+  border: 1px solid var(--line); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; cursor: pointer;
+}
+.newbtn:hover { background: var(--panel-blue); }
+.tree-createbar {
+  display: flex; justify-content: center; gap: 8px;
+  padding: 5px 4px; border: 0; background: var(--page-bg);
+}
+.tree-createbar button {
+  position: relative; display: grid; place-items: center; width: 28px; height: 26px; padding: 0;
+  color: var(--muted); border: 0; border-radius: 3px; background: transparent; cursor: pointer;
+}
+.tree-createbar button:hover { color: var(--fg); background: var(--panel-grey); }
+.tree-createbar button > span { position: absolute; right: 2px; bottom: 0; font-size: 12px; font-weight: 700; line-height: 1; }
+.tree-createbar button::after {
+  content: attr(data-tooltip); position: absolute; top: calc(100% + 7px); left: 50%; z-index: 30;
+  width: max-content; max-width: 180px; padding: 5px 8px; color: var(--bg); background: var(--fg);
+  border-radius: 3px; box-shadow: 0 4px 12px rgb(0 0 0 / .18); font-size: 11px; line-height: 1.2;
+  opacity: 0; pointer-events: none; transform: translate(-50%, -3px); transition: opacity .12s ease, transform .12s ease;
+}
+.tree-createbar button:hover::after, .tree-createbar button:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+.graph-action-icon { width: 16px; height: 16px; }
+.create-location { width: min(460px, calc(100vw - 32px)); padding: 20px; }
+.create-location-backdrop { z-index: 1200; }
+body:has(.create-location-backdrop) .structurehelp { visibility: hidden; }
+/* A real modal owns the interaction until it closes. Leaving the tour above
+   or below it produces two competing overlays and instructions for controls
+   the user cannot reach. The guide returns automatically when the modal is
+   dismissed. */
+body:has(.create-location-backdrop) .tour-card,
+body:has(.create-location-backdrop) .tour-spotlight { display: none; }
+.create-location h2 { margin: 0 0 8px; font-size: 18px; }
+.create-location p { margin: 0 0 14px; color: var(--muted); line-height: 1.45; }
+.create-location > input { width: 100%; padding: 8px 10px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); }
+.create-location .newbtn { width: auto; margin: 0; }
+.folder-picker-list { min-height: 150px; max-height: 310px; margin-top: 8px; overflow-y: auto; border: 1px solid var(--line-soft); background: var(--page-bg); }
+.folder-picker-list button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 9px; color: var(--fg); background: transparent; border: 0; text-align: left; cursor: pointer; }
+.folder-picker-list button:hover { background: var(--panel-grey); }
+.folder-picker-list button.selected { color: var(--link); background: var(--panel-blue); font-weight: 600; }
+.folder-picker-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-picker-empty { padding: 18px 10px; color: var(--muted); text-align: center; }
+.newform { border: 1px solid var(--line); padding: 7px; margin-bottom: 8px; background: var(--panel-grey); }
+.newform input, .newform select {
+  width: 100%; font: inherit; font-size: 12px; padding: 3px 5px; margin-bottom: 5px;
+  border: 1px solid var(--line-soft); background: var(--bg); color: var(--fg);
+}
+.newform .err { color: var(--link-red); font-size: 11.5px; }
+
+/* ---------------------------------------------------------------- resizer */
+.resizer {
+  position: absolute; top: 0; bottom: 0; width: 7px; margin-left: -3px;
+  cursor: col-resize; z-index: 45; background: transparent;
+}
+.resizer::after {
+  content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; background: transparent;
+}
+.resizer:hover::after, .resizer.dragging::after { background: var(--link); }
+:root[data-side="collapsed"] .resizer { display: none; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing.resizing-rows { cursor: row-resize; }
+
+/* ---------------------------------------------------------------- context menu */
+.ctxmenu {
+  position: fixed; z-index: 90; min-width: 170px; background: var(--bg);
+  border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0,0,0,.22); padding: 3px;
+}
+.ctxhead {
+  font-size: 11px; color: var(--muted); padding: 3px 8px 5px;
+  border-bottom: 1px solid var(--line-soft); margin-bottom: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ctxmenu button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 12.5px;
+  padding: 5px 8px; border: 0; background: none; color: var(--fg); cursor: pointer; border-radius: 2px;
+}
+.ctxmenu button:hover { background: var(--panel-blue); }
+.ctxmenu button.danger { color: var(--link-red); }
+.ctxmenu button.danger:hover { background: var(--link-red); color: #fff; }
+.ctxsep { height: 1px; background: var(--line-soft); margin: 3px 0; }
+
+.inlineedit {
+  width: 100%; font: inherit; font-size: 12.4px; padding: 1px 4px;
+  border: 1px solid var(--link); background: var(--bg); color: var(--fg);
+}
+.err { color: var(--link-red); font-size: 11.5px; }
+
+.prose { cursor: text; }
+.provnote { color: var(--ai-line); font-weight: 600; }
+
+.treehint { font-size: 11px; color: var(--muted); padding: 2px 4px 6px; }
+/* Las dos reglas de .cm-editor que había aquí eran una copia literal de las
+   de arriba (~línea 244). Duplicadas no eran inocuas: al venir DESPUÉS, ganaban
+   por orden de aparición a cualquier regla posterior de igual especificidad
+   — que es como el editor de código acabó con el scroller sin scroll. */
+
+/* ---------------------------------------------------------------- theme toggle */
+.themebtn {
+  border: 1px solid var(--line); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; padding: 5px 9px; cursor: pointer; font-size: 13px;
+  line-height: 1; align-self: center; margin-left: 10px;
+}
+.themebtn:hover { background: var(--panel-blue); }
+.themebtn svg { display: block; }
+
+/* Panel de configuración. `relative` sobre el envoltorio para anclar el
+   desplegable al botón, y no al masthead entero. */
+.cfgwrap { position: relative; align-self: center; }
+.cfgpanel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+  width: 260px; padding: 10px 12px 12px;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 3px; box-shadow: 0 6px 22px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column; gap: 7px;
+  /* Dentro del masthead arrastrable de la app de escritorio, los controles
+     tienen que volver a ser clicables. */
+  -webkit-app-region: no-drag;
+}
+.cfgsec {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-top: 3px;
+}
+
+/* Menú de IA. Reusa `.cfgwrap`/`.cfgpanel` del panel de configuración a
+   propósito: es el mismo desplegable anclado a un botón del masthead, y darle
+   caja propia habría duplicado el anclaje, la sombra y —lo que de verdad se
+   olvida— el `no-drag` que hace clicable un control dentro de la barra
+   arrastrable de la app de escritorio. */
+/* Reanudar es la acción secundaria de la fila —no abre nada nuevo, vuelve a
+   algo que ya existe— y no compite con las dos de arrancar. */
+.aiagent .cfgmodes .airesume { color: var(--muted); }
+.aiagent .cfgmodes .airesume:not(:disabled):hover { color: var(--fg); }
+.aiagent > strong {
+  display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 4px;
+}
+.aiagent > .aiagentname {
+  display: flex; align-items: center; gap: 7px;
+}
+.aiagenticon {
+  width: 18px; height: 18px; flex: 0 0 18px;
+  display: grid; place-items: center; overflow: hidden;
+  border: 1px solid var(--line-soft); border-radius: 4px;
+  background: #fff;
+}
+.aiagenticon img {
+  display: block; width: 14px; height: 14px; object-fit: contain;
+}
+/* El agente que falta se apaga pero no se esconde: saber que Codex existe es
+   parte de lo que el menú enseña a quien nunca ha instalado un CLI. */
+.aiagent.off > strong { color: var(--muted); font-weight: 500; }
+.aiagent > strong em { font-style: normal; font-size: 11px; color: var(--muted); }
+.aiagent .cfgmodes button:disabled { opacity: .45; cursor: not-allowed; }
+.aiagent .cfgmodes button:not(:disabled):hover {
+  background: var(--panel-blue); color: var(--fg); border-color: var(--line);
+}
+.cfgmodes { display: flex; gap: 4px; }
+/* Los siete agentes de ACP en una rejilla que se envuelve, no en la fila de
+   `.cfgmodes`: son nombres propios de largo desigual y en una sola línea el
+   menú se estiraría hasta el ancho del más largo por siete. */
+.cfgmodes.aichat { flex-wrap: wrap; margin-bottom: 6px; }
+.cfgmodes button {
+  flex: 1; font: inherit; font-size: 12px; padding: 4px 0; cursor: pointer;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--muted);
+  border-radius: 2px;
+}
+.cfgmodes button.on { background: var(--bg); color: var(--fg); font-weight: 600; border-color: var(--line); }
+.cfgpanel input {
+  font: inherit; font-size: 12.5px; padding: 5px 7px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; width: 100%; box-sizing: border-box;
+}
+.cfgrow { display: flex; align-items: center; gap: 8px; }
+.cfghint { margin: 2px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+.cfghint code { font-size: 10px; }
+
+/* Ruta del vault. `break-all` y no `ellipsis`: una ruta cortada por la mitad
+   no sirve para confirmar que es la carpeta correcta, que es lo único para lo
+   que se muestra. Que ocupe dos renglones es preferible a que mienta. */
+.cfgpath {
+  font-size: 11px; line-height: 1.4; word-break: break-all;
+  color: var(--fg); background: var(--page-bg);
+  border: 1px solid var(--line-soft); border-radius: 2px; padding: 4px 6px;
+}
+
+/* ------------------------------------------------------- appearance designer */
+.appearance-open { display:block; padding:0; border:0; background:none; cursor:pointer; color:var(--link); }
+.appearance-backdrop { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:24px; background:rgba(0,0,0,.42); }
+.appearance-dialog { width:min(980px, 96vw); max-height:min(820px, 92vh); overflow:auto; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:var(--panel-radius); box-shadow:var(--shadow-popup); }
+.appearance-head { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; gap:18px; padding:18px 22px; background:var(--bg); border-bottom:1px solid var(--line-soft); }
+.appearance-head h2 { margin:0; font-family:var(--font-heading); font-size:23px; font-weight:500; }
+.appearance-head p { margin:2px 0 0; color:var(--muted); font-size:12.5px; }
+.appearance-head > button { border:0; background:none; color:var(--muted); cursor:pointer; font-size:24px; }
+.appearance-body { display:grid; grid-template-columns:minmax(300px, 1.05fr) minmax(280px, .95fr); gap:24px; padding:22px; }
+.appearance-controls h3 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.appearance-controls h3:not(:first-child) { margin-top:22px; }
+.appearance-modes { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; }
+.appearance-modes button { padding:7px 5px; border:1px solid var(--line-soft); background:var(--page-bg); color:var(--muted); cursor:pointer; }
+.appearance-modes button.on { border-color:var(--link); background:var(--panel-blue-head); color:var(--fg); font-weight:600; }
+.appearance-modehint { margin:5px 0 0; color:var(--muted); font-size:10.5px; line-height:1.4; }
+.presetgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.presetcard { display:grid; grid-template-columns:34px 1fr; grid-template-rows:auto auto; column-gap:9px; text-align:left; padding:9px; border:1px solid var(--line-soft); background:var(--page-bg); color:var(--fg); cursor:pointer; }
+.presetcard.on { border-color:var(--link); box-shadow:inset 0 0 0 1px var(--link); }
+.presetcard strong { font-size:12.5px; align-self:end; }
+.presetcard small { color:var(--muted); line-height:1.25; }
+.preset-swatch { grid-row:1 / 3; width:34px; height:34px; border:1px solid var(--line-soft); border-radius:50%; background:linear-gradient(135deg,#fff 0 48%,#3366cc 49%); }
+.preset-swatch.palette-paper-terracotta { background:linear-gradient(135deg,#fffaf1 0 48%,#a94f35 49%); }
+.preset-swatch.palette-neutral-indigo { background:linear-gradient(135deg,#fff 0 48%,#5559c9 49%); }
+.preset-swatch.palette-archive-green { background:linear-gradient(135deg,#fbf8ee 0 48%,#396847 49%); }
+.preset-swatch.palette-technical-charcoal { background:linear-gradient(135deg,#171c1f 0 48%,#58d6bd 49%); }
+.appearance-controls > label { display:grid; grid-template-columns:115px 1fr; align-items:center; gap:10px; margin:7px 0; font-size:12.5px; }
+.appearance-controls select, .save-custom input { min-width:0; padding:6px 8px; border:1px solid var(--line); background:var(--page-bg); color:var(--fg); font:inherit; }
+.appearance-preview { align-self:start; position:sticky; top:92px; padding:18px; border:1px solid var(--line-soft); border-radius:var(--panel-radius); background:var(--page-bg); }
+.appearance-preview article h1 { font-size:25px; }
+.appearance-preview article h2 { font-size:18px; }
+.appearance-preview article p { font-family:var(--font-content); }
+.preview-label { margin-bottom:14px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.07em; }
+.preview-actions { display:flex; gap:7px; flex-wrap:wrap; }
+.appearance-footer { position:sticky; bottom:0; display:flex; justify-content:flex-end; align-items:center; gap:8px; padding:13px 22px; border-top:1px solid var(--line-soft); background:var(--bg); }
+.appearance-footer > button, .save-custom button { padding:6px 13px; border:1px solid var(--line); background:var(--page-bg); color:var(--fg); cursor:pointer; }
+.save-custom { margin-right:auto; display:flex; gap:6px; }
+.appearance-error { padding:0 22px 10px; }
+@media (max-width:760px) { .appearance-body { grid-template-columns:1fr; } .appearance-preview { position:static; } .appearance-footer { flex-wrap:wrap; } .save-custom { flex-basis:100%; } }
+.vaultpick { display: flex; flex-direction: column; gap: 7px; }
+
+/* Panel de ayuda del formato. Comparte el armazón del de configuración
+   (.cfgpanel) y solo cambia el ancho: aquí lo que manda es que una línea de
+   markdown de ejemplo quepa sin partirse, porque un ejemplo cortado a la mitad
+   se copia mal y se lee peor. */
+.helppanel {
+  position: fixed; top: auto; right: auto; bottom: 52px; left: 8px; z-index: 200;
+  width: min(440px, calc(100vw - 16px)); max-height: calc(100vh - 68px); overflow: auto;
+}
+.helptext { margin: 0; font-size: 12px; line-height: 1.5; color: var(--fg); }
+.help-shortcut { display: flex; flex-direction: column; gap: 5px; margin: 0 0 6px; font-size: 12px; }
+.help-shortcut kbd {
+  display: inline-block; padding: 1px 6px; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--page-bg); box-shadow: 0 1px 0 var(--line);
+  font: 11px/1.5 var(--mono); color: var(--fg);
+}
+.help-shortcut small { color: var(--muted); font-size: 10px; }
+
+/* El ejemplo es un botón porque hace algo al pulsarlo (copiar), pero tiene que
+   leerse como un bloque de código: de ahí que no herede nada de button. */
+.helpsnip {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  font: inherit; cursor: pointer; padding: 6px 7px; border-radius: 2px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+}
+.helpsnip:hover { background: var(--panel-blue); }
+.helpsnip code {
+  flex: 1; min-width: 0; font-size: 11px; line-height: 1.45; word-break: break-all;
+}
+.helpcopy {
+  flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted);
+}
+
+.helptable { border-collapse: collapse; font-size: 12px; width: 100%; }
+.helptable td { padding: 3px 0; vertical-align: top; line-height: 1.45; }
+.helptable td:first-child { white-space: nowrap; padding-right: 12px; }
+.helptable code { font-size: 11px; color: var(--fg); }
+
+.helplist { margin: 0; padding-left: 16px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.helplist li { margin-bottom: 3px; }
+
+/* ---------------------------------------------------------------- asistente */
+/* Botón que se lee como enlace: para lo secundario ("volver"), donde un botón
+   con marco competiría con la acción principal de la pantalla. */
+.linkish {
+  font: inherit; font-size: 12.5px; color: var(--muted);
+  background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline;
+}
+.linkish:hover { color: var(--fg); }
+
+.setupchoices { display: grid; gap: 12px; margin: 22px auto 0; max-width: 560px; }
+.setupcard {
+  display: flex; flex-direction: column; gap: 5px; text-align: left;
+  font: inherit; cursor: pointer; padding: 14px 16px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+.setupcard:hover { border-color: var(--muted); }
+.setupcard strong { font-size: 15px; }
+.setupcard span { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+
+.setupcreate { max-width: 620px; margin-inline: auto; text-align: left; }
+.setupfield { margin-top: 20px; display: flex; flex-direction: column; gap: 6px; }
+.setupfield > label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.setupfield-label { display: flex; align-items: center; gap: 6px; }
+.setupfield-label > label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.structurehelp {
+  position: relative; width: 17px; height: 17px; padding: 0;
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  border: 1px solid var(--line-soft); border-radius: 50%;
+  background: transparent; color: var(--muted); font: 600 10px/1 var(--sans);
+  cursor: help;
+}
+.structurehelp:hover, .structurehelp:focus-visible { color: var(--fg); border-color: var(--muted); }
+.structurehelp::after {
+  content: attr(data-tooltip); position: absolute; z-index: 80; left: 24px; top: -8px;
+  width: min(310px, 70vw); padding: 9px 11px; pointer-events: none;
+  border: 1px solid var(--line); border-radius: var(--control-radius);
+  background: var(--bg); color: var(--fg); box-shadow: var(--panel-shadow);
+  font: 11.5px/1.5 var(--sans); text-align: left; text-transform: none;
+  letter-spacing: normal; opacity: 0; transform: translateY(3px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.structurehelp:hover::after, .structurehelp:focus-visible::after { opacity: 1; transform: none; }
+.setupfield input {
+  font: inherit; font-size: 13px; padding: 6px 8px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; width: 100%; box-sizing: border-box;
+}
+
+/* auto-fit y no un número fijo de columnas: las arquitecturas son tres hoy y
+   pueden ser cinco, y la rejilla no debería tener que enterarse. */
+.archgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.archcard {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  font: inherit; cursor: pointer; padding: 10px 12px;
+  background: var(--page-bg); color: var(--fg);
+  border: 1px solid var(--line-soft); border-radius: 3px;
+}
+.archcard.on { border-color: var(--fg); background: var(--bg); }
+.archcard strong { font-size: 13.5px; }
+.archcard span { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+/*
+ * La insignia de «instalado / no instalado» en la tarjeta del agente.
+ *
+ * Va dentro del `<strong>` del nombre, en línea, y no como una fila aparte: lo
+ * que el usuario compara al elegir es cuál de los cuatro tiene, y esa respuesta
+ * tiene que leerse en el mismo golpe de vista que el nombre.
+ *
+ * Sin color de fondo. El rojo de «no instalado» diría que algo está mal, y no
+ * lo está — no tener Codex instalado es el estado normal de casi todo el mundo,
+ * y la app funciona sin ninguno de los cuatro.
+ */
+.archcard strong { display: flex; align-items: baseline; gap: 6px; }
+.agentok, .agentmissing {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .02em;
+  text-transform: lowercase;
+}
+.agentok { color: var(--ok, var(--muted)); }
+.agentok::before { content: "\2713\a0"; }
+.agentmissing { color: var(--muted); opacity: .75; }
+.architecture-options { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+.architecture-options .archcard { min-width: 0; }
+.archmini {
+  display: flex; flex-direction: column; gap: 1px; margin: 5px 0 3px; padding: 7px 8px;
+  border: 1px solid var(--line-soft); border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  font-family: var(--mono); overflow: hidden;
+}
+.archmini-row { display: flex; gap: 4px; min-width: 0; }
+.archmini-folder { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg) !important; }
+.archbest { margin-top: auto; padding-top: 5px; color: var(--fg) !important; }
+.archbest > strong { font-size: inherit; color: var(--link); }
+@media (max-width: 620px) { .architecture-options { grid-template-columns: 1fr; } }
+
+.cfglink { font-size: 12.5px; }
+.setupfield textarea {
+  font: inherit; font-size: 12.5px; font-family: var(--mono); padding: 6px 8px;
+  border: 1px solid var(--line-soft); background: var(--page-bg); color: var(--fg);
+  border-radius: 2px; width: 100%; box-sizing: border-box; resize: vertical;
+}
+/* Aviso de riesgo. Rojo y con borde grueso a la izquierda, no un `cfghint`
+   gris: es la única cosa de la interfaz que puede costarle archivos al usuario,
+   y tiene que leerse distinto de una nota al pie. */
+.warnbox {
+  margin-top: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.55;
+  color: var(--fg); background: var(--page-bg);
+  border: 1px solid var(--link-red); border-left-width: 3px; border-radius: 2px;
+}
+.warnbox strong { color: var(--link-red); }
+
+/* Errores y avisos por campo, pegados al campo que los produce: un error
+   general al pie obliga a adivinar cuál de los tres campos lo causó. */
+.fielderr { margin: 2px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--link-red); }
+.fieldwarn { margin: 2px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.steps {
+  margin: -6px 0 18px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted);
+}
+
+/* La terminal del agente. Alta de verdad —no una tira de cuatro renglones—
+   porque el punto es poder LEER lo que está haciendo, no confirmar que corre. */
+.agentrun { margin-top: 12px; }
+.agentterm {
+  height: min(52vh, 460px); margin-top: 8px; padding: 6px;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--bg);
+  overflow: hidden;
+}
+.agentterm > div { height: 100%; }
+
+.archpreview { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 3px; }
+.archpreview .structtable { margin: 6px 0; }
+/* Fuera del panel —en la pantalla de primer arranque— el selector no debe
+   estirarse a lo ancho de la portada. */
+.welcome .vaultpick { max-width: 420px; margin: 18px auto 0; }
+
+/* ------------------------------------------------- chat con agentes (ACP) */
+/* El vocabulario visual sale de beautifului.dev: superficies apiladas en vez
+   de cajas con borde, esquinas de 6/8/10px, un anillo de un píxel en lugar de
+   un `border`, y sombras de dos capas muy bajas. Lo que NO se copia son sus
+   colores: son OKLCH oscuros fijos y aquí hay cuatro paletas y modo claro, así
+   que cada superficie se deriva con `color-mix` de los tokens de apariencia.
+   Cambiar de paleta cambia el chat entero sin tocar una regla. */
+:root {
+  /* Superficies, de atrás hacia adelante. La escala imita la del referente
+     (page < canvas < inset < surface < field) pero relativa al tema: en claro
+     se oscurece el papel, en oscuro se aclara. `--chat-lift` es ese signo. */
+  --chat-lift: #000;
+  --chat-canvas: var(--surface-app);
+  --chat-inset: color-mix(in srgb, var(--surface-content) 96%, var(--chat-lift));
+  --chat-surface: color-mix(in srgb, var(--surface-content) 92%, var(--chat-lift));
+  --chat-field: color-mix(in srgb, var(--surface-content) 97%, var(--chat-lift));
+  --chat-hover: color-mix(in srgb, var(--surface-content) 88%, var(--chat-lift));
+
+  /* Un anillo de 1px hace de borde. Separado del color de línea del resto de
+     la app porque tiene que leerse más suave que un `1px solid var(--line)`. */
+  --chat-ring: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 62%, transparent);
+  --chat-ring-strong: 0 0 0 1px color-mix(in srgb, var(--border-default) 55%, transparent);
+  --chat-shadow-card: var(--chat-ring), 0 1px 2px rgb(0 0 0 / .05), 0 2px 6px rgb(0 0 0 / .04);
+  --chat-shadow-raised: var(--chat-ring-strong), 0 2px 10px rgb(0 0 0 / .09);
+  --chat-shadow-overlay: var(--chat-ring-strong), 0 8px 28px rgb(0 0 0 / .16);
+  --chat-shadow-field: inset 0 1px 2px rgb(0 0 0 / .05);
+
+  /* Radios propios del chat. No usan `--control-radius` porque los presets lo
+     llevan a 0 (`archive`, `terminal`) y ahí la conversación debe seguir
+     leyéndose como conversación; sí se respeta abajo, en un bloque aparte. */
+  --chat-r-chip: 6px;
+  --chat-r-control: 8px;
+  --chat-r-card: 10px;
+  --chat-r-bubble: 14px;
+
+  /* Tintes de estado, al 14% como en el referente. */
+  --chat-ok: #2f9e63;
+  --chat-ok-tint: color-mix(in srgb, var(--chat-ok) 14%, transparent);
+  --chat-bad: var(--danger);
+  --chat-bad-tint: color-mix(in srgb, var(--danger) 14%, transparent);
+  --chat-accent-tint: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --chat-lift: #fff; --chat-ok: #4ade80; }
+}
+:root[data-theme="dark"] { --chat-lift: #fff; --chat-ok: #4ade80; }
+
+/* Los presets angulares mandan sobre el gusto del referente: si alguien eligió
+   `archive` o `terminal` es porque quiere esquinas rectas en TODA la app. */
+:root[data-preset="archive"], :root[data-preset="terminal"] {
+  --chat-r-chip: 0; --chat-r-control: 0; --chat-r-card: 0; --chat-r-bubble: 0;
+}
+
+.articleagentactions { display: flex; gap: 6px; margin: 6px 0 12px; }
+.chatmentions { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 14px 8px; }
+.chatmentions > span {
+  padding: 3px 9px; font-size: 11.5px; letter-spacing: -.01em;
+  background: var(--chat-surface); border-radius: 999px; box-shadow: var(--chat-ring);
+}
+.mentionat { color: var(--link); }
+
+/* Sustituye a la terminal incrustada como superficie principal. Ocupa el panel
+   entero y reparte el alto en tres: barra fija arriba, conversación que crece,
+   caja de escribir fija abajo. La conversación es lo único que hace scroll —
+   perder el campo de texto al bajar sería perder la forma de contestar. */
+.chat {
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
+  background: var(--chat-canvas);
+  font-family: var(--font-ui); letter-spacing: -.01em;
+}
+
+/* ------------------------------------------------------------ barra fija */
+.chatbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; font-size: 12px;
+  background: var(--chat-canvas);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+}
+.chatopt { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.chatopt select {
+  font: inherit; font-size: 11.5px; max-width: 220px; padding: 4px 6px;
+  border: 0; border-radius: var(--chat-r-chip);
+  background: var(--chat-surface); color: var(--fg); box-shadow: var(--chat-ring);
+}
+.chatopt select:hover { background: var(--chat-hover); }
+
+.harnesspicker { position: relative; color: var(--fg); }
+.harnesspicker summary {
+  display: flex; align-items: center; gap: 7px; min-width: 138px; padding: 5px 9px;
+  border: 0; border-radius: var(--chat-r-control);
+  background: var(--chat-surface); box-shadow: var(--chat-ring);
+  font-size: 12px; font-weight: 500; cursor: pointer; list-style: none;
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.harnesspicker summary:hover { background: var(--chat-hover); box-shadow: var(--chat-ring-strong); }
+.harnesspicker summary::-webkit-details-marker { display: none; }
+.harnesspicker summary::after {
+  content: "⌄"; margin-left: auto; color: var(--muted);
+  transition: transform var(--motion-fast); transform-origin: 50% 35%;
+}
+.harnesspicker[open] summary::after { transform: rotate(180deg); }
+.harnesslogo { width: 16px; height: 16px; flex: 0 0 16px; object-fit: contain; }
+.harnessmenu {
+  position: absolute; z-index: 5; top: calc(100% + 5px); left: 0; width: max-content; min-width: 100%;
+  padding: 4px; border: 0; border-radius: var(--chat-r-card);
+  background: var(--chat-field); box-shadow: var(--chat-shadow-overlay);
+}
+.harnessmenu button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  border: 0; border-radius: var(--chat-r-chip); background: transparent; color: var(--fg); font: inherit;
+  font-size: 12px; text-align: left; white-space: nowrap; cursor: pointer;
+}
+.harnessmenu button:hover, .harnessmenu button:focus-visible { background: var(--chat-hover); }
+.harnessmenu button.selected { background: var(--chat-accent-tint); color: var(--fg); }
+
+/* El modelo, cuando es informativo y no elegible. Como etiqueta discreta y no
+   como campo: tiene que leerse como un dato, no como un control desactivado. */
+.chatmodel {
+  font-size: 11px; color: var(--muted); font-style: normal;
+  padding: 3px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-content) 94%, var(--chat-lift));
+}
+.chatusage { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* Los comandos de barra, pegados por encima de la caja de escribir — donde
+   está mirando quien acaba de teclear `/`. Acotado en alto porque un agente
+   puede anunciar decenas (Codex anuncia 76). */
+.chatcmds {
+  display: flex; flex-direction: column; max-height: 240px; overflow-y: auto;
+  margin: 0 12px; padding: 4px; border-radius: var(--chat-r-card);
+  background: var(--chat-field); box-shadow: var(--chat-shadow-overlay);
+}
+.chatcmds > span { display: contents; }
+.chatcmds button {
+  display: flex; gap: 10px; align-items: baseline; width: 100%;
+  padding: 6px 9px; font: inherit; font-size: 12px; text-align: left;
+  background: none; border: 0; border-radius: var(--chat-r-chip); cursor: pointer; color: var(--fg);
+}
+.chatcmds button:hover, .chatcmds button.active { background: var(--chat-hover); }
+.chatcmds code {
+  flex: 0 0 auto; font-family: var(--mono); font-size: 11px; font-weight: 500;
+  padding: 1px 6px; border-radius: 5px; background: var(--chat-surface);
+}
+.chatcmds span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+
+/* ------------------------------------------------------- la conversación */
+.chatscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 16px 22px; scrollbar-width: thin; }
+.chatscroll::-webkit-scrollbar { width: 8px; }
+.chatscroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent; background-clip: padding-box;
+  border-radius: 8px; background-color: color-mix(in srgb, var(--border-default) 45%, transparent);
+}
+.chatprose { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chatprose:last-child { margin-bottom: 0; }
+
+/* Cada bloque entra con un desplazamiento mínimo. Es lo que separa un
+   transcript que aparece de golpe de uno que se siente en vivo. */
+.chatmsg, .chattool, .chatplan, .chatthought, .chaterror {
+  animation: chat-in 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes chat-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Lo del usuario es una burbuja alineada a la derecha; lo del agente es prosa
+   sin caja. La asimetría es la que resuelve, sin colores ni etiquetas, la
+   misma pregunta que los marcadores `<!-- ai -->` en las notas: quién escribió
+   esto. Antes ambos eran cajas y había que leer el color para saberlo. */
+.chatmsg { max-width: 46em; margin-bottom: 16px; font-size: 13px; line-height: 1.65; }
+.chatuser {
+  width: fit-content; max-width: min(38em, 88%); margin-left: auto;
+  padding: 9px 13px; border-radius: var(--chat-r-bubble);
+  background: var(--chat-surface); box-shadow: var(--chat-shadow-card);
+}
+.chatagent { padding-left: 1px; }
+
+/* El razonamiento. Cerrado es una línea tenue con una chispa delante; abierto,
+   un bloque sangrado contra un raíl. Nunca compite con la respuesta. */
+.chatthought, .chatstderr { margin-bottom: 12px; font-size: 12px; }
+.chatthought > summary, .chatstderr > summary {
+  display: flex; align-items: center; gap: 7px; width: fit-content;
+  cursor: pointer; font-size: 11.5px; font-weight: 500; color: var(--muted);
+  padding: 3px 9px 3px 7px; border-radius: 999px; list-style: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.chatthought > summary::-webkit-details-marker,
+.chatstderr > summary::-webkit-details-marker { display: none; }
+.chatthought > summary::before { content: "✦"; font-size: 10px; color: var(--accent); }
+.chatstderr > summary::before { content: "▸"; font-size: 9px; transition: transform var(--motion-fast); }
+.chatstderr[open] > summary::before { transform: rotate(90deg); }
+.chatthought > summary:hover, .chatstderr > summary:hover { background: var(--chat-surface); color: var(--fg); }
+.chatthought[open] {
+  padding: 4px 0 4px 12px; margin-left: 7px;
+  border-left: 1.5px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.chatthought[open] > summary { margin: 0 0 6px -19px; }
+.chatthought .chatprose { color: var(--muted); font-style: normal; line-height: 1.6; }
+.chatstderr pre { font-size: 11px; color: var(--muted); }
+
+/* Que está pensando. Un barrido sobre el texto en vez de un spinner: ocupa lo
+   mismo que la frase y no mete un elemento nuevo en la conversación. */
+.chatwait {
+  margin: 6px 0 14px; font-size: 12px; font-weight: 500; width: fit-content;
+  background: linear-gradient(90deg, var(--muted) 20%, var(--fg) 45%, var(--muted) 70%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: chat-shimmer 1.6s linear infinite;
+}
+@keyframes chat-shimmer { from { background-position: 120% 0; } to { background-position: -60% 0; } }
+
+/* El estado vacío. Centrado y discreto: es una indicación, no contenido, y no
+   debe competir con el primer mensaje que llegue justo encima. */
+.chatempty {
+  max-width: 30em; margin: 10vh auto; text-align: center;
+  font-size: 12.5px; line-height: 1.65; color: var(--muted);
+}
+.chatempty p { margin: 0; }
+.chatempty p:first-child { font-size: 14px; font-weight: 500; color: var(--fg); }
+.chatempty::before {
+  content: "✦"; display: block; margin-bottom: 12px;
+  font-size: 20px; color: color-mix(in srgb, var(--accent) 75%, transparent);
+}
+.chatempty .cfghint { margin-top: 8px; font-size: 11.5px; }
+
+.chatcode, .chatterm, .chatdiff pre, .chatstderr pre {
+  margin: 8px 0; padding: 10px 12px; font-family: var(--mono); font-size: 11.5px;
+  line-height: 1.55; white-space: pre; overflow-x: auto;
+  background: var(--chat-inset); border: 0; border-radius: var(--chat-r-control);
+  box-shadow: var(--chat-ring);
+}
+
+/* Una llamada a herramienta, como el "tool chip" del referente: una tarjeta
+   baja con un punto de estado, el verbo, y el argumento en mono a la derecha.
+   El estado se lee del punto y del color del argumento, sin abrir nada. */
+.chattool {
+  margin-bottom: 10px; padding: 9px 12px; font-size: 12px;
+  background: var(--chat-inset); border: 0; border-radius: var(--chat-r-card);
+  box-shadow: var(--chat-shadow-card);
+}
+.chattoolhead { display: flex; align-items: center; gap: 9px; overflow-wrap: anywhere; font-weight: 500; }
+/* El punto de estado sustituye al borde izquierdo de color: en una tarjeta con
+   esquinas de 10px un borde de 3px se ve como un defecto, no como semántica. */
+.chattoolhead::before {
+  content: ""; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-default);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-default) 18%, transparent);
+}
+.chattool[data-status="pending"] .chattoolhead::before,
+.chattool[data-status="in_progress"] .chattoolhead::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--chat-accent-tint);
+  animation: chat-pulse 1.4s ease-in-out infinite;
+}
+.chattool[data-status="completed"] .chattoolhead::before {
+  background: var(--chat-ok); box-shadow: 0 0 0 3px var(--chat-ok-tint);
+}
+.chattool[data-status="failed"] .chattoolhead::before {
+  background: var(--chat-bad); box-shadow: 0 0 0 3px var(--chat-bad-tint);
+}
+@keyframes chat-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+/* La clase de herramienta, empujada al final de la fila y en versalitas: es
+   metadato, y delante del verbo lo único que hacía era retrasar la lectura. */
+.chattoolkind {
+  order: 9; margin-left: auto; flex: 0 0 auto;
+  font-size: 9px; text-transform: uppercase; letter-spacing: .07em; font-weight: 600;
+  color: var(--muted); padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-content) 90%, var(--chat-lift));
+}
+.chattool .chatcode, .chattool .chatterm { background: var(--chat-canvas); }
+.chatraw { margin-top: 7px; }
+.chatraw > summary { cursor: pointer; font-size: 11px; color: var(--muted); }
+.chatraw > summary:hover { color: var(--fg); }
+/* Acotado: el respaldo de `rawOutput` puede traer el listado entero de un
+   directorio, y desplegarlo no debería empujar la conversación fuera de vista. */
+.chatraw .chatterm { max-height: 260px; overflow-y: auto; }
+.chattool .chatprose { margin-top: 7px; font-size: 12px; color: var(--muted); }
+
+/* El diff. La ruta es un chip mono, como en el referente, y no una línea de
+   texto suelta que se confunde con el contenido del propio diff. */
+.chatdiff { margin: 8px 0; }
+.chatdiffpath {
+  display: inline-block; font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  padding: 2px 8px; border-radius: var(--chat-r-chip);
+  background: var(--chat-surface); box-shadow: var(--chat-ring);
+  overflow-wrap: anywhere;
+}
+.chatdiff pre { margin-top: 5px; background: var(--chat-canvas); }
+.chatdiff .add { background: var(--chat-ok-tint); color: color-mix(in srgb, var(--chat-ok) 80%, var(--fg)); }
+.chatdiff .del { background: var(--chat-bad-tint); color: color-mix(in srgb, var(--danger) 80%, var(--fg)); }
+
+/* El plan, como las "task rows": una cápsula por paso, con el estado a la
+   izquierda. Sin viñetas — una lista con bullets no distingue lo hecho de lo
+   que está corriendo sin leer palabra por palabra. */
+.chatplan { margin-bottom: 14px; font-size: 12.5px; }
+.chatplan > strong { display: block; margin-bottom: 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.chatplan ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.chatplan li {
+  display: flex; align-items: center; gap: 9px; padding: 7px 12px;
+  border-radius: 999px; background: var(--chat-inset); box-shadow: var(--chat-ring);
+}
+.chatplan li::before {
+  content: "○"; flex: 0 0 auto; width: 1em; font-size: 11px; color: var(--muted); text-align: center;
+}
+.chatplan li[data-status="completed"] { color: var(--muted); text-decoration: none; opacity: .72; }
+.chatplan li[data-status="completed"]::before { content: "✓"; color: var(--chat-ok); font-weight: 700; }
+.chatplan li[data-status="in_progress"] { font-weight: 600; box-shadow: var(--chat-ring-strong); }
+.chatplan li[data-status="in_progress"]::before { content: "●"; color: var(--accent); animation: chat-pulse 1.4s ease-in-out infinite; }
+
+.chaterror { margin-bottom: 12px; border-radius: var(--chat-r-card); }
+.chaterror code { font-family: var(--mono); font-size: 11px; }
+
+/* El permiso va PEGADO a la caja de escribir y no dentro del scroll: el turno
+   está detenido esperando la respuesta, y algo que bloquea no puede quedarse
+   enterrado bajo el historial. Se levanta como tarjeta —sombra y esquinas— en
+   vez de teñir una banda: la banda se leía como aviso, y esto es una pregunta
+   que hay que contestar para seguir. */
+.chatperm {
+  position: relative; z-index: 1; margin: 0 12px 4px; padding: 13px 15px; font-size: 12.5px;
+  background: var(--chat-field); border: 0; border-radius: var(--chat-r-card);
+  box-shadow: var(--chat-shadow-raised), 0 0 0 1px var(--chat-accent-tint);
+  animation: chat-in 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.chatperm p { margin: 0 0 10px; font-weight: 500; }
+
+/* `.newbtn` nace a lo ancho porque su casa es la barra lateral, una columna.
+   Aquí las opciones van en fila —son alternativas de la MISMA pregunta— y
+   apiladas a pantalla completa se leían como tres pasos consecutivos. */
+.chat .cfgrow { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.chat .cfgrow .newbtn {
+  width: auto; margin: 0; padding: 6px 14px; font-size: 12px; font-weight: 500;
+  border: 0; border-radius: var(--chat-r-control);
+  background: var(--chat-surface); color: var(--fg); box-shadow: var(--chat-ring-strong);
+}
+.chat .cfgrow .newbtn:hover:not(:disabled) { background: var(--chat-hover); }
+.chat .cfgrow .newbtn.danger { color: var(--danger); background: transparent; }
+.chat .cfgrow .newbtn.danger:hover { background: var(--chat-bad-tint); color: var(--danger); }
+/* La opción de permitir es la acción principal y va sólida; el resto, sobrias.
+   Antes las tres eran el mismo botón y había que leerlas para elegir. */
+.chatperm .cfgrow .newbtn:first-child { background: var(--accent); color: #fff; box-shadow: none; }
+.chatperm .cfgrow .newbtn:first-child:hover { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+
+/* ------------------------------------------------------ caja de escribir */
+/* El "prompt bar": un solo campo redondeado con el botón de mandar DENTRO,
+   abajo a la derecha. El botón fuera hacía que la caja creciera hacia arriba y
+   el botón se quedara flotando a media altura. */
+.chatbox { display: block; padding: 10px 12px 12px; background: var(--chat-canvas); border: 0; }
+.chatcomposer {
+  position: relative; border-radius: var(--chat-r-bubble);
+  background: var(--chat-field);
+  box-shadow: var(--chat-ring-strong), var(--chat-shadow-field);
+  transition: box-shadow var(--motion-fast);
+}
+.chatcomposer:focus-within {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--chat-accent-tint), var(--chat-shadow-field);
+}
+.chatinput { display: grid; min-width: 0; background: transparent; border-radius: inherit; }
+.chatinputhighlight, .chatinput textarea { grid-area: 1 / 1; }
+.chatinputhighlight {
+  z-index: 0; min-height: 46px; max-height: 30vh; padding: 12px 52px 12px 14px;
+  overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word;
+  font: inherit; font-size: 13px; line-height: 1.55; color: var(--fg);
+  border: 0;
+}
+.chatbox textarea {
+  z-index: 1; min-width: 0; min-height: 46px; max-height: 30vh; padding: 12px 52px 12px 14px;
+  font: inherit; font-size: 13px; line-height: 1.55; resize: none;
+  border: 0; border-radius: inherit; outline: 0;
+  background: transparent; color: transparent; caret-color: var(--fg);
+}
+.chatbox textarea::placeholder { color: var(--muted); }
+
+/* Mandar y parar comparten sitio y forma: un botón circular anclado abajo a la
+   derecha del campo. Circular y no rectangular para que no se confunda con la
+   fila de botones del permiso, que está justo encima. */
+.chatsend {
+  position: absolute; right: 8px; bottom: 8px; z-index: 2;
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--accent); color: #fff; font-size: 14px; line-height: 1;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .25);
+  transition: background var(--motion-fast), opacity var(--motion-fast), transform var(--motion-fast);
+}
+.chatsend:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+.chatsend:active:not(:disabled) { transform: scale(.94); }
+.chatsend:disabled {
+  cursor: default; background: var(--chat-surface); color: var(--muted);
+  box-shadow: var(--chat-ring);
+}
+.chatsend.danger { background: var(--danger); }
+.chatsend.danger:hover { background: color-mix(in srgb, var(--danger) 85%, var(--fg)); }
+/* El rótulo sigue en el DOM para lectores de pantalla; en pantalla lo dice el
+   glifo. `aria-label` solo no basta: el botón también es un objetivo de test. */
+.chatsend .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chatmsg, .chattool, .chatplan, .chatthought, .chaterror, .chatperm { animation: none; }
+  .chatwait { animation: none; -webkit-text-fill-color: var(--muted); color: var(--muted); }
+  .chattoolhead::before, .chatplan li[data-status="in_progress"]::before { animation: none; }
+  .chatsend:active:not(:disabled) { transform: none; }
+}
+
+/* ---------------------------------------------------------------- open tabs */
+.tabstrip {
+  display: flex; gap: 2px; align-items: stretch; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+  margin: -20px -30px 14px; padding: 6px 22px 0;
+  border-bottom: 1px solid var(--line); background: var(--page-bg);
+  position: sticky; top: 61px; z-index: 25;
+}
+.tabstrip::-webkit-scrollbar { height: 6px; }
+.tabstrip::-webkit-scrollbar-thumb { background: var(--line-soft); border-radius: 3px; }
+.otab { flex: 0 0 auto; }
+@media (max-width: 850px) { .tabstrip { margin: -18px -16px 12px; padding: 6px 12px 0; } }
+.otab {
+  display: flex; align-items: center; gap: 6px; max-width: 210px;
+  padding: 5px 6px 5px 10px; font-size: 12.5px; cursor: pointer;
+  background: var(--panel-grey); color: var(--muted);
+  border: 1px solid var(--line-soft); border-bottom: 0; border-radius: 3px 3px 0 0;
+  position: relative; top: 1px;
+}
+.otab:hover { background: var(--panel-blue); }
+.otab.on { background: var(--bg); color: var(--fg); font-weight: 600; border-bottom: 1px solid var(--bg); }
+.otab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.otab-x {
+  border: 0; background: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 2px;
+}
+.otab-x:hover { background: var(--link-red); color: #fff; }
+.otab-closeall {
+  margin-left: 8px; align-self: center; font-size: 11.5px; padding: 3px 8px;
+  border: 1px solid var(--line-soft); background: var(--bg); color: var(--muted);
+  border-radius: 2px; cursor: pointer;
+}
+
+.cathead { cursor: context-menu; }
+.pinmark { color: var(--link); margin-right: 4px; font-size: 9px; vertical-align: middle; }
+.ctxsub { position: relative; }
+.ctxsubmenu {
+  margin: 2px 0 2px 8px; border-left: 2px solid var(--line-soft); padding-left: 4px;
+  max-height: 220px; overflow-y: auto;
+}
+
+.catcount { color: var(--muted); font-weight: 400; font-size: 10.5px; }
+
+/* Distintivo de núcleo y pie de categorías del artículo */
+.corebadge {
+  margin-left: 10px; vertical-align: middle; font-family: var(--sans);
+  font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--core-line); background: var(--core-bg);
+  border: 1px solid var(--core-line); border-radius: 10px; padding: 2px 8px;
+}
+.catline {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: -4px 0 14px; font-size: 12.5px;
+}
+.catline a {
+  padding: 1px 8px; border: 1px solid var(--line-soft); border-radius: 10px;
+  background: var(--panel-grey);
+}
+.catline a:hover { background: var(--panel-blue-head); text-decoration: none; }
+.catlinelabel { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+.hiddenzone { margin-top: 14px; border-top: 1px dashed var(--line-soft); padding-top: 6px; }
+.hiddentoggle {
+  width: 100%; text-align: left; font: inherit; font-size: 11.5px; padding: 3px 6px;
+  border: 0; background: none; color: var(--muted); cursor: pointer; border-radius: 2px;
+}
+.hiddentoggle:hover { background: var(--panel-grey-head); color: var(--fg); }
+.hiddenzone .cathead { opacity: .72; }
+.confirmbox {
+  margin-top: 10px; padding: 8px; border: 1px solid var(--link-red);
+  background: var(--panel-grey); font-size: 12px;
+}
+.newbtn.danger { color: var(--link-red); border-color: var(--link-red); }
+.newbtn.danger:hover { background: var(--link-red); color: #fff; }
+
+/* Arrastrar una imagen desde el Finder. El realce marca el panel entero
+   porque esa es exactamente el área que acepta el soltar — señalar solo el
+   texto mentiría sobre dónde se puede soltar, que es lo que hacía parecer
+   que la función no existía. */
+.panescroll.dropping {
+  outline: 2px dashed var(--link); outline-offset: -6px; border-radius: 3px;
+}
+.panescroll.dropping .cm-content { background: var(--panel-blue); }
+
+/* Formatting controls remain attached to the document instead of the app
+   chrome: split panes therefore get their own toolbar and editor history. */
+.editor-toolbar {
+  position: sticky; top: 0; z-index: 12; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 4px; overflow: visible; scrollbar-width: thin; padding: 5px 6px;
+  margin: 0 0 10px; background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(8px); border: 1px solid var(--line-soft);
+  border-radius: var(--control-radius); box-shadow: var(--shadow-sm);
+}
+.editor-toolgroup { display: inline-flex; gap: 1px; padding-right: 4px; border-right: 1px solid var(--line-soft); }
+.editor-toolgroup:last-child { border-right: 0; padding-right: 0; }
+.editor-toolbar button {
+  min-width: 29px; height: 28px; padding: 0 6px; border: 0; background: transparent;
+  color: var(--muted); font: 600 12px/1 var(--sans); cursor: pointer; border-radius: var(--control-radius);
+}
+.editor-toolbar button:hover:not(:disabled) { background: var(--panel-grey); color: var(--fg); }
+.editor-toolbar button.on { background: var(--panel-blue); color: var(--link); }
+.editor-toolbar button:disabled { opacity: .38; cursor: default; }
+.editor-toolbar button svg { width: 17px; height: 17px; display: block; margin: auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.editor-toolbar [data-tooltip] { position: relative; }
+.editor-toolbar [data-tooltip]::after {
+  content: attr(data-tooltip); position: absolute; z-index: 90; top: calc(100% + 8px); left: 50%;
+  width: max-content; max-width: 240px; padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: var(--control-radius); background: var(--fg); color: var(--bg);
+  box-shadow: var(--shadow-sm); font: 500 11.5px/1.35 var(--sans); white-space: normal;
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, -3px);
+  transition: opacity .12s ease, transform .12s ease, visibility 0s linear .12s;
+}
+.editor-toolbar [data-tooltip]:hover::after,
+.editor-toolbar [data-tooltip]:focus-within::after,
+.editor-toolbar [data-tooltip]:focus-visible::after {
+  opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: .35s;
+}
+.editor-color { position: relative; display: grid; place-items: center; min-width: 29px; height: 28px; color: var(--muted); font: 700 13px/1 var(--sans); cursor: pointer; border-radius: var(--control-radius); }
+.editor-color > span { border-bottom: 3px solid #3973c6; padding: 1px 3px; }
+.editor-highlight > span { background: #f7df72; color: #29251a; border-bottom: 0; padding: 3px 5px; }
+.editor-color:hover { background: var(--panel-grey); color: var(--fg); }
+.editor-color select { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.editor-history { margin-left: auto; }
+.editor-toolbar-restore {
+  display: block; margin: 0 0 8px auto; padding: 3px 8px; border: 1px solid var(--line-soft);
+  background: var(--page-bg); color: var(--muted); font: 500 11.5px/1.3 var(--sans); cursor: pointer;
+}
+.editor-toolbar-restore:hover { color: var(--fg); background: var(--panel-grey); }
+
+.editormodal-backdrop {
+  position: fixed; inset: 0; z-index: 120; display: grid; place-items: center;
+  padding: 20px; background: rgba(0,0,0,.28);
+}
+.editormodal {
+  width: min(560px, 100%); overflow: hidden; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: calc(var(--control-radius) * 1.5);
+  box-shadow: 0 20px 55px rgba(0,0,0,.24);
+}
+.editormodal header, .editormodal footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px; }
+.editormodal header { justify-content: space-between; border-bottom: 1px solid var(--line-soft); }
+.editormodal footer { justify-content: flex-end; border-top: 1px solid var(--line-soft); }
+.editormodal header button { border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.editormodal-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line-soft); }
+.editormodal-tabs button { padding: 10px; border: 0; border-bottom: 3px solid transparent; background: var(--page-bg); color: var(--muted); cursor: pointer; }
+.editormodal-tabs button.on { border-bottom-color: var(--link); background: var(--bg); color: var(--fg); }
+.editormodal-body { display: grid; gap: 13px; padding: 16px; }
+.editormodal-body > label:not(.image-drop) { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+.editormodal-body input { width: 100%; padding: 8px 9px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
+.image-drop { display: grid; place-items: center; gap: 6px; min-height: 145px; padding: 20px; text-align: center; cursor: pointer; border: 2px dashed var(--line-soft); border-radius: var(--control-radius); background: var(--page-bg); }
+.image-drop:hover { border-color: var(--link); }
+.image-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.image-drop small { color: var(--muted); }
+@media (max-width: 650px) {
+  .editor-toolbar { overflow-x: auto; overflow-y: hidden; margin-left: -8px; margin-right: -8px; border-left: 0; border-right: 0; border-radius: 0; }
+  .editor-history { margin-left: 0; }
+}
+
+/* ----------------------------------------------------- article navigation rails */
+.artrow { display: flex; gap: 22px; align-items: flex-start; }
+.artrow > article { flex: 1 1 auto; min-width: 0; }
+.linkrail {
+  flex: 0 0 190px; position: sticky; top: 108px; align-self: flex-start;
+  max-height: calc(100vh - 150px); overflow-y: auto;
+  border-right: 1px solid var(--line-soft); padding-right: 10px;
+}
+.linkrail.closed { flex-basis: 34px; border-right: 0; padding-right: 0; overflow: hidden; }
+.linkrailtoggle {
+  width: 100%; text-align: right; font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--muted); background: none; border: 0; cursor: pointer;
+  padding: 2px 4px 6px; text-transform: uppercase; letter-spacing: .04em;
+}
+.linkrailtoggle:hover { color: var(--fg); }
+.linkbranch + .linkbranch { margin-top: 12px; }
+.linkbranch h3 {
+  margin: 0 0 4px; color: var(--muted); font: 600 10.5px/1.35 var(--sans);
+  letter-spacing: .035em; text-transform: uppercase;
+}
+.linkbranch ul { margin: 0 0 0 6px; padding: 0 0 0 9px; border-left: 1px solid var(--line-soft); list-style: none; }
+.linkbranch li { position: relative; margin: 0; padding: 0; }
+.linkbranch li::before {
+  content: ""; position: absolute; top: .82em; left: -9px; width: 7px;
+  border-top: 1px solid var(--line-soft);
+}
+.linkbranch a {
+  display: block; padding: 3px 4px; overflow: hidden; color: var(--muted);
+  font-size: 12.2px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap;
+}
+.linkbranch a:hover { color: var(--link); text-decoration: none; background: var(--panel-grey); }
+.linkbranch p { margin: 2px 4px; color: var(--muted); font-size: 11.5px; }
+.toc {
+  flex: 0 0 210px; position: sticky; top: 108px; align-self: flex-start;
+  max-height: calc(100vh - 150px); overflow-y: auto;
+  border-left: 1px solid var(--line-soft); padding-left: 10px;
+}
+.toc.closed { flex-basis: 34px; border-left: 0; padding-left: 0; }
+@media (max-width: 1100px) { .toc, .linkrail { display: none; } }
+.toctoggle {
+  width: 100%; text-align: left; font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--muted); background: none; border: 0; cursor: pointer;
+  padding: 2px 4px 6px; text-transform: uppercase; letter-spacing: .04em;
+}
+.toctoggle:hover { color: var(--fg); }
+.tocitem {
+  display: block; font-size: 12.2px; line-height: 1.4; padding: 3px 4px;
+  color: var(--muted); border-left: 2px solid transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tocitem:hover { color: var(--link); text-decoration: none; background: var(--panel-grey); }
+.tocitem.on { color: var(--fg); border-left-color: var(--link); font-weight: 600; }
+
+.crumb {
+  margin-left: auto; align-self: center; font-family: var(--mono);
+  font-size: 11px; color: var(--muted); padding: 0 4px 5px;
+  max-width: 52%; overflow: hidden; white-space: nowrap;
+}
+.crumb a { color: var(--muted); }
+.crumb a:hover { color: var(--link); text-decoration: underline; }
+.crumb-sep { opacity: .5; margin: 0 2px; }
+.crumb-gap { cursor: help; opacity: .7; }
+.crumb-file { color: var(--fg); }
+.tree .row.current {
+  background: var(--panel-blue-head); border-radius: 2px;
+}
+.tree .row.current .name { color: var(--fg); font-weight: 600; }
+
+/* ---------------------------------------------------------------- graph */
+.graphwrap { position: relative; }
+.graphbar {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  font-size: 12.5px; margin-bottom: 8px;
+}
+.graphbar select {
+  font: inherit; font-size: 12.5px; padding: 3px 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 2px;
+}
+.graphfilter { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; }
+/* Lo que resaltó el agente en el grafo. Va en el color de acento, el mismo del
+   halo que dibuja el lienzo, para que el botón y los nodos se lean como una
+   sola cosa y no como dos avisos distintos. */
+.graphlit { border: 1px solid var(--accent, #d97706); color: var(--accent, #d97706); background: transparent; border-radius: 4px; padding: 1px 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.graphlit:hover { background: var(--accent, #d97706); color: var(--bg); }
+.graphlegend { display: flex; gap: 9px; flex-wrap: wrap; margin-left: auto; color: var(--muted); font-size: 11px; }
+.graphlegend button { display: flex; align-items: center; gap: 3px; padding: 1px 3px; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.graphlegend button:hover { color: var(--fg); }
+.graphlegend button.off { opacity: .35; text-decoration: line-through; }
+.graphlegend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.graphcanvas {
+  /* El alto lo fija GraphView midiendo lo que queda de pantalla; aquí solo el
+     mínimo por si el efecto no ha corrido todavía. Ver el comentario allá. */
+  width: 100%; height: 320px;
+  border: 1px solid var(--line-soft); cursor: grab; display: block;
+}
+
+/* La página del grafo no lleva el colchón inferior del contenido: el lienzo ya
+   se dimensiona para terminar donde termina la pantalla, y 90 px más debajo son
+   90 px de scroll que solo sirven para esconder el panel del nodo enfocado. */
+.content:has(.graphcanvas) { padding-bottom: 16px; }
+.graphcanvas:active { cursor: grabbing; }
+.graphtip {
+  position: absolute; bottom: 10px; left: 10px; background: var(--bg);
+  border: 1px solid var(--line); padding: 4px 9px; font-size: 12px; pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- pdf */
+.pdfwrap { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.pdfscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 24px; }
+.pdfbar {
+  display: flex; gap: 8px; align-items: center; font-size: 12.5px; flex: 0 0 auto;
+  padding: 7px 14px; background: var(--bg); border-bottom: 1px solid var(--line-soft);
+}
+.pdfbar button {
+  font: inherit; font-size: 13px; padding: 2px 9px; border: 1px solid var(--line);
+  background: var(--page-bg); color: var(--fg); border-radius: 2px; cursor: pointer;
+}
+.pdfpages { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.pdfpage {
+  position: relative; border: 1px solid var(--line-soft);
+  box-shadow: 0 1px 4px rgba(0,0,0,.12); background: #fff;
+}
+.pdftext {
+  position: absolute; inset: 0; overflow: hidden; line-height: 1;
+  opacity: .22;                    /* invisible but selectable */
+}
+.pdftext span {
+  position: absolute; white-space: pre; transform-origin: 0 0; color: transparent;
+  cursor: text;
+}
+.pdftext ::selection { background: rgba(255, 214, 0, .55); }
+.pdfsel {
+  position: fixed; bottom: 54px; left: 50%; transform: translateX(-50%);
+  background: var(--bg); border: 1px solid var(--line); padding: 10px 12px;
+  max-width: min(680px, 92vw); z-index: 40; box-shadow: 0 4px 18px rgba(0,0,0,.2);
+}
+.pdfsel-q { font-size: 13px; margin-bottom: 4px; }
+.pdfsel button.primary { background: var(--link); border-color: var(--link); color: #fff; }
+
+.otab-kind {
+  font-size: 9px; background: var(--panel-blue-head); color: var(--muted);
+  padding: 1px 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------- split */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
+.split > div:first-child { min-width: 0; }
+.pane {
+  min-width: 0; border: 1px solid var(--line-soft);
+  max-height: calc(100vh - 220px); display: flex; flex-direction: column;
+}
+.panehead {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  background: var(--panel-grey); border-bottom: 1px solid var(--line-soft); font-size: 12.5px;
+}
+.panetitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panehead .dim { margin-left: auto; font-size: 11px; }
+.panehead button {
+  border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.panehead button:hover { color: var(--link-red); }
+
+.otab.dragging { opacity: .45; }
+.otab { user-select: none; }
+/* ---------------------------------------------------------------- split shell */
+.splitwrap { display: grid; align-items: stretch; }
+@media (max-width: 1000px) { .splitwrap { grid-template-columns: 1fr !important; } .splitbar { display: none; } }
+.splitcol { min-width: 0; }
+.splitbar { background: transparent; position: relative; }
+.splitbar.columns { cursor: col-resize; }
+.splitbar.rows { cursor: row-resize; }
+.splitbar.columns::after {
+  content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px;
+  background: var(--line-soft);
+}
+.splitbar.rows::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 3px; height: 1px;
+  background: var(--line-soft);
+}
+.splitbar:hover::after, .splitbar.dragging::after { background: var(--link); }
+.splitbar.columns:hover::after, .splitbar.columns.dragging::after { width: 2px; }
+.splitbar.rows:hover::after, .splitbar.rows.dragging::after { height: 2px; }
+.pane { max-height: none; height: 100%; }
+
+/* ---------------------------------------------------------------- workspace */
+.wsgrid {
+  display: grid; align-items: stretch; height: 100%; min-height: 0;
+  height: 100%; min-height: 0;
+}
+/* The note route owns the viewport so pane tab bars never scroll away under
+   the masthead. Only pane content scrolls. */
+body.workspace .content { height: calc(100vh - 62px); overflow: hidden; padding: 0; }
+body.workspace { height: 100vh; overflow: hidden; }
+body.workspace .side { max-height: calc(100vh - 62px); }
+body.workspace.masthead-hidden .content { height: 100vh; }
+body.workspace.masthead-hidden .side { top: 0; max-height: 100vh; }
+body.workspace .bar { display: none; }
+@media (max-width: 1000px) { .wsgrid { grid-template-columns: 1fr !important; } .wsgrid .splitbar { display: none; } }
+
+.wspane {
+  position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  border-right: 0;
+}
+.wscolumn {
+  display: grid; min-width: 0; min-height: 0; height: 100%; overflow: hidden;
+  border-right: 1px solid var(--line-soft);
+}
+.wscolumn:last-child { border-right: 0; }
+.wspane.active .panetabrow, .wspane.active .panetabs { background: var(--bg); }
+
+.panetabrow {
+  display: flex; min-width: 0; flex: 0 0 auto;
+  border-bottom: 1px solid var(--line); background: var(--page-bg); z-index: 22;
+}
+.tab-side-toggle {
+  display: grid; place-items: center; flex: 0 0 42px; width: 42px; min-width: 42px;
+  height: 38px; align-self: flex-end; padding: 8px; border: 0; border-right: 1px solid var(--line-soft);
+  border-radius: 0; background: transparent; color: var(--muted); cursor: pointer; box-shadow: none;
+}
+.tab-side-toggle:hover { color: var(--fg); background: var(--panel-grey); }
+.tab-side-toggle svg {
+  width: 20px; height: 20px; display: block; fill: none; stroke: currentColor;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.panetabs {
+  display: flex; gap: 2px; align-items: stretch; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+  border-bottom: 0; background: var(--page-bg);
+  padding: 5px 8px 0;
+}
+.panetabs::-webkit-scrollbar { height: 5px; }
+.panetabs::-webkit-scrollbar-thumb { background: var(--line-soft); border-radius: 3px; }
+.otab.ghosted { opacity: .35; }
+.panecontent {
+  flex: 1; min-width: 0; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.panecontent > section { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.panecontent > section > .panechrome { order: -1; }
+.panescroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px 18px 24px; }
+
+/* Drag feedback: a ghost under the cursor and a painted landing region. */
+body.dragging-tab { cursor: grabbing; user-select: none; }
+.dragghost {
+  position: fixed; z-index: 200; pointer-events: none;
+  background: #2b2b31; color: #fff; border-radius: 6px;
+  padding: 6px 11px; font-size: 12.5px; display: flex; align-items: center; gap: 7px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.dragghost-ico { opacity: .8; }
+.dropzone {
+  position: absolute; z-index: 60; pointer-events: none;
+  background: rgba(150, 120, 255, .42);
+  border: 1px solid rgba(120, 90, 240, .6);
+}
+.dropzone.left  { left: 0; top: 0; bottom: 0; width: 50%; }
+.dropzone.right { right: 0; top: 0; bottom: 0; width: 50%; }
+.dropzone.top   { left: 0; right: 0; top: 0; height: 50%; }
+.dropzone.bottom{ left: 0; right: 0; bottom: 0; height: 50%; }
+.dropzone.center{ inset: 0; background: rgba(150, 120, 255, .26); }
+
+.imgview { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.markdown-file-editor { flex: 1; min-height: 0; overflow: hidden; }
+.markdown-file-editor > div, .markdown-file-editor .cm-editor { height: 100%; }
+.markdown-file-editor .cm-editor .cm-scroller { overflow-y: auto; overflow-x: hidden; }
+.markdown-file-controls {
+  position: absolute; z-index: 12; top: 10px; right: 14px;
+  display: flex; align-items: center; gap: 9px; font-size: 11.5px;
+}
+.markdown-view-toggle {
+  display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line-soft);
+  border-radius: 9px; background: color-mix(in srgb, var(--bg) 94%, transparent);
+  box-shadow: var(--shadow-sm); backdrop-filter: blur(8px);
+}
+.markdown-view-toggle button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.markdown-view-toggle button:hover { color: var(--fg); background: var(--panel-grey); }
+.markdown-view-toggle button.on { color: var(--fg); background: var(--panel-blue); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+.markdown-view-toggle svg {
+  width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.imgbar {
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex: 0 0 auto;
+  padding: 7px 14px; background: var(--bg); border-bottom: 1px solid var(--line-soft);
+}
+.imgname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imgscroll { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; }
+.imgscroll img {
+  max-width: 100%; height: auto; display: block;
+  border: 1px solid var(--line-soft); background: var(--panel-grey);
+}
+.videopreview {
+  flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center;
+  overflow: auto; padding: 20px; background: color-mix(in srgb, var(--page-bg) 92%, #000);
+}
+.videopreview video {
+  display: block; width: min(100%, 1100px); max-height: calc(100vh - 190px);
+  background: #000; border: 1px solid var(--line-soft); border-radius: var(--control-radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* El TOC se ocultaba por completo dentro del workspace porque su `sticky`
+   estaba anclado al viewport (top: 108px) y quedaba varado a media nota: el
+   contenedor de scroll aquí es .panescroll, no la ventana. Se ancla en 0 y
+   vuelve a mostrarse; el caso de panel dividido ya lo gobierna showToc en
+   React, así que no hace falta esconderlo con CSS. */
+body.workspace .artrow { display: flex; }
+body.workspace .toc, body.workspace .linkrail { position: sticky; top: 0; max-height: calc(100vh - 190px); }
+/* La consulta de ancho vive antes en el archivo, así que se repite aquí para
+   que no la gane la regla de arriba. */
+@media (max-width: 1100px) { body.workspace .toc, body.workspace .linkrail { display: none; } }
+
+/* Sticky offsets are viewport-relative by default. Inside a pane the scroll
+   container is .panescroll, so anything sticky there must anchor at 0 or it
+   parks in the middle of the content. */
+.panescroll { position: relative; }
+.panechrome {
+  flex: 0 0 auto; padding: 6px 12px 0; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.pdfpageno { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+.pdfpageno input {
+  width: 46px; text-align: center; font: inherit; font-size: 12.5px; padding: 2px 4px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 2px;
+}
+.pdfcolors { display: inline-flex; gap: 4px; margin-left: 10px; }
+.swatch {
+  width: 17px; height: 17px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid var(--line);
+}
+.swatch:disabled { opacity: .35; cursor: default; }
+.swatch:not(:disabled):hover { outline: 2px solid var(--link); outline-offset: 1px; }
+.pdftext mark.hl {
+  color: transparent; border-radius: 2px; padding: 0; cursor: pointer;
+}
+.pdftext mark.hl:hover { outline: 1px solid var(--link-red); }
+
+/* La etiqueta de extensión se retiró: el nombre ya la lleva y el icono ya da
+   el tipo de un vistazo. */
+.tree .row.other .name { color: var(--fg); }
+
+/* Placeholders show as blank sheets until their canvas is drawn. */
+.pdfpage[data-state="pending"], .pdfpage[data-state="drawing"] {
+  background: #fff; display: grid; place-items: center;
+}
+.pdfpage[data-state="pending"]::after {
+  content: attr(data-page); color: #bbb; font-size: 13px;
+}
+
+/* ---------------------------------------------------------- quick switcher */
+/* Cmd/Ctrl+O. Replaces what a per-folder index used to do for a human:
+   get to the note you already have in mind without walking the tree. */
+.qsback {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0, 0, 0, .35);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 12vh;
+}
+.qsbox {
+  width: min(720px, 92vw);
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+  display: flex; flex-direction: column;
+  max-height: 70vh; overflow: hidden;
+}
+.qsinput {
+  border: 0; border-bottom: 1px solid var(--line-soft);
+  background: transparent; color: var(--fg);
+  font-size: 17px; padding: 14px 16px; outline: none; font-family: inherit;
+}
+.qslist { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; }
+.qsrow {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) max-content;
+  gap: 10px; align-items: baseline;
+  padding: 7px 16px; cursor: pointer;
+}
+.qsrow.on { background: var(--panel-blue-head); }
+.qstitle { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qspath {
+  color: var(--muted); font-size: 12px; direction: rtl; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qsmeta {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .04em; white-space: nowrap;
+}
+.qshit { color: var(--link); font-weight: 700; }
+.qsrow.on .qshit { color: inherit; text-decoration: underline; }
+.qsempty { padding: 18px 16px; color: var(--muted); }
+.qsfoot {
+  display: flex; gap: 16px; padding: 8px 16px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted); font-size: 11px; background: var(--panel-grey);
+}
+
+/* ------------------------------------------------- portada: núcleo */
+/* El núcleo no usa .panel: los paneles son secciones informativas, y esto es
+   la cabecera del wiki. Color propio, borde propio, y ancho completo. */
+.core {
+  background: var(--core-bg); border: 1px solid var(--core-line);
+  border-top: 3px solid var(--core-line); border-radius: 3px;
+  padding: 14px 16px 16px; margin: 0 0 20px;
+}
+.corehead { margin-bottom: 12px; }
+.core > .corehead h2 {
+  margin: 0; padding: 0; border: 0; font-family: var(--sans);
+  font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--core-line);
+}
+.corehead p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.core .centrecard { background: var(--bg); border-color: var(--core-line); border-left-width: 4px; }
+.core .qcard { border-color: var(--core-head); }
+
+/* ------------------------------------------------- portada: mapa de identidad */
+.centrecard {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  border: 1px solid var(--line); border-left: 4px solid var(--link);
+  background: var(--panel-blue);
+  padding: 16px 20px; margin: 0 0 18px; border-radius: 3px;
+}
+.centrecard h2 { margin: 0 0 4px; border: 0; font-size: 22px; padding: 0; }
+.centrecard h2 a { text-decoration: none; }
+.centrecard p { margin: 0; color: var(--muted); max-width: 62ch; }
+.centrego {
+  white-space: nowrap; padding: 8px 16px; border: 1px solid var(--link);
+  border-radius: 3px; text-decoration: none; font-weight: 600;
+}
+.centrego:hover { background: var(--link); color: #fff; }
+
+.qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.qcard {
+  border: 1px solid var(--line-soft); border-radius: 3px;
+  padding: 12px 14px; background: var(--bg); min-width: 0;
+}
+.qcard h3 { margin: 0 0 6px; font-size: 15px; }
+.qcard h3 a { text-decoration: none; }
+.qblurb { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.qmeta { margin: 0; font-size: 11.5px; color: var(--muted); }
+.qmeta code { font-size: 11px; }
+.qlist { margin: 8px 0 0; padding-left: 16px; font-size: 13px; }
+.qlist li { margin: 2px 0; }
+
+/* ------------------------------------------------- portada: índice temático */
+.catindex { margin: 0 0 20px; }
+.catindexhead h2 {
+  margin: 0; padding: 0 0 4px; font-family: var(--serif); font-size: 22px;
+  font-weight: 400; border-bottom: 1px solid var(--line-soft);
+}
+.catindexhead p { margin: 8px 0 0; color: var(--muted); font-size: 13px; max-width: 82ch; }
+
+/* Saltos rápidos: con veinte categorías, bajar a la de uno no debería ser scroll. */
+.catjump {
+  display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 12px 0 18px;
+  padding-bottom: 12px; border-bottom: 1px dashed var(--line-soft);
+}
+.catjump a {
+  font-size: 12px; padding: 2px 8px; border: 1px solid var(--line-soft);
+  border-radius: 11px; background: var(--panel-grey); color: var(--link);
+  white-space: nowrap;
+}
+.catjump a:hover { background: var(--panel-blue-head); text-decoration: none; }
+
+.catblock { margin: 0 0 16px; scroll-margin-top: 74px; }
+.catblock h3 {
+  margin: 0; font-family: var(--sans); font-size: 14.5px; font-weight: 700;
+  padding-bottom: 3px; border-bottom: 1px solid var(--line-soft);
+}
+.catblurb { margin: 4px 0 6px; color: var(--muted); font-size: 12.5px; }
+.catlist {
+  columns: 3; column-gap: 26px; margin: 6px 0 0; padding-left: 18px; font-size: 13.5px;
+}
+.catlist li { margin: 2px 0; break-inside: avoid; }
+@media (max-width: 1100px) { .catlist { columns: 2; } }
+@media (max-width: 700px) { .catlist { columns: 1; } }
+.cathiddenbox { margin-top: 18px; border-top: 1px dashed var(--line-soft); padding-top: 10px; }
+.cathiddenbox summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.cathiddenbox > .catblock { opacity: .75; margin-top: 12px; }
+
+.structtable { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 13.5px; }
+.structtable td { padding: 4px 8px 4px 0; vertical-align: top; border: 0; }
+.structtable td:first-child { white-space: nowrap; width: 1%; }
+
+kbd {
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px;
+  padding: 1px 5px; font-size: 11px; font-family: var(--mono, monospace);
+}
+
+/* ------------------------------------------------- barra: mapa de identidad */
+/* Mismo acento que el núcleo de la portada: los seis artículos se reconocen
+   por color estén donde estén. */
+.side h4.corehead4 {
+  background: var(--core-head); color: var(--core-line);
+  letter-spacing: .08em; text-transform: uppercase; font-size: 10.5px;
+}
+.navid { margin-bottom: 14px; }
+.navid li { display: flex; align-items: baseline; gap: 6px; }
+.navid a { flex: 1; min-width: 0; }
+.navcentre { font-weight: 700; margin-bottom: 4px; }
+.navcount {
+  font-size: 10.5px; color: var(--muted); background: var(--panel-grey);
+  border: 1px solid var(--line-soft); border-radius: 8px; padding: 0 5px;
+}
+
+/* --------------------------------------------------- reordenar pestañas */
+/* Marca de inserción durante el arrastre. Se dibuja con un pseudo-elemento
+   para no alterar el layout de la barra: correr las pestañas al pasar por
+   encima hacía que el índice calculado saltara. */
+.otab.insbefore { position: relative; }
+.otab.insbefore::before {
+  content: ""; position: absolute; left: -1px; top: 4px; bottom: 4px;
+  width: 2px; background: var(--link); border-radius: 1px;
+}
+.insend {
+  width: 2px; align-self: stretch; margin: 4px 0;
+  background: var(--link); border-radius: 1px; flex: 0 0 auto;
+}
+body.dragging-tab .otab { cursor: grabbing; }
+.otab.ghosted { opacity: .4; }
+
+/* --------------------------------------------- páginas propias de pestaña */
+/*
+ * /canvas?p=... y /terminal son adonde recarga una pestaña de canvas o de
+ * editor de canvas: fuera del workspace de pestañas, dentro del <article>
+ * normal de .content. Sin este bloque, la nota "está sola" — sin pestañas — y el
+ * contenido se queda con su min-height propio en vez de llenar la página,
+ * porque .content solo da min-height, no una altura definida contra la que
+ * height:100%/flex:1 pueda resolver. Cancela el padding de .content como ya
+ * hace .tabstrip, y fija una altura real de viewport para que el hijo
+ * flex:1 (.cvwrap) sí tenga contra qué crecer.
+ */
+.canvaspage {
+  display: flex; flex-direction: column; min-height: 0;
+  margin: -20px -30px 0; padding: 18px 30px 14px;
+  height: calc(100vh - 62px); box-sizing: border-box;
+}
+.canvaspage-head { flex: 0 0 auto; margin-bottom: 10px; }
+.canvaspage .cvwrap { flex: 1; }
+@media (max-width: 850px) {
+  .canvaspage { margin: -18px -16px 0; padding: 16px 16px 14px; }
+}
+
+/* ------------------------------------------------------- editor de canvas */
+.cvwrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cvbar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-soft); background: var(--panel-grey);
+}
+.cvbar button {
+  font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+}
+.cvbar button:disabled { opacity: .4; cursor: default; }
+.cvcolors { display: inline-flex; gap: 4px; }
+.cvcolor { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; }
+
+/* El escenario recorta y hace de contenedor de scroll; la capa se transforma. */
+.cvstage {
+  position: relative; flex: 1 1 auto; min-height: 420px; overflow: hidden;
+  background: var(--page-bg); cursor: grab;
+}
+body.canvas-dragging .cvstage { cursor: grabbing; }
+.cvlayer { position: absolute; inset: 0; transform-origin: 0 0; }
+.cvsvg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Trazo invisible y ancho: una curva de 2 px es imposible de clicar. */
+.cvedgehit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+
+.cvnode {
+  position: absolute; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); overflow: hidden; cursor: move;
+}
+.cvnode.on { border-width: 2px; }
+.cvtext {
+  width: 100%; height: 100%; box-sizing: border-box; padding: 8px 10px;
+  font: inherit; font-size: 13px; line-height: 1.45; color: var(--fg);
+  white-space: pre-wrap; overflow: auto; word-break: break-word;
+}
+textarea.cvtext { background: var(--bg); border: 0; outline: none; resize: none; cursor: text; }
+.cvtext.read { user-select: none; }
+
+.cvport {
+  position: absolute; width: 11px; height: 11px; margin: -6px 0 0 -6px;
+  border-radius: 50%; background: var(--bg); border: 2px solid var(--link);
+  cursor: crosshair;
+}
+.cvresize {
+  position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px;
+  border: 2px solid var(--link); border-radius: 2px; background: var(--bg);
+  cursor: nwse-resize;
+}
+
+/* ------------------------------------------- buscador de enlaces al escribir */
+.lpbox {
+  position: fixed; z-index: 260; width: min(380px, 92vw);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .3); overflow: hidden;
+}
+.lplist { list-style: none; margin: 0; padding: 3px 0; max-height: 240px; overflow-y: auto; }
+.lprow { padding: 5px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.lprow.on { background: var(--panel-blue-head); }
+.lptitle { font-size: 13px; font-weight: 600; }
+.lppath {
+  font-size: 11px; color: var(--muted); direction: rtl; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lpempty { padding: 10px; color: var(--muted); font-size: 12.5px; }
+.lpfoot {
+  display: flex; gap: 12px; padding: 5px 10px; font-size: 10.5px; color: var(--muted);
+  border-top: 1px solid var(--line-soft); background: var(--panel-grey);
+}
+
+/* Arrastrar archivos entre carpetas en el árbol. */
+.row[draggable="true"] { -webkit-user-drag: element; }
+.row.dir.dropinto {
+  background: var(--panel-blue-head);
+  outline: 1px solid var(--link); outline-offset: -1px;
+}
+
+/* Panel del nodo enfocado en el grafo. */
+/* Abajo a la izquierda: arriba está la barra de herramientas y el panel la
+   tapaba. Ese hueco quedó libre al quitar el tooltip, que duplicaba la
+   etiqueta que ahora dibuja el propio canvas. */
+.gfocus {
+  position: absolute; z-index: 5; left: 10px; bottom: 12px;
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  max-width: calc(100% - 20px);
+  padding: 7px 12px; border-radius: 4px;
+  background: var(--bg); border: 1px solid var(--link);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .25); font-size: 13px;
+}
+.gfocusbtns { display: flex; gap: 6px; margin-left: auto; }
+.gfocus button {
+  font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer;
+}
+.gfocus button:first-child { border-color: var(--link); color: var(--link); font-weight: 600; }
+
+/* Enlaces embebidos en un PDF: rectángulos transparentes sobre el canvas. */
+.pdflinks { position: absolute; inset: 0; }
+.pdflink {
+  position: absolute; display: block; padding: 0; margin: 0;
+  background: transparent; border: 0; border-radius: 2px; cursor: pointer;
+  /* Se insinúan al pasar por encima; marcarlos siempre taparía el documento. */
+  transition: background-color .12s, box-shadow .12s;
+}
+.pdflink:hover {
+  background: rgba(51, 102, 204, .18);
+  box-shadow: inset 0 0 0 1px var(--link);
+}
+/* Iniciar sesión, que ocurre FUERA de la app. El comando es lo que importa, así
+   que se le da el peso de un bloque de código: seleccionable, monoespaciado, y
+   con scroll propio en vez de partirse — una línea partida se pega mal. */
+.chatmanualauth code.chatauthcmd {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  user-select: all;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}

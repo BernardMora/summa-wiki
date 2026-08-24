@@ -5,7 +5,19 @@ import { fuzzy, markHits } from "@/lib/fuzzy.ts";
 import { useT, useCollator } from "./I18n";
 
 export interface LinkTarget { id: string; title: string; path: string; bundle: string; type: string }
-export interface LinkQuery { query: string; from: number; to: number; x: number; y: number }
+export interface LinkQuery {
+  query: string;
+  /**
+   * The text the link should read as, when the user asked for one with
+   * `[[note|words]]`. `null` means "use the target's title", which is the
+   * default and the only behaviour that existed before.
+   */
+  label: string | null;
+  from: number;
+  to: number;
+  x: number;
+  y: number;
+}
 
 /**
  * Buscador de notas que aparece al escribir `[[` dentro del editor.
@@ -108,7 +120,14 @@ export default function LinkPicker({
           </li>
         ))}
       </ul>
-      <div className="lpfoot"><span>↑↓</span><span>{t("lp.insert")}</span><span>{t("lp.escCancel")}</span></div>
+      <div className="lpfoot">
+        <span>↑↓</span>
+        <span>{t("lp.insert")}</span>
+        {/* The pipe is invisible until someone types it, so the footer teaches
+            it: it names the feature while the picker is already open. */}
+        <span>{q.label === null ? t("lp.pipeHint") : t("lp.asText", { text: q.label.trim() || "…" })}</span>
+        <span>{t("lp.escCancel")}</span>
+      </div>
     </div>
   );
 }
