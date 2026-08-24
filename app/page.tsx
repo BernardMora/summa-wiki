@@ -4,7 +4,7 @@ import { getIndex } from "@/lib/server.ts";
 import { identityBranches, CENTRE } from "@/lib/identity.ts";
 import { navGroups } from "@/lib/nav.ts";
 import { readConfig, HAS_VAULT, VAULT, VAULT_SOURCE, vaultExists, ARCH } from "@/src/config.ts";
-import { readSettings } from "@/src/appdata.mjs";
+import { needsOnboarding } from "@/src/appdata.mjs";
 import { splitBold } from "@/src/architecture.ts";
 import VaultPicker from "@/components/VaultPicker";
 import { getT, getLocale } from "@/lib/i18n.server.ts";
@@ -70,8 +70,12 @@ export default function MainPage() {
   const locale = getLocale();
   // Sin vault configurado no hay portada que degradar: se va al asistente,
   // que es una pantalla propia y no una portada vacía con un botón.
-  const machine = readSettings();
-  if (!HAS_VAULT && machine.onboarding.status !== "completed") redirect("/onboarding");
+  //
+  // The condition lives in `appdata.mjs` because the desktop shell evaluates it
+  // too, so it can load `/onboarding` directly instead of coming through here.
+  // This redirect stays as the BROWSER's door: someone opening the app on
+  // localhost has no main process deciding for them.
+  if (needsOnboarding()) redirect("/onboarding");
   if (!HAS_VAULT) redirect("/setup");
   if (!vaultExists()) return <NoVault state="missing" />;
 

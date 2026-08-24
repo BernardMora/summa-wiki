@@ -8,6 +8,9 @@ export default function SidebarToggle() {
 
   useEffect(() => {
     setCollapsed(localStorage.getItem("wiki.sidecollapsed") === "1");
+    const sync = (event: Event) => setCollapsed(Boolean((event as CustomEvent<{ collapsed: boolean }>).detail?.collapsed));
+    window.addEventListener("summa:sidebar-state", sync);
+    return () => window.removeEventListener("summa:sidebar-state", sync);
   }, []);
 
   return (

@@ -7,7 +7,7 @@ import { REVEAL_EVENT } from "./Crumb.tsx";
 import { FileIcon, FolderIcon } from "./FileIcon.tsx";
 import { useT } from "./I18n";
 import { bold } from "./markup";
-import { queueTerminalInput, terminalTargets } from "./terminalBridge.ts";
+import { queueChatInput, chatTargets } from "./chatBridge.ts";
 
 /** Sangría por nivel, en px. Es también la separación entre guías. */
 const STEP = 11;
@@ -827,16 +827,16 @@ export default function FileTree({ createRequest, onSelectedDirChange }: { creat
           <div className="ctxhead">{menu.node.name}</div>
           {!menu.node.dir && <>
             <button data-tour="file-add-chat" onClick={() => {
-              const ok = queueTerminalInput(`${menu.node.rel} `);
+              const ok = queueChatInput(undefined, "", { id: menu.node.id || menu.node.rel, title: menu.node.name, path: menu.node.rel });
               setMenu(null);
-              if (!ok) alert(t("terminal.chooseFirst"));
-            }}>{t("terminal.addToChat")}</button>
+              if (!ok) alert(t("chat.chooseFirst"));
+            }}>{t("chat.addToChat")}</button>
             <div className="ctxsub">
-              <button onClick={() => setChatOpen((value) => !value)}>{t("terminal.addTo")}</button>
+              <button onClick={() => setChatOpen((value) => !value)}>{t("chat.addTo")}</button>
               {chatOpen && <div className="ctxsubmenu">
-                {terminalTargets().length === 0 && <div className="ctxhead">{t("terminal.noneOpen")}</div>}
-                {terminalTargets().map((target) => <button key={target.id} onClick={() => {
-                  queueTerminalInput(`${menu.node.rel} `, target.id); setMenu(null); setChatOpen(false);
+                {chatTargets().length === 0 && <div className="ctxhead">{t("chat.noneOpen")}</div>}
+                {chatTargets().map((target) => <button key={target.id} onClick={() => {
+                  queueChatInput(target.id, "", { id: menu.node.id || menu.node.rel, title: menu.node.name, path: menu.node.rel }); setMenu(null); setChatOpen(false);
                 }}>{target.title}</button>)}
               </div>}
             </div>

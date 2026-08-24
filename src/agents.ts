@@ -1,4 +1,44 @@
 import { spawn } from "node:child_process";
+import { ACP_PRESETS } from "./acp/presets.ts";
+
+/**
+ * Entorno limpio para todo lo que esta app lanza: shells de sondeo, agentes y
+ * los comandos que ellos piden ejecutar.
+ *
+ * Se hereda casi todo —hace falta `HOME`, `PATH` y las credenciales del
+ * usuario— y se quitan dos familias:
+ *
+ * - **`npm_*`, y `npm_config_prefix` sobre todo.** No es higiene: es un fallo
+ *   que costó una tarde. npm exporta su configuración al entorno de los
+ *   scripts que corre, así que un servidor arrancado con `npm run dev` o
+ *   `npm run desktop` lleva dentro `npm_config_prefix`. Y **nvm se niega a
+ *   cargar** cuando esa variable existe: imprime «nvm is not compatible with
+ *   the "npm_config_prefix" environment variable» y aborta. La shell de sondeo
+ *   heredaba la variable, nvm no arrancaba, y `~/.nvm/versions/node/<v>/bin`
+ *   no llegaba nunca al PATH — así que TODO binario instalado con
+ *   `npm install -g` bajo nvm resultaba invisible. En la interfaz se veía como
+ *   «claude-agent-acp no está instalado» con el paquete instalado y
+ *   funcionando desde cualquier terminal. Solo mordía a los binarios de nvm:
+ *   `hermes`, `opencode` y `bunx` viven en otro sitio y nunca fallaron, lo que
+ *   hacía el patrón más difícil de leer.
+ *
+ * - **`CLAUDE_CODE_*`.** Si el servidor se arrancó desde dentro de una sesión
+ *   de Claude Code, `CLAUDE_CODE_CHILD_SESSION` hace que el agente lanzado se
+ *   crea sesión hija y desactive el guardado de transcripciones: un fallo que
+ *   no parece un fallo.
+ *
+ * Se copia y se BORRA en vez de construir un objeto vacío: Next amplía
+ * `ProcessEnv` para exigir `NODE_ENV`, así que un `{}` recién hecho no tipa por
+ * mucho que se rellene. Y es más honesto — lo que se hereda es todo, y lo
+ * excepcional queda en una sola lista visible.
+ */
+export function cleanEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
+  for (const k of Object.keys(env)) {
+    if (k.startsWith("CLAUDE_CODE_") || k.toLowerCase().startsWith("npm_")) delete env[k];
+  }
+  return env;
+}
 
 /**
  * Corre un comando resolviendo el PATH como lo vería el usuario, no el
@@ -21,12 +61,14 @@ import { spawn } from "node:child_process";
  * hasta el timeout. `spawn` sí deja fijar `stdio`, así que el stdin del hijo
  * se cierra (`"ignore"`) desde el arranque y ese hook ve EOF de inmediato.
  */
-function runInUserShell(command: string, timeoutMs: number): Promise<{ stdout: string; ok: boolean }> {
+export function runInUserShell(command: string, timeoutMs: number): Promise<{ stdout: string; ok: boolean }> {
   const win = process.platform === "win32";
   const shell = win ? "powershell.exe" : (process.env.SHELL ?? "/bin/zsh");
   const args = win ? ["-NoProfile", "-NonInteractive", "-Command", command] : ["-lic", command];
   return new Promise((resolve) => {
-    const child = spawn(shell, args, { stdio: ["ignore", "pipe", "pipe"] });
+    // `cleanEnv` y no `process.env`: ver arriba. Sin esto, el sondeo no ve los
+    // binarios de nvm cuando al servidor lo lanzó npm.
+    const child = spawn(shell, args, { stdio: ["ignore", "pipe", "pipe"], env: cleanEnv() });
     let stdout = "";
     let done = false;
     const finish = (ok: boolean) => {
@@ -42,115 +84,22 @@ function runInUserShell(command: string, timeoutMs: number): Promise<{ stdout: s
   });
 }
 
-export interface AgentModel { id: string; label: string }
+/** ACP command paths keyed by the preset's stable id. */
+export type AcpAgentPaths = Record<string, string | null>;
 
 /**
- * El catálogo de modelos que `agy` tiene disponibles AHORA mismo, según su
- * propio backend — no una lista fija en el código que se desactualiza en
- * cuanto Google agrega o retira un modelo.
+ * ACP adapters and commands the app can launch.
  *
- * `agy models` imprime `id<TAB>etiqueta` por línea a stdout, y un
- * "Fetching..." de progreso a stderr que se descarta solo. Tarda ~2s porque
- * agy lo resuelve contra su backend — por eso es una llamada bajo demanda, no
- * algo que corra en cada carga de la página. Si `agy` no está instalado, no
- * hay red, o tarda de más, se devuelve `null` y quien llama cae a una lista
- * fija.
+ * Ids and executables come directly from `ACP_PRESETS`, so adding an agent
+ * does not require updating a second detection table.
  */
-export async function agyModels(): Promise<AgentModel[] | null> {
-  const { stdout, ok } = await runInUserShell("agy models", 12_000);
-  if (!ok) return null;
-  const models = stdout
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [id, ...rest] = line.split("\t");
-      return { id: (id ?? "").trim(), label: rest.join("\t").trim() };
-    })
-    .filter((m) => m.id && m.label);
-  return models.length ? models : null;
-}
-
-interface CodexCatalogue {
-  models?: {
-    slug?: unknown;
-    display_name?: unknown;
-    visibility?: unknown;
-  }[];
-}
-
-/**
- * Reduce la respuesta de `codex debug models` a lo único que necesita la UI.
- *
- * El catálogo crudo también contiene instrucciones internas muy extensas; no
- * deben viajar al navegador. `visibility: list` replica lo que el propio CLI
- * considera elegible y evita mostrar aliases ocultos o retirados.
- */
-export function parseCodexModels(stdout: string): AgentModel[] | null {
-  try {
-    const catalogue = JSON.parse(stdout) as CodexCatalogue;
-    const seen = new Set<string>();
-    const models = (catalogue.models ?? [])
-      .filter((m) => m.visibility === "list")
-      .map((m) => ({
-        id: typeof m.slug === "string" ? m.slug.trim() : "",
-        label: typeof m.display_name === "string" ? m.display_name.trim() : "",
-      }))
-      .filter((m) => m.id && m.label && !seen.has(m.id) && !!seen.add(m.id));
-    return models.length ? models : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Catálogo que reconoce la instalación local de Codex en este momento. */
-export async function codexModels(): Promise<AgentModel[] | null> {
-  const { stdout, ok } = await runInUserShell("codex debug models", 12_000);
-  return ok ? parseCodexModels(stdout) : null;
-}
-
-/**
- * El binario que hay que encontrar en el PATH para cada agente.
- *
- * La clave es el id que usa la interfaz (`components/agent-session.ts` arma el
- * comando con los mismos ids) y el valor es el ejecutable de verdad. Los dos
- * coinciden en tres de los cuatro casos y NO en Antigravity, que se instala
- * como `agy`: por eso esto es una tabla y no `id === binario`.
- */
-export const AGENT_BINARIES = {
-  claude: "claude",
-  antigravity: "agy",
-  opencode: "opencode",
-  codex: "codex",
-} as const;
-
-export type AgentId = keyof typeof AGENT_BINARIES;
-
-/** Ruta del ejecutable de cada agente, o `null` si no está en el PATH. */
-export type AgentPaths = Record<AgentId, string | null>;
-
-const NOT_FOUND: AgentPaths = { claude: null, antigravity: null, opencode: null, codex: null };
-
-/**
- * Qué agentes están instalados en esta máquina, en **una sola** invocación de
- * shell para los cuatro.
- *
- * Uno por agente sería lo obvio y cuesta cuatro veces más de lo que parece: en
- * macOS y Linux cada sondeo levanta una zsh de login e interactiva (`-lic`,
- * necesario para ver el PATH real — ver `runInUserShell`), y eso significa leer
- * `.zshrc` entero cuatro veces. Con un `.zshrc` cargado de plugins son varios
- * segundos, y esto corre mientras el usuario mira el paso de configuración del
- * asistente. Un bucle dentro de la MISMA shell paga el arranque una vez.
- *
- * El bucle termina siempre en 0 aunque no encuentre nada; quién falta se lee de
- * la salida, no del código de salida. Un fallo de verdad —no hay shell, se agotó
- * el tiempo— devuelve los cuatro en `null`, que es lo honesto: no se pudo
- * comprobar, y la interfaz no debe afirmar que falten.
- */
-export async function detectAgents(): Promise<AgentPaths> {
+export async function detectAcpAgents(): Promise<AcpAgentPaths> {
   const win = process.platform === "win32";
-  const names = Object.values(AGENT_BINARIES);
-
+  const names = [...new Set(ACP_PRESETS.flatMap((preset) => [
+    preset.command,
+    ...(preset.requires ?? []),
+    ...Object.values(preset.envFrom ?? {}),
+  ]))];
   const command = win
     ? `foreach ($b in ${names.map((n) => `'${n}'`).join(",")}) { ` +
       `$c = Get-Command $b -ErrorAction SilentlyContinue; ` +
@@ -158,30 +107,35 @@ export async function detectAgents(): Promise<AgentPaths> {
     : `for b in ${names.join(" ")}; do printf '%s\\t%s\\n' "$b" "$(command -v "$b" 2>/dev/null)"; done`;
 
   const { stdout, ok } = await runInUserShell(command, 12_000);
-  return ok ? parseAgentPaths(stdout, win) : { ...NOT_FOUND };
+  return ok ? parsePresetPaths(stdout, win) : emptyCommandPaths(
+    Object.fromEntries(ACP_PRESETS.map((preset) => [preset.id, preset.command])),
+  );
 }
 
-/**
- * Convierte la salida `binario<TAB>ruta` en el mapa por id de agente.
- *
- * Separado de `detectAgents` para poder probarlo: lo de arriba levanta una
- * shell de login y no se puede ejercitar en CI, pero todo lo que puede salir
- * mal de verdad está aquí.
- *
- * Lo que descarta, y por qué cada cosa:
- *
- *  - **Líneas sin tabulador.** Una shell interactiva imprime lo suyo antes de
- *    obedecer — zsh con la restauración de sesión activada suelta un
- *    «Restored session: …» que llega mezclado con los resultados. No tiene
- *    tabulador, así que su «ruta» sale vacía y cae por la regla siguiente.
- *  - **Rutas no absolutas.** Es como se ve un binario que no está: `command -v`
- *    no imprime nada y queda la cadena vacía. En Windows además filtra lo que
- *    `Get-Command` resuelve y no se puede lanzar en una terminal — alias y
- *    funciones de PowerShell, que devuelven un nombre en vez de una ruta.
- *  - **Binarios que no son de ningún agente.** El mapa se arma recorriendo
- *    `AGENT_BINARIES`, no la salida, así que nada que aparezca de más entra.
- */
-export function parseAgentPaths(stdout: string, win = process.platform === "win32"): AgentPaths {
+/** A preset is installed only when its command and wrapped harnesses exist. */
+export function parsePresetPaths(stdout: string, win = process.platform === "win32"): AcpAgentPaths {
+  const commands = Object.fromEntries(
+    ACP_PRESETS.flatMap((preset) => [preset.command, ...(preset.requires ?? []), ...Object.values(preset.envFrom ?? {})])
+      .map((command) => [command, command]),
+  );
+  const paths = parseCommandPaths(stdout, commands, win);
+  return Object.fromEntries(ACP_PRESETS.map((preset) => {
+    const dependencies = [...(preset.requires ?? []), ...Object.values(preset.envFrom ?? {})];
+    const ready = paths[preset.command] && dependencies.every((command) => paths[command]);
+    return [preset.id, ready ? paths[preset.command] : null];
+  }));
+}
+
+function emptyCommandPaths(commands: Record<string, string>): AcpAgentPaths {
+  return Object.fromEntries(Object.keys(commands).map((id) => [id, null]));
+}
+
+/** Generic parser used by the ACP registry and pinned by tests. */
+export function parseCommandPaths(
+  stdout: string,
+  commands: Record<string, string>,
+  win = process.platform === "win32",
+): AcpAgentPaths {
   const found = new Map<string, string>();
   for (const line of stdout.split("\n")) {
     const [name, ...rest] = line.split("\t");
@@ -189,8 +143,7 @@ export function parseAgentPaths(stdout: string, win = process.platform === "win3
     const absolute = win ? /^[a-zA-Z]:[\\/]/.test(path) : path.startsWith("/");
     if (name?.trim() && absolute) found.set(name.trim(), path);
   }
-
   return Object.fromEntries(
-    Object.entries(AGENT_BINARIES).map(([id, bin]) => [id, found.get(bin) ?? null]),
-  ) as AgentPaths;
+    Object.entries(commands).map(([id, binary]) => [id, found.get(binary) ?? null]),
+  );
 }

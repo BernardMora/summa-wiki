@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTabs } from "./Tabs.tsx";
+import { subscribeUiActions, takePendingGraphAction, type UiAction } from "./acp-ui.ts";
 import { useT } from "./I18n";
 
 interface Node {
@@ -53,6 +54,17 @@ export default function GraphView() {
   const focus = useRef<Node | null>(null);
   /** Destino de cámara al que se interpola; null cuando no hay animación. */
   const camera = useRef<{ x: number; y: number; k: number } | null>(null);
+  /**
+   * Nodos resaltados por el agente (`focus_graph`).
+   *
+   * Es un canal distinto del foco a propósito. El foco es UNO y lo elige quien
+   * navega; esto es un CONJUNTO y responde a una pregunta —«cuáles conectan
+   * estos dos grupos»—, de modo que la respuesta se ve como constelación en
+   * vez de tener que recorrerla nodo a nodo. Que convivan es lo útil: se puede
+   * enfocar uno de los resaltados sin perder los demás.
+   */
+  const highlight = useRef<Set<string>>(new Set());
+  const [highlighted, setHighlighted] = useState(0);
   /** Simulation temperature. A ref so dragging can reheat it from outside. */
   const alpha = useRef(1);
   const DRAG_PX = 4;
@@ -250,7 +262,11 @@ export default function GraphView() {
       ctx.globalAlpha = 1;
       for (const n of nodes.current) {
         const r = 3 + Math.min(9, Math.sqrt(n.degree) * 2);
-        const dim = Boolean(anchor && near && n !== anchor && !near.has(n.id));
+        const lit = highlight.current.has(n.id);
+        // Un resaltado NUNCA se atenúa: es la respuesta a lo que se preguntó, y
+        // apagarlo porque el foco está en otro sitio la borraría justo cuando
+        // se está mirando.
+        const dim = !lit && Boolean(anchor && near && n !== anchor && !near.has(n.id));
         ctx.globalAlpha = dim ? 0.14 : 1;
         ctx.fillStyle = COLOR[n.type] ?? "#888";
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
@@ -261,6 +277,14 @@ export default function GraphView() {
           ctx.strokeStyle = css.getPropertyValue("--link") || "#3366cc"; ctx.lineWidth = 1; ctx.globalAlpha = 0.5; ctx.stroke();
           ctx.globalAlpha = 1;
         } else if (n === hi) { ctx.strokeStyle = css.getPropertyValue("--link") || "#3366cc"; ctx.lineWidth = 2; ctx.stroke(); }
+        else if (lit) {
+          // Halo ancho y cálido: se distingue del anillo azul del foco a
+          // simple vista, que es lo único que hace falta cuando conviven.
+          ctx.strokeStyle = css.getPropertyValue("--accent") || "#d97706";
+          ctx.lineWidth = 3; ctx.stroke();
+          ctx.beginPath(); ctx.arc(n.x, n.y, r + 5, 0, Math.PI * 2);
+          ctx.globalAlpha = 0.45; ctx.stroke(); ctx.globalAlpha = 1;
+        }
         else if (n.pinned) {
           ctx.strokeStyle = css.getPropertyValue("--muted") || "#666";
           ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]);
@@ -335,6 +359,50 @@ export default function GraphView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [focusNode]);
 
+  /**
+   * Obedece un `focus_graph` del agente.
+   *
+   * Los filtros se aplican como estado de React —vuelven a pedir el grafo,
+   * porque cambian qué nodos existen— y el enfoque tiene que esperar a que
+   * eso termine: pedir la cámara sobre un nodo que la recarga va a tirar deja
+   * el viaje a medias en un grafo que ya no es el mismo. Por eso el id se
+   * aparca en `wanted` y lo consume el efecto de abajo, que corre cuando los
+   * nodos ya están.
+   */
+  const wanted = useRef<string | null>(null);
+  const applyUiAction = useCallback((action: UiAction) => {
+    if (action.kind !== "focus_graph") return;
+    if (action.bundle) setBundle(action.bundle);
+    if (action.category) setCategory(action.category);
+    if (action.highlight) {
+      highlight.current = new Set(action.highlight);
+      setHighlighted(highlight.current.size);
+      alpha.current = Math.max(alpha.current, 0.05);
+    }
+    if (action.id) wanted.current = action.id;
+  }, []);
+
+  useEffect(() => subscribeUiActions(applyUiAction), [applyUiAction]);
+
+  /*
+   * Lo que el agente pidió ANTES de que esta vista existiera.
+   *
+   * Es el caso normal, no el raro: «enfoca el grafo en X» abre la pestaña y
+   * enfoca en la misma frase, así que la orden pasa por el bus mientras este
+   * componente todavía no está montado. Sin esto, el grafo se abriría en
+   * blanco justo cuando acaban de decirle dónde mirar.
+   */
+  useEffect(() => { const pending = takePendingGraphAction(); if (pending) applyUiAction(pending); }, [applyUiAction]);
+
+  /** Enfoca lo que quedó pendiente, en cuanto los nodos existen. */
+  useEffect(() => {
+    if (!ready || !wanted.current) return;
+    const node = byId.current.get(wanted.current);
+    if (!node) return;   // lo filtró el panel: se queda esperando a que vuelva
+    wanted.current = null;
+    focusNode(node);
+  }, [ready, focusNode]);
+
   // ---------------------------------------------------------------- input
   const at = (ev: React.MouseEvent) => {
     const cv = canvas.current!;
@@ -386,6 +454,21 @@ export default function GraphView() {
         >
           Soltar fijados{pinned ? ` (${pinned})` : ""}
         </button>
+        {/*
+          * El resaltado del agente es lo único de esta barra que la persona no
+          * puso, así que tiene que poder quitarlo — y verse que hay algo que
+          * quitar. Solo aparece cuando hay algo resaltado: un botón permanente
+          * a cero diría que la función está apagada, no que nadie la usó.
+          */}
+        {highlighted > 0 && (
+          <button
+            className="graphlit"
+            onClick={() => { highlight.current = new Set(); setHighlighted(0); alpha.current = Math.max(alpha.current, 0.05); }}
+            title={t("graph.clearHighlight")}
+          >
+            {t("graph.highlighted", { n: String(highlighted) })}
+          </button>
+        )}
         <span className="dim">{stats.n} notas · {stats.e} enlaces</span>
         <span className="graphlegend">
           {types.map((type) => (

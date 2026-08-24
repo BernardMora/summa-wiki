@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EditorView } from "@codemirror/view";
-import Editor, { markSelection, unmarkSelection } from "./Editor.tsx";
+import Editor, { markSelection, unmarkSelection, useImageStrings } from "./Editor.tsx";
 import Toc, { parseHeads, type Head } from "./Toc.tsx";
+import LinkRail from "./LinkRail.tsx";
 import Crumb from "./Crumb.tsx";
 import { useTabs } from "./Tabs.tsx";
 import LinkPicker, { type LinkQuery, type LinkTarget } from "./LinkPicker.tsx";
@@ -13,6 +14,8 @@ import EditorToolbar from "./EditorToolbar.tsx";
 import ImageDialog from "./ImageDialog.tsx";
 import VideoDialog from "./VideoDialog.tsx";
 import { insertText } from "./editorCommands.ts";
+import { closeOpenNote, publishOpenNote, subscribeAgentFileWrites } from "./acp-buffers.ts";
+import AskAgent from "./AskAgent.tsx";
 
 export interface Ref { id: string; title: string; path: string; }
 export interface Meta {
@@ -79,9 +82,15 @@ export default function ArticlePane({
   const [rawMarkdown, setRawMarkdown] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(true);
 
+  const imageStrings = useImageStrings();
+
   const viewRef = useRef<EditorView | null>(null);
   const savedRef = useRef(initial?.content ?? "");
   const mtimeRef = useRef(initial?.mtimeMs ?? 0);
+  // Monotonic local-edit token. The main pane is painted from the server
+  // payload and then refreshed in the browser. That refresh must not remount
+  // CodeMirror over text typed or pasted while its request was in flight.
+  const localRevisionRef = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const tabs = useTabs();
@@ -107,10 +116,16 @@ export default function ArticlePane({
     let dead = false;
     (async () => {
       await inFlight.get(nid)?.catch(() => {});
+      const revisionAtRequest = localRevisionRef.current;
       const r = await fetch(`/api/note-full?id=${encodeURIComponent(nid)}`, { cache: "no-store" });
       if (!r.ok) { if (!initial) setErr(t("pane.openFailed")); return; }
       const d: Payload = await r.json();
       if (dead) return;
+      // A late hydration response used to make a paste disappear visually.
+      // Worse, the pending autosave then read the newly remounted old editor
+      // and PUT that stale text back to disk. Local input wins; its guarded
+      // save will surface a real filesystem conflict if there is one.
+      if (localRevisionRef.current !== revisionAtRequest) return;
       const changed = d.content !== savedRef.current;
       setData(d); savedRef.current = d.content; mtimeRef.current = d.mtimeMs;
       setHeads(parseHeads(d.content));
@@ -140,13 +155,31 @@ export default function ArticlePane({
     setTimeout(() => setStatus((s) => (s === "guardado" ? "" : s)), 1400);
   }, [noteId]);
 
-  const onChange = useCallback(() => {
+  const onChange = useCallback((next?: string) => {
+    localRevisionRef.current++;
     const doc = viewRef.current?.state.doc.toString();
     if (doc !== undefined) setHeads(parseHeads(doc));
+    if (doc !== undefined && noteId) publishOpenNote(noteId, next ?? doc);
     setStatus(t("pane.unsaved"));
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => save(), AUTOSAVE_MS);
   }, [save]);
+
+  useEffect(() => {
+    if (!noteId || !data) return;
+    publishOpenNote(noteId, viewRef.current?.state.doc.toString() ?? data.content);
+    const unsubscribe = subscribeAgentFileWrites((write) => {
+      if (write.id !== noteId) return;
+      const current = viewRef.current;
+      if (current) current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: write.content } });
+      savedRef.current = write.content;
+      mtimeRef.current = write.mtimeMs;
+      setData((previous) => previous ? { ...previous, content: write.content, mtimeMs: write.mtimeMs } : previous);
+      setHeads(parseHeads(write.content));
+      setStatus("");
+    });
+    return () => { unsubscribe(); closeOpenNote(noteId); };
+  }, [noteId, data?.id]);
 
   useEffect(() => {
     const flush = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } save(); };
@@ -174,8 +207,12 @@ export default function ArticlePane({
    * esquema `aios://`, que es lo que exige la spec §2 — una ruta relativa que
    * se escapa del bundle no resuelve.
    */
-  const linkTo = useCallback((t: LinkTarget) => {
-    const label = t.title.replace(/[[\]]/g, "");
+  const linkTo = useCallback((t: LinkTarget, custom: string | null) => {
+    // A label the user typed wins over the note's title; brackets are stripped
+    // from either, because a `]` inside `[...]` ends the link early and would
+    // leave the rest of the label loose in the paragraph.
+    const chosen = custom?.trim() || t.title;
+    const label = chosen.replace(/[[\]]/g, "");
     if (!data || t.bundle !== data.meta.bundle) {
       return `[${label}](aios://${t.bundle}/${encodeURI(t.path)})`;
     }
@@ -190,7 +227,7 @@ export default function ArticlePane({
   const insertLink = useCallback((t: LinkTarget) => {
     const v = viewRef.current;
     if (!v || !linkQ) return;
-    const text = linkTo(t);
+    const text = linkTo(t, linkQ.label);
     v.dispatch({
       changes: { from: linkQ.from, to: linkQ.to, insert: text },
       selection: { anchor: linkQ.from + text.length },
@@ -251,6 +288,13 @@ export default function ArticlePane({
       <div className="panescroll">
 
         <div className="artrow">
+          {showToc && !secondary && tab === "article" && (
+            <LinkRail
+              outbound={data.outbound}
+              backlinks={data.backlinks}
+              onOpen={(ref, newTab) => tabs.open(ref.id, ref.title, newTab)}
+            />
+          )}
           <article>
             <p className="infoline">
               {m.core && <span className="corebadge" style={{ marginLeft: 0, marginRight: 8 }} title={t("pane.coreArticle")}>{t("pane.core")}</span>}
@@ -261,6 +305,23 @@ export default function ArticlePane({
               <span>{m.words} palabras</span>
               {m.agentWords > 0 && total > 0 && <span>{Math.round((100 * m.agentWords) / total)}% agente</span>}
             </p>
+            <div className="articleagentactions">
+              <AskAgent
+                label={t("chat.askAbout")}
+                prompt={t("chat.askAboutPrompt", { title: m.title })}
+                resource={{ id: noteId, title: m.title, path: m.pathRel }}
+              />
+              {hasSel && <AskAgent
+                label={t("chat.askSelection")}
+                getPrompt={() => {
+                  const current = viewRef.current;
+                  if (!current) return "";
+                  const selection = current.state.selection.main;
+                  return t("chat.askSelectionPrompt", { title: m.title, selection: current.state.doc.sliceString(selection.from, selection.to) });
+                }}
+                resource={{ id: noteId, title: m.title, path: m.pathRel, description: t("chat.selectedPassage") }}
+              />}
+            </div>
             {(m.categories?.length ?? 0) > 0 && (
               <p className="catline">
                 <span className="catlinelabel">{t("pane.categories")}</span>
@@ -310,6 +371,7 @@ export default function ArticlePane({
                 value={data.content}
                 onChange={onChange}
                 resolve={resolveHref}
+                imageStrings={imageStrings}
                 onLinkQuery={setLinkQ}
                 onSelectionChange={(selected) => { setHasSel(selected); setSelectionRevision((n) => n + 1); }}
                 showFrontmatter={showFrontmatter}

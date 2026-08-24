@@ -22,3 +22,8 @@ out/
 # dia, con un `git add .` que barrio 900 KB de escaneos que nadie quiso commitear.
 # Sacarlos costo reescribir 73 commits.
 assets/
+
+# Borradores sueltos: previews de HTML y notas de una linea que se crean
+# probando el editor. No son del producto.
+tmp/
+nota.md

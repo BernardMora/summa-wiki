@@ -77,15 +77,20 @@ search your notes:
 
 ```
 wiki search <query> [--type --pillar --author --tag --since --limit --why]
-wiki show <slug>            metadata, links, backlinks, provenance
 wiki related <slug> --depth 2
 wiki orphans                notes nothing links to
 wiki health                 validate the vault against the spec
-wiki tree [path] [--depth N --titles]
+wiki candidates             articles worth writing, from graph structure
+wiki stats                  index statistics
 wiki index                  rebuild the index
 ```
 
 Set `WIKI_VAULT` to point it at a vault without touching the app's settings.
+
+Inside the app the agent does not need any of this: the same queries are exposed
+over MCP, so they show up in its tool list without anyone announcing them. The CLI
+keeps only what `cat`, `ls` and `grep` cannot answer — which is why `show` and
+`tree` were removed.
 
 ## Build from source
 
@@ -95,7 +100,7 @@ Requires Node 22.6 or newer.
 git clone https://github.com/BernardMora/summa-wiki.git
 cd summa-wiki
 npm install
-npm run dev          # http://localhost:4321
+npm run dev          # http://localhost:43210
 npm run desktop      # the Electron shell
 ```
 

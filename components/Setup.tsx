@@ -2,9 +2,9 @@
 import { useEffect, useState } from "react";
 import { postJSON, TimeoutError } from "./net";
 import VaultPicker from "./VaultPicker";
-import AgentSession from "./AgentSession";
-import { AGENTS, type AgentPickId, PERMS, useAgentModels, useInstalledAgents } from "./agent-session";
-import AgentMissing from "./AgentMissing";
+import AgentChat from "./AgentChat";
+import { ACP_PRESETS } from "@/src/acp/presets.ts";
+import { useInstalledAcpAgents } from "./acp-installed.ts";
 import { useT } from "./I18n";
 import { bold } from "./markup";
 
@@ -71,11 +71,8 @@ export default function Setup({
   // Paso «crear»
   const [packs, setPacks] = useState<Pack[]>([]);
   const [chosen, setChosen] = useState("");
-  const [agent, setAgent] = useState<AgentPickId>("claude");
-  const [model, setModel] = useState("");
-  const [perm, setPerm] = useState("acceptEdits");
-  const { models: agentModels, loading: modelsLoading } = useAgentModels(agent);
-  const { agents: installedAgents, installed } = useInstalledAgents();
+  const [agent, setAgent] = useState("claude-code");
+  const { installed } = useInstalledAcpAgents();
   const [name, setName] = useState(suggestName);
   const [dir, setDir] = useState(suggestDir);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -91,6 +88,7 @@ export default function Setup({
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [agentFinished, setAgentFinished] = useState(false);
+  const [chatId] = useState(() => `setup-${crypto.randomUUID()}`);
   /**
    * Segundos transcurridos mientras se analiza.
    *
@@ -342,11 +340,11 @@ export default function Setup({
         <div className="setupfield">
           <label>{t("setup.fieldAgent")}</label>
           <div className="archgrid">
-            {AGENTS.map((a) => {
+            {ACP_PRESETS.map((a) => {
               const has = installed(a.id);
               return (
                 <button key={a.id} className={`archcard${agent === a.id ? " on" : ""}`}
-                        onClick={() => { setAgent(a.id); setModel(""); setPerm("acceptEdits"); }}>
+                        onClick={() => setAgent(a.id)}>
                   <strong>
                     {a.name}
                     {has !== null && (
@@ -355,50 +353,12 @@ export default function Setup({
                       </span>
                     )}
                   </strong>
-                  <span>{t(a.blurb)}</span>
+                  <span>{t(a.adapter ? "setup.agentAdapter" : "setup.agentNativeAcp")}</span>
                 </button>
               );
             })}
           </div>
-          <AgentMissing agent={agent} installed={installed(agent)} all={installedAgents} />
-        </div>
-
-        <div className="setupfield">
-          <label>{t("setup.fieldModel")}</label>
-          <div className="archgrid">
-            {agentModels.map((m) => (
-              <button key={m.id} className={`archcard${m.id === model ? " on" : ""}`}
-                      onClick={() => setModel(m.id)}>
-                <strong>{m.labelKey ? t(m.labelKey) : m.label}</strong>
-                <span>{t(m.hint)}</span>
-              </button>
-            ))}
-          </div>
-          <p className="cfghint">
-            {modelsLoading
-              ? t("setup.modelsLoading")
-              : t("setup.modelsHint")}
-          </p>
-        </div>
-
-        <div className="setupfield">
-          <label>{t("setup.fieldPerms")}</label>
-          <div className="archgrid">
-            {(PERMS[agent] || PERMS.claude).map((p) => (
-              <button key={p.id} className={`archcard${p.id === perm ? " on" : ""}`}
-                      onClick={() => setPerm(p.id)}>
-                <strong>{t(p.label)}</strong>
-                <span>{t(p.hint)}</span>
-              </button>
-            ))}
-          </div>
-          {perm === "bypass" && (
-            <div className="warnbox">
-              <strong>{t("setup.bypassTitle")}</strong> {t("setup.bypassBody")}
-              <br /><br />
-              {t("setup.bypassBody2")}
-            </div>
-          )}
+          <p className="cfghint">{t("setup.acpOptionsHint")}</p>
         </div>
 
         {err && <div className="err">{err}</div>}
@@ -500,12 +460,11 @@ export default function Setup({
       <p className="steps">{t("setup.stepSort")}</p>
       <p>{t("setup.runIntro", { n: copied?.copied ?? 0 })}</p>
 
-      <AgentMissing agent={agent} installed={installed(agent)} all={installedAgents} />
       <p className="cfghint">{t("agent.optionalNote")}</p>
-      <AgentSession cwd={vault} agent={agent} model={model} perm={perm}
-                    installed={installed(agent)}
-                    onStarted={() => setAgentFinished(false)}
-                    onEnded={() => setAgentFinished(true)} />
+      <div className="agentterm">
+        <AgentChat tabId={chatId} cwd={vault} agent={agent} initialPrompt="/vault-ingest"
+                   onTurnComplete={() => setAgentFinished(true)} />
+      </div>
 
       {/*
         * El botón sale también cuando el agente NO está instalado: si no,

@@ -77,3 +77,74 @@ export function applyHumanProvenance(_oldText: string, newText: string): Provena
 
   return { content, wrapped, authorChanged };
 }
+
+/**
+ * Attribute a whole-file write made through ACP.
+ *
+ * ACP sends the replacement document, not an edit list. We therefore collapse
+ * the change to one common-prefix/common-suffix span. Inline markers are only
+ * inserted when that span is a complete Markdown block and is outside fenced
+ * code and tables. In every other case the file-level author is still moved to
+ * `mixed`: less precise, but honest and incapable of corrupting the document.
+ */
+export function applyAgentProvenance(oldText: string, newText: string): ProvenanceResult {
+  const changed = changedSpan(oldText, newText);
+  if (!changed) return { content: newText, wrapped: false, authorChanged: null };
+
+  let start = changed.start;
+  let end = changed.end;
+  // Include the line break at either edge when the diff stopped immediately
+  // beside it. This recognizes the normal "insert a paragraph" edit.
+  if (start > 0 && newText[start - 1] === "\n") {
+    // already begins at a line boundary
+  } else if (newText[start] === "\n") {
+    start++;
+  }
+  if (end < newText.length && newText[end] === "\n") {
+    // already ends at a line boundary
+  } else if (end > start && newText[end - 1] === "\n") {
+    end--;
+  }
+
+  const prefix = newText.slice(0, start);
+  const addition = newText.slice(start, end);
+  const atLineStart = start === 0 || newText[start - 1] === "\n";
+  const atLineEnd = end === newText.length || newText[end] === "\n";
+  const fencesBefore = (prefix.match(/^\s*(```|~~~)/gm) ?? []).length;
+  const insideFence = fencesBefore % 2 === 1;
+  const tableLike = addition.split("\n").some((line) => /^\s*\|.*\|\s*$/.test(line));
+  const alreadyMarked = /<!--\s*\/?(?:ai|human)\s*-->/.test(addition);
+  const safe = Boolean(addition.trim()) && atLineStart && atLineEnd && !insideFence && !tableLike && !alreadyMarked;
+
+  let content = safe
+    ? `${newText.slice(0, start)}<!-- ai -->\n${addition}\n<!-- /ai -->${newText.slice(end)}`
+    : newText;
+
+  const author = content.match(/^author:\s*(human|agent|mixed)\s*$/m)?.[1] ?? null;
+  const next = author === "agent" && !/<!--\s*human\s*-->/.test(content) ? "agent" : "mixed";
+  let authorChanged: string | null = null;
+  if (author && author !== next) {
+    content = content.replace(/^author:\s*(human|agent|mixed)\s*$/m, `author: ${next}`);
+    authorChanged = next;
+  }
+  return { content, wrapped: safe, authorChanged };
+}
+
+/** Attribute a new Markdown file written through ACP. */
+export function applyNewAgentProvenance(newText: string): ProvenanceResult {
+  const frontmatter = /^(---\r?\n[\s\S]*?^---\r?\n?)/m.exec(newText);
+  const head = frontmatter?.[1] ?? "";
+  const body = newText.slice(head.length);
+  const alreadyMarked = /<!--\s*\/?(?:ai|human)\s*-->/.test(body);
+  const wrapped = Boolean(body.trim()) && !alreadyMarked;
+  let content = wrapped ? `${head}<!-- ai -->\n${body}\n<!-- /ai -->` : newText;
+
+  const author = content.match(/^author:\s*(human|agent|mixed)\s*$/m)?.[1] ?? null;
+  const next = /<!--\s*human\s*-->/.test(content) ? "mixed" : "agent";
+  let authorChanged: string | null = null;
+  if (author && author !== next) {
+    content = content.replace(/^author:\s*(human|agent|mixed)\s*$/m, `author: ${next}`);
+    authorChanged = next;
+  }
+  return { content, wrapped, authorChanged };
+}

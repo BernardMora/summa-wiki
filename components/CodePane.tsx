@@ -112,8 +112,7 @@ export default function CodePane({
       }
     }).catch(() => { /* lenguaje sin modo instalable: se queda en texto plano */ });
 
-    // CodeMirror no lee variables CSS; hay que reconfigurarlo al cambiar el
-    // tema, igual que xterm en TerminalPane.
+    // CodeMirror no lee variables CSS; hay que reconfigurarlo al cambiar el tema.
     const repaint = () => {
       view.current?.dispatch({ effects: themeCompartment.reconfigure(themeExtensions(isDark())) });
     };

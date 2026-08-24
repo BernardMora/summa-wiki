@@ -1,0 +1,54 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Chat preview</title>
+<link rel="stylesheet" href="./appearance.css">
+<link rel="stylesheet" href="./globals.css">
+<style>
+body{margin:0}
+.grid{display:grid;grid-template-columns:1fr;gap:0;height:100vh}
+.cell{height:100vh;overflow:hidden;border-right:1px solid #888}
+.cell > .chat{height:100%}
+</style></head><body>
+<div class="grid">
+  <div class="cell" id="a"></div>
+  </div>
+<template id="tpl">
+<div class="chat">
+  <div class="chatbar">
+    <details class="harnesspicker"><summary><img class="harnesslogo" alt="">Claude Code</summary></details>
+    <label class="chatopt">Modo <select><option>default</option></select></label>
+    <span class="chatmodel">claude-opus-5</span>
+    <span class="dim chatusage">12.4k tokens</span>
+  </div>
+  <div class="chatscroll">
+    <div class="chatmsg chatuser"><p class="chatprose">Compara las ventas de mint chip con el verano pasado y arregla el linter.</p></div>
+    <details class="chatthought" open><summary class="dim">Razonando</summary><p class="chatprose">Necesito tres veranos de datos antes de comparar; el índice sólo tiene dos.</p></details>
+    <div class="chatmsg chatagent"><p class="chatprose">Saqué tres veranos de ventas de mint chip. Va 12% arriba, con picos de fin de semana más fuertes.</p></div>
+    <div class="chattool" data-status="completed"><div class="chattoolhead"><span class="chattoolkind">read</span><span>Leer flavors.csv</span></div><pre class="chatterm">2024,mint-chip,4210
+2025,mint-chip,4711</pre></div>
+    <div class="chattool" data-status="in_progress"><div class="chattoolhead"><span class="chattoolkind">execute</span><span>npm run lint</span></div></div>
+    <div class="chattool" data-status="failed"><div class="chattoolhead"><span class="chattoolkind">edit</span><span>Escribir 204 líneas</span></div>
+      <div class="chatdiff"><div class="chatdiffpath">components/ChurnSchedule.tsx</div><pre><div class="add">+ const rows = useMemo(() =&gt; parse(csv), [csv]);</div><div class="del">- const rows = parse(csv);</div></pre></div>
+      <details class="chatraw"><summary class="dim">Salida completa</summary><pre class="chatterm">ENOENT: no such file</pre></details>
+    </div>
+    <div class="chatplan"><strong class="dim">Plan</strong><ul>
+      <li data-status="completed">Leer el histórico de ventas</li>
+      <li data-status="in_progress">Comparar contra el verano pasado</li>
+      <li data-status="pending">Escribir el resumen</li></ul></div>
+    <p class="dim chatwait">Trabajando…</p>
+  </div>
+  <div class="chatperm"><p>Claude Code quiere escribir en <code>components/ChurnSchedule.tsx</code>.</p>
+    <div class="cfgrow"><button class="newbtn">Permitir</button><button class="newbtn">Permitir siempre</button><button class="newbtn danger">Rechazar</button></div></div>
+  <div class="chatmentions"><span><span class="mentionat">@</span>notas-de-prehistoria</span><span><span class="mentionat">@</span>veridia-methodology</span></div>
+  <div class="chatbox"><div class="chatcomposer"><div class="chatinput">
+    <div class="chatinputhighlight"></div>
+    <textarea placeholder="Escribe o etiqueta una nota con @"></textarea></div>
+    <button class="chatsend"><span>↑</span></button></div></div>
+</div>
+</template>
+<script>
+const tpl=document.getElementById('tpl');
+a.append(tpl.content.cloneNode(true));
+const q=new URLSearchParams(location.search);
+document.documentElement.dataset.theme=q.get('theme')||'light';
+if(q.get('palette'))document.documentElement.dataset.palette=q.get('palette');
+if(q.get('preset'))document.documentElement.dataset.preset=q.get('preset');
+</script></body></html>

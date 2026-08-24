@@ -7,9 +7,8 @@
 # contribuyente de fuera llega sin ese contexto y la revisión a mano no escala.
 #
 # Deliberadamente NO empaqueta. Construir las cuatro plataformas son ~40
-# minutos de runner por PR, y lo que atrapa un empaquetado —que node-pty
-# compile, que el servidor arranque desde el paquete— no cambia con un PR que
-# toca componentes. De eso responde `release.yml` con su prueba de humo antes
+# minutos de runner por PR, y lo que atrapa un empaquetado —que el servidor
+# arranque desde el paquete— no cambia con un PR que toca componentes. De eso responde `release.yml` con su prueba de humo antes
 # de publicar nada.
 
 name: CI

@@ -4,113 +4,6 @@ Decisions that have been *thought through* but deliberately not built. Each entr
 records the reasoning so the next person — or the next session — does not have to
 rediscover it. Nothing here is a commitment.
 
-## Extensibility: plugins
-
-The question that started this: DeepSeek Harness ([dsh](https://github.com/deepseek-ai/deepseek-harness))
-ships an architecture where *everything is a plugin*, and demos a flow where a user
-asks the agent for a new capability and gets one. Could Summa Wiki do the same?
-
-Yes, but not by copying dsh, and the reason is a constraint we chose on purpose.
-
-### The constraint: there is no compiler in the package
-
-Next.js compiles routes and React components at build time, and the shipped app
-excludes `@next/swc` (124 MB — see `electron-builder.yml`). **A plugin therefore
-cannot ship a React component and have it appear in the UI.** Nothing in the
-installed app knows how to compile one.
-
-This is not an accident to be undone. Putting the compiler back costs 124 MB in
-every download to support a feature that does not exist yet.
-
-Worth noting: dsh has the same shape of answer. Its plugins do not inject UI
-either — they register `ConversationNodeDefinition` objects and keyed renderers
-that paint from an event log. The extensible UI is a *declarative contract*.
-
-### Three layers, very different costs
-
-**Agent layer — mostly already built.** The vault writes the `vault-ingest` skill
-into `.claude/skills/`, regenerated per ingest from the live architecture.
-`findClaude()` already locates Claude Code, and the terminal pane already hosts it.
-"Ask the agent for something new and get a plugin" is close to reachable today: the
-agent writes a skill file, the app picks it up. This is the shortest path to the
-demo that prompted the question.
-
-**Server layer — cheap.** New CLI commands, `/api` routes, indexer hooks, handling
-for new `type:` values. Plain JS modules loaded at runtime by the server child
-process. No compilation. This is where dsh's model maps over directly.
-
-**UI layer — expensive, and the one that matters.** Summa Wiki is a UI product; the
-terminal exists so different agent harnesses can be plugged in, not because the CLI
-is the deliverable. So the layer to eventually pay for is precisely the expensive
-one.
-
-The reference here is **Obsidian**, not dsh: a UI product over a Markdown vault,
-a large plugin ecosystem, and no compiler in the app. Its plugins are pre-bundled
-JS that talks to an API and to DOM nodes — never to the component tree.
-
-Translated to this codebase: the Next shell stays pre-compiled and declares **mount
-points** (a sidebar slot, an article panel, a renderer per `type:`). A plugin gets a
-DOM node and an API and owns that subtree. With React that is a `div` with a `ref`;
-it does not fight the App Router and it compiles nothing.
-
-### What extensibility already exists
-
-Worth stating plainly, because it changes how much of the above is needed: an agent
-that writes notes, skills, category rules or a whole architecture *is already
-extending the app*, and the UI reflects it, because the UI is data-driven —
-`.summa/architecture.json`, categories as rules, the architecture packs.
-
-dsh needs "everything is a plugin" because it has no host. Summa Wiki can host
-someone else's harness and get much of the extensibility without building the
-framework. The open question is narrow: **what can a user want that the data layer
-cannot express?** The answer is *new views* — and only that answer justifies the UI
-layer above.
-
-### Security, if this is ever built
-
-dsh is a developer tool run by developers. Summa Wiki holds someone's personal
-notes. Third-party code hot-loaded into Electron is arbitrary code execution over
-the whole vault and machine. Non-negotiables: plugins load in the **server child
-process, never the renderer with Node integration**; explicit per-plugin opt-in; a
-manifest declaring what a plugin touches. Local plugins would live in
-`.summa/plugins/`, consistent with the rule that vault-level state lives in
-`.summa/`.
-
-### First step, when the time comes
-
-Not designing the contract. Write **one** throwaway plugin against the app as it
-stands — a renderer for an invented `type:` — and find where it chafes. A plugin
-contract designed without plugins using it gets designed wrong.
-
-## Distribution: npm
-
-Considered and declined **as a launch channel**, for now.
-
-The CLI is a clean npm candidate: `src/cli.ts` imports only `node:` builtins and
-its own modules, needs no build step, and the name `summa-wiki` is free on npm. It
-would have been easy to publish — which is exactly the bias to watch. Easy is not
-the same as right.
-
-Someone running `npx summa-wiki search` gets a ranked list of file paths. That is
-useful to an *agent*, and no evidence at all of why the app is worth installing.
-The product is the reading and writing experience; the CLI is shared infrastructure
-between the app and the agent.
-
-So: **one channel, the installers on GitHub Releases.** Publishing the CLI later has
-a real but narrow use — letting an agent reach a vault from outside the app, which
-is what `CLAUDE.md` in the author's own vault does — but it is a convenience, not a
-launch.
-
-If plugins are ever built, one package does become necessary: **`@summa-wiki/plugin-api`**,
-carrying only the types and the contract. It has to be versioned *separately from
-the app*, or every app release breaks every plugin. Discovery would follow dsh's
-approach, which demonstrably works: a `summa-wiki-plugin` npm keyword plus a GitHub
-topic.
-
-Shipping the whole app as `npx summa-wiki web` (dsh's model) is feasible but heavy —
-the tarball would carry the Next build and `next` itself, well over 150 MB. Only
-worth it for a "run it on a server, open a browser" story that nobody has asked for.
-
 ## Representation: the graph view is one idiom out of many
 
 `components/GraphView.tsx` is a hand-written force-directed canvas — nodes colored
@@ -200,6 +93,8 @@ which is best — it is which loss is acceptable for the question being asked, a
 whether a second coordinated view recovers it.
 
 ## Ingest: local OCR
+
+Idea coming from: https://github.com/baidu/Unlimited-OCR
 
 Spiked in July 2026 and declined, with the measurements kept here because the
 blocker is not quality.
@@ -301,16 +196,6 @@ decide for them.
 A live mirror is the feature people actually picture. It is also a sync engine,
 and writing one of those is a much larger project than the app it would live in.
 
-## Onboarding: a showcase vault
-
-First run opens an empty vault. Every feature in this app is data-driven — the
-graph, the category rules, backlinks, `wiki search`, the renderers keyed to
-`type:` — which means an empty vault demonstrates exactly none of them. They are
-emergent properties of content, and with no content they are invisible.
-
-The proposal is an optional showcase vault, offered on first run beside "create a
-vault": a real vault with real files that the user can open, break and delete.
-Not a video, not a tour overlay pointing at empty panes.
 
 ### Why this does not reintroduce the cost scaffold.ts avoids
 
@@ -366,6 +251,73 @@ realistic full-coverage corpus they currently lack.
 Which also sets the timing. Build it after the feature set stops moving. Every
 new feature adds a required exhibit, so building it early means rewriting it on
 every release.
+
+## Agent output: a file should arrive as an artifact, not disappear into the vault
+
+Agents can already create and modify files in their working directory, and ACP
+can describe tool calls and diffs. The app currently renders those events as part
+of the conversation. That proves the operation happened, but it does not give the
+result a product surface: a new note can be written successfully and remain
+invisible until the user notices it in the file tree or searches for it.
+
+That is the gap behind "produce an artifact." An artifact is not a second storage
+format and not an attachment owned by the chat. It is still an ordinary file in
+the vault. The artifact UI is the temporary, visual handoff between an agent action
+and that durable file.
+
+### The handoff
+
+After a successful create or edit, the transcript should show a result card with:
+
+- the file's title, type and vault-relative path;
+- whether it was **created** or **modified**;
+- a rendered preview for Markdown, an image preview for supported assets, and a
+  safe generic file card for everything else;
+- a concise change summary and, for edits, an expandable diff;
+- actions to open the file in the editor, reveal it in the tree, and accept or
+  reject a proposed edit when the write has not yet been committed;
+- provenance state — `agent` for a new agent-authored note, `mixed` for edits to
+  human work, with the same `<!-- ai -->` rules as every other write path.
+
+The card must be derived from a structured file event, not inferred from prose
+such as "I created `foo.md`." ACP's `ToolCallContent` diff variant is already the
+right shape for modifications. New files need the equivalent application-level
+event: operation, canonical vault-relative path, media type, before/after state
+where applicable, and write status. Paths must be resolved inside the active
+vault before they become clickable; a tool result must never turn an arbitrary
+filesystem path into an app navigation target.
+
+### Two levels, in order
+
+**First: visible committed writes.** When an agent writes directly to disk, detect
+the completed in-vault create or edit, refresh the index/tree, and render the
+result card with preview and "Open". This closes the current discoverability gap
+without pretending the app controlled a write it did not control.
+
+**Then: proposed writes.** Once `fs/write_text_file` is routed through the ACP
+client, hold the candidate change in the app, paint its diff in the real editor,
+and let the user accept or reject it. The accepted write passes through one
+markdown-aware provenance handler. This is the stronger interaction, but it
+depends on the unsolved safe-marker placement described in
+[`docs/acp-migration.md`](acp-migration.md#phase-4--vault-native-capabilities).
+
+Do not introduce a separate artifact database, copy generated files into a chat
+folder, or make an artifact exist only for the lifetime of a conversation. The
+vault remains the source of truth; conversation history only records the handoff.
+
+### Showcase criterion
+
+The optional showcase vault is the proving ground. A guided task should ask the
+agent to synthesize several existing notes into one new knowledge artifact, then
+show the result card, open the new note, and make its incoming links and
+provenance visible. A fictional-media vault can make that sequence immediately
+legible — for example, synthesizing character, faction and event notes into a
+thematic analysis — but the shipped capability and tests must remain
+domain-agnostic.
+
+**Done when:** after an agent creates or modifies an in-vault file, a user who
+never opens the file tree can see what changed, inspect it, open the durable file,
+and tell whether the change is committed and who authored it.
 
 ## Smaller items
 

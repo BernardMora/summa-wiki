@@ -1,10 +1,26 @@
 #!/usr/bin/env node
+/**
+ * El CLI del wiki: indexar y preguntarle al índice.
+ *
+ * ## Lo que ya NO está aquí, y por qué
+ *
+ * `show` y `tree` se fueron en la fase 5 de la migración a ACP. Los dos
+ * existían para un agente que no tenía otra forma de mirar el vault, y los dos
+ * hacían lo que `cat` y `ls` ya hacen — con la diferencia de que había que
+ * anunciarlos en `CLAUDE.md` y esperar a que los leyera. Ahora el vault se
+ * consulta por MCP (`src/mcp/tools.ts`), donde las herramientas aparecen solas
+ * en la lista del agente, y lo que queda aquí es lo que NINGÚN comando de
+ * shell contesta: búsqueda con ranking, el vecindario del grafo, los huérfanos,
+ * la validación contra la spec y los candidatos.
+ *
+ * El criterio para volver a añadir un comando es ése: si `cat`, `ls` o `grep`
+ * lo resuelven, no es un comando de esto.
+ */
 import fs from "node:fs";
 import path from "node:path";
 import { buildIndex } from "./indexer.ts";
 import { search, neighbourhood, health, candidates } from "./search.ts";
-import { INDEX_PATH, VAULT, VAULT_SOURCE, vaultExists, ARCH } from "./config.ts";
-import { underAny } from "./match.ts";
+import { INDEX_PATH, VAULT, VAULT_SOURCE, vaultExists } from "./config.ts";
 import { settingsPath } from "./appdata.mjs";
 
 /**
@@ -82,31 +98,6 @@ switch (cmd) {
     break;
   }
 
-  case "show": {
-    const idx = load();
-    const n = resolve(idx, args[1] ?? "");
-    if (!n) { console.error("not found"); process.exit(1); }
-    console.log(`# ${n.title}`);
-    console.log(`  id       ${n.id}`);
-    console.log(`  type     ${n.type}   author ${n.author}   words ${n.words}`);
-    console.log(`  created  ${n.created || "(blank — not derivable)"}   updated ${n.updated}`);
-    if (n.pillar) console.log(`  pillar   ${n.pillar}`);
-    if (n.tags.length) console.log(`  tags     ${n.tags.join(", ")}`);
-    if (n.resource) console.log(`  resource ${n.resource}`);
-    if (n.provenance.agentWords) {
-      const t = n.provenance.humanWords + n.provenance.agentWords;
-      console.log(`  authored ${n.provenance.humanWords} human / ${n.provenance.agentWords} agent words (${Math.round(100 * n.provenance.agentWords / t)}% agent)`);
-    }
-    if (n.headings.length) console.log(`\n  headings: ${n.headings.slice(0, 8).join(" · ")}`);
-    const out = n.links.filter((l) => l.kind === "internal");
-    if (out.length) { console.log(`\n  links out (${out.length}):`); for (const l of out.slice(0, 15)) console.log(`    -> ${l.target}`); }
-    if (n.backlinks.length) { console.log(`\n  backlinks (${n.backlinks.length}):`); for (const b of n.backlinks.slice(0, 15)) console.log(`    <- ${b}`); }
-    const broken = n.links.filter((l) => l.kind === "broken");
-    if (broken.length) { console.log(`\n  BROKEN (${broken.length}):`); for (const l of broken) console.log(`    !! ${l.href}`); }
-    console.log(`\n  path: ${n.abs}`);
-    break;
-  }
-
   case "related": {
     const idx = load();
     const n = resolve(idx, args[1] ?? "");
@@ -160,115 +151,16 @@ switch (cmd) {
     break;
   }
 
-  /**
-   * What a per-folder _index.md was for, without the 48 files.
-   *
-   * Generated from the index, so it only shows folders that actually hold
-   * notes, and it cannot go stale. An agent reads one command instead of
-   * walking the tree; a human sees where the mass sits.
-   */
-  case "tree": {
-    const idx = load();
-    const root = args[1] && !args[1].startsWith("--")
-      ? args[1].split(/[\\/]+/).filter(Boolean).join("/")
-      : "";
-    const maxDepth = Number(flag("depth") ?? 99);
-
-    /**
-     * A note's `path` is relative to *its bundle*, so notes in a nested bundle
-     * used to surface as if they were vault top-level
-     * folders — and no path prefix could ever select them. Rebuild the path
-     * relative to the vault instead, derived from the bundle roots rather than
-     * hardcoded, so the tree matches what is actually on disk.
-     */
-    const vaultRoot = idx.bundles.find((b) => b.id === ARCH.primaryBundle)?.root ?? "";
-    const shared = new Set(idx.bundles.filter((b) => b.shared).map((b) => b.id));
-    const vaultPath = (n: Note) => {
-      if (!n.abs || !vaultRoot) return n.path.normalize("NFC");
-      // `path.relative` + `path.sep`, no concatenar "/": es el mismo idioma que
-      // usa `indexer.ts` para derivar `path` y `relFromVault`, y es lo que hace
-      // que esto no mienta en Windows, donde el separador es "\\".
-      const rel = path.relative(vaultRoot, n.abs);
-      // Sale con ".." cuando la nota no cuelga del bundle primario. Los bundles
-      // compartidos son el caso normal, no un error: ahí manda `n.path`.
-      return (rel && !rel.startsWith("..") && !path.isAbsolute(rel)
-        ? rel.split(path.sep).join("/")
-        : n.path
-      ).normalize("NFC");
-    };
-
-    const notes = idx.notes.filter((n) => {
-      const p = vaultPath(n);
-      // Solo `paths`, no `contains`: el árbol muestra la forma del disco, y
-      // las plantillas son archivos que están ahí de verdad. Lo que se salta
-      // son los codebases, que no son notas.
-      return !underAny(p, ARCH.articles.notArticles.paths) &&
-        (!root || p === root || p.startsWith(root + "/"));
-    });
-    if (!notes.length) {
-      console.log(root ? `Nada bajo "${root}".` : "El índice está vacío.");
-      break;
-    }
-
-    interface Node { notes: number; words: number; kids: Map<string, Node>; titles: string[]; bundles: Set<string> }
-    const mk = (): Node => ({ notes: 0, words: 0, kids: new Map(), titles: [], bundles: new Set() });
-    const tree = mk();
-
-    for (const n of notes) {
-      const parts = vaultPath(n).split(/[\\/]/);
-      const dirs = parts.slice(0, -1);
-      let cur = tree;
-      cur.notes++; cur.words += n.words; cur.bundles.add(n.bundle);
-      for (const d of dirs) {
-        if (!cur.kids.has(d)) cur.kids.set(d, mk());
-        cur = cur.kids.get(d)!;
-        cur.notes++; cur.words += n.words; cur.bundles.add(n.bundle);
-      }
-      cur.titles.push(n.title);
-    }
-
-    const walk = (node: Node, prefix: string, depth: number) => {
-      const kids = [...node.kids.entries()].sort((a, b) => b[1].notes - a[1].notes);
-      kids.forEach(([name, kid], i) => {
-        const last = i === kids.length - 1;
-        const w = kid.words >= 1000 ? `${(kid.words / 1000).toFixed(1)}k` : String(kid.words);
-        // Flag the shared subtree: everything under it syncs to someone else.
-        const tag = [...kid.bundles].every((b) => shared.has(b)) ? "  ⇄ compartido" : "";
-        console.log(`${prefix}${last ? "└─ " : "├─ "}${name}/  ${kid.notes} nota${kid.notes === 1 ? "" : "s"} · ${w} pal.${tag}`);
-        const next = prefix + (last ? "   " : "│  ");
-        if (depth + 1 < maxDepth) walk(kid, next, depth + 1);
-        else if (kid.kids.size) console.log(`${next}└─ … ${kid.kids.size} subcarpeta(s) más`);
-        if (has("titles") && kid.titles.length && depth + 1 <= maxDepth)
-          for (const t of kid.titles) console.log(`${next}   · ${t}`);
-      });
-    };
-
-    // Descend to the requested folder so its ancestors are not re-printed.
-    let start = tree;
-    for (const seg of root ? root.split(/[\\/]/) : []) {
-      const next = start.kids.get(seg);
-      if (!next) break;
-      start = next;
-    }
-
-    console.log(`${root || "(vault)"}  —  ${tree.notes} notas · ${tree.words.toLocaleString()} palabras\n`);
-    if (has("titles") && start.titles.length) for (const t of start.titles) console.log(`  · ${t}`);
-    walk(start, "", 0);
-    break;
-  }
-
   default:
     console.log(`Summa Wiki CLI — index and query the knowledge base.
 
   wiki index [--pretty]              rebuild index.json
   wiki search <query> [filters]      ranked search
       --type --pillar --author --bundle --tag --since --limit --why --excerpt
-  wiki show <slug|path|id>           metadata, links, backlinks, provenance
   wiki related <slug> [--depth N]    graph neighbourhood
   wiki orphans                       notes with no inbound links
   wiki health [--all]                spec section 9 validation
   wiki candidates [--min N]          articles worth writing, from graph structure
-  wiki tree [path] [--depth N]       folder overview with note counts (--titles)
   wiki stats                         index statistics
 
 Vault: ${VAULT}

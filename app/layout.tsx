@@ -9,6 +9,7 @@ import TabsProvider, { TabBar } from "@/components/Tabs.tsx";
 import ZoomGuard from "@/components/ZoomGuard.tsx";
 import { readConfig } from "@/src/config.ts";
 import { I18nProvider } from "@/components/I18n.tsx";
+import { DefaultAgentProvider } from "@/components/DefaultAgent.tsx";
 import { getLocale, getT } from "@/lib/i18n.server.ts";
 import { appearanceExists, readAppearance } from "@/src/appearance/store.ts";
 import { appearanceAttributes, resolveAppearance } from "@/src/appearance/catalog.ts";
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ZoomGuard />
         <Suspense fallback={null}>
         <I18nProvider locale={locale}>
+        <DefaultAgentProvider agent={machine.ai.agent}>
         <TabsProvider>
           <Masthead name={cfg.name} tagline={cfg.tagline} />
           <div className="shell">
@@ -78,10 +80,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             skipped={machine.onboarding.skipped}
             aiConfigured={machine.ai.configured}
             agent={machine.ai.agent}
-            model={machine.ai.model}
             vaultPath={machine.demoVault?.path ?? activeVault}
           />}
         </TabsProvider>
+        </DefaultAgentProvider>
         </I18nProvider>
         </Suspense>
       </body>

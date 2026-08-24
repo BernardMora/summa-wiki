@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { search, searchKeymap, openSearchPanel, highlightSelectionMatches } from "@codemirror/search";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { frontmatterField, frontmatterVisible, livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate } from "./livePreview.ts";
+import { frontmatterField, frontmatterVisible, livePreview, tableField, livePreviewTheme, linkClick, linkResolver, navigate, imageLabels, type ImageLabels } from "./livePreview.ts";
 import { toggleWrap } from "./editorCommands.ts";
+import { useT } from "./I18n";
 
 /**
  * El último editor que tuvo el foco, y el atajo global de búsqueda.
@@ -28,8 +29,6 @@ function onGlobalFind(e: KeyboardEvent) {
   if (e.defaultPrevented) return;      // el editor enfocado ya lo atendió
   if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
   if (e.key.toLowerCase() !== "f") return;
-  // Una terminal se queda con lo suyo: ahí ⌘F no busca en una nota.
-  if ((document.activeElement as HTMLElement | null)?.closest(".termhost")) return;
   const v = lastFocused;
   if (!v || !v.dom.isConnected) return;
   e.preventDefault();
@@ -43,6 +42,25 @@ function trackFind(v: EditorView) {
     if (lastFocused === v) lastFocused = null;
     if (--listeners === 0) window.removeEventListener("keydown", onGlobalFind);
   };
+}
+
+/**
+ * The strings the image widget shows, in the reader's language.
+ *
+ * A hook and not a constant per pane: every pane that mounts an editor needs
+ * the same six words, and the object goes into a CodeMirror facet, so it has to
+ * be stable across renders or the editor reconfigures on every keystroke.
+ */
+export function useImageStrings(): ImageLabels {
+  const t = useT();
+  return useMemo(() => ({
+    selectPath: t("image.selectPath"),
+    floatLeft: t("image.floatLeft"),
+    floatRight: t("image.floatRight"),
+    fullWidth: t("image.fullWidth"),
+    plain: t("image.plain"),
+    captionPlaceholder: t("image.captionPlaceholder"),
+  }), [t]);
 }
 
 const HIDDEN_TAG_LEFT = /<\/?(?:u|sup|sub|span|mark)(?:\s+class="summa-(?:text|highlight)-[a-z]+")?>\s*$/i;
@@ -172,11 +190,13 @@ const imagesIn = (dt: DataTransfer | null) =>
   [...(dt?.files ?? [])].filter((f) => f.type.startsWith("image/"));
 
 export default function Editor({
-  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery, onSelectionChange, showFrontmatter = false, rawMarkdown = false,
+  value, onChange, resolve, onNavigate, onReady, onPasteImage, onLinkQuery, onSelectionChange, imageStrings, showFrontmatter = false, rawMarkdown = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   resolve: (href: string) => string | null;
+  /** Localized strings the image widget shows; see the `imageLabels` facet. */
+  imageStrings: ImageLabels;
   onNavigate: (url: string, text: string) => void;
   onReady?: (view: EditorView) => void;
   /** Uploads a pasted image and returns the href to link, or null on failure. */
@@ -185,7 +205,7 @@ export default function Editor({
    * Se avisa mientras se escribe `[[algo`, para ofrecer un buscador de notas.
    * `null` cuando el patrón deja de estar bajo el cursor.
    */
-  onLinkQuery?: (q: { query: string; from: number; to: number; x: number; y: number } | null) => void;
+  onLinkQuery?: (q: { query: string; label: string | null; from: number; to: number; x: number; y: number } | null) => void;
   /** Se avisa en cada cambio de selección, venga del ratón o del teclado. */
   onSelectionChange?: (hasSelection: boolean) => void;
   showFrontmatter?: boolean;
@@ -240,25 +260,46 @@ export default function Editor({
           livePreviewTheme,
           linkClick,
           linkResolver.of(resolve),
+          imageLabels.of(imageStrings),
           navigate.of(onNavigate),
           EditorView.lineWrapping,
           // Pegar una imagen dentro de la nota, Obsidian-style. Arrastrarla
           // desde el Finder se engancha más abajo, sobre un área mayor.
           EditorView.domEventHandlers({
             paste(event, view) {
-              const items = event.clipboardData?.items;
+              const clipboard = event.clipboardData;
+              const items = clipboard?.items;
               const upload = onImageRef.current;
-              if (!items || !upload) return false;
-              for (const it of items) {
-                if (it.kind !== "file" || !it.type.startsWith("image/")) continue;
-                const file = it.getAsFile();
-                if (!file) continue;
-                event.preventDefault();
-                const at = view.state.selection.main;
-                placeImage(view, file, at.from, at.to, upload, onChange);
-                return true;
+              if (items && upload) {
+                for (const it of items) {
+                  if (it.kind !== "file" || !it.type.startsWith("image/")) continue;
+                  const file = it.getAsFile();
+                  if (!file) continue;
+                  event.preventDefault();
+                  const at = view.state.selection.main;
+                  placeImage(view, file, at.from, at.to, upload, onChange);
+                  return true;
+                }
               }
-              return false;
+
+              if (!clipboard) return false;
+              // El texto normal —incluidas las URLs copiadas de una barra de
+              // direcciones— se deja a CodeMirror. Interceptar todo paste y
+              // reconstruir la transacción manualmente rompía el pegado en
+              // algunos WebViews aunque el portapapeles sí trajera text/plain.
+              const plain = clipboard.getData("text/plain");
+              if (plain) return false;
+
+              // Algunos navegadores entregan un enlace copiado únicamente
+              // como text/uri-list. Ese es el único caso que CodeMirror no
+              // puede resolver por sí solo y que necesita un fallback.
+              const uri = clipboard.getData("text/uri-list")
+                .split(/\r?\n/).find((line) => line && !line.startsWith("#")) ?? "";
+              if (!uri) return false;
+
+              event.preventDefault();
+              view.dispatch(view.state.replaceSelection(uri));
+              return true;
             },
           }),
           EditorView.updateListener.of((u) => {
@@ -281,8 +322,23 @@ export default function Editor({
             const m = /\[\[([^\[\]]*)$/.exec(before);
             if (!m) return cb(null);
             const coords = u.view.coordsAtPos(sel.head);
+            /*
+             * `[[note|the words I want]]` — the pipe splits what is SEARCHED
+             * from what is WRITTEN.
+             *
+             * Before this the label was always the target's title, so linking
+             * a phrase mid-sentence meant inserting the link and then editing
+             * its text back into the sentence. The pipe is Obsidian's syntax
+             * for the same thing, which is the muscle memory people arrive
+             * with; only the first one splits, so a title containing a pipe
+             * still searches.
+             */
+            const pipe = m[1].indexOf("|");
+            const query = pipe < 0 ? m[1] : m[1].slice(0, pipe);
+            const label = pipe < 0 ? null : m[1].slice(pipe + 1);
             cb({
-              query: m[1],
+              query,
+              label,
               from: line.from + m.index,
               to: sel.head,
               x: coords?.left ?? 0,

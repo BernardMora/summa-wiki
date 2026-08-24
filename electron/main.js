@@ -4,23 +4,28 @@ import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveVault, rememberVault, readSettings, inspectVault, resolveLocale, seedLocale } from "../src/appdata.mjs";
+import { resolveVault, rememberVault, readSettings, inspectVault, resolveLocale, seedLocale, needsOnboarding } from "../src/appdata.mjs";
 import { menuT } from "./menu-messages.mjs";
 import { serverEnv, SERVER_ARGV } from "./server-env.mjs";
+import { killTree } from "./kill-tree.mjs";
+import { PORTS_NEEDED, resolvePort } from "../src/ports.mjs";
 
 /**
  * Cascarón de escritorio — Fase 1.
  *
  * NO reimplementa nada: arranca el mismo `server.ts` que usa `npm run dev` y
  * carga http://localhost:PORT en una ventana nativa. Todo lo que ya funciona
- * (Next, las rutas de /api, la pty por WebSocket en PORT+1) sigue igual.
+ * (Next, las rutas de /api, el WebSocket de agentes en PORT+1) sigue igual.
  *
  * El servidor corre como PROCESO HIJO con el Node del sistema, no dentro de
- * Electron, y eso es deliberado: `node-pty` es un módulo nativo compilado
- * contra el ABI de Node, no contra el de Electron. Cargándolo aquí habría que
- * pasar por `electron-rebuild` desde el primer día. Como hijo, node-pty ni se
- * entera de que Electron existe. Ese es el trabajo de la Fase 2 (empaquetar),
- * no de esta.
+ * Electron, y eso sigue siendo deliberado aunque su motivo original ya no
+ * exista. Lo era `node-pty`, un módulo nativo compilado contra el ABI de Node
+ * y no contra el de Electron, que habría exigido `electron-rebuild` desde el
+ * primer día; se retiró al mover el inicio de sesión a la terminal del
+ * usuario. Lo que queda es igual de decisivo: Next trae sus propias
+ * dependencias nativas, y sobre todo un servidor con su propio ciclo de vida
+ * —que se puede reiniciar, matar y ver morir— no es lo mismo que una librería
+ * cargada dentro de la ventana.
  *
  * Corolario: en Fase 1 la app se lanza desde una terminal (`npm run desktop`),
  * porque hereda el PATH de esa shell para encontrar `node`. Una app lanzada
@@ -29,7 +34,7 @@ import { serverEnv, SERVER_ARGV } from "./server-env.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const PREFERRED_PORT = Number(process.env.PORT ?? 4321);
+const PREFERRED_PORT = resolvePort();
 let PORT = PREFERRED_PORT;
 let ORIGIN = `http://localhost:${PORT}`;
 
@@ -44,19 +49,21 @@ function portAvailable(port) {
 }
 
 /**
- * Next y la terminal necesitan dos puertos consecutivos. Nunca adoptamos un
+ * Un bloque de puertos consecutivos que podamos poseer. Nunca adoptamos un
  * listener preexistente: podría ser un servidor huérfano con una caché vieja
  * (la causa del splash perpetuo de "Compilando") o incluso otra aplicación.
  */
 async function chooseOwnedPorts() {
-  for (let candidate = PREFERRED_PORT; candidate < PREFERRED_PORT + 100; candidate += 2) {
-    if (await portAvailable(candidate) && await portAvailable(candidate + 1)) {
+  for (let candidate = PREFERRED_PORT; candidate < PREFERRED_PORT + 100; candidate += PORTS_NEEDED) {
+    const free = [];
+    for (let offset = 0; offset < PORTS_NEEDED; offset++) free.push(await portAvailable(candidate + offset));
+    if (free.every(Boolean)) {
       PORT = candidate;
       ORIGIN = `http://localhost:${PORT}`;
       return;
     }
   }
-  throw new Error(`No hay un par de puertos libres desde ${PREFERRED_PORT}`);
+  throw new Error(`No hay ${PORTS_NEEDED} puertos consecutivos libres desde ${PREFERRED_PORT}`);
 }
 
 /**
@@ -192,10 +199,15 @@ function startServer() {
   server = spawn(node, SERVER_ARGV, {
     cwd: ROOT,
     env,
-    // Grupo de procesos propio: al salir se mata el grupo entero, no solo al
-    // node — si no, las shells que la terminal integrada dejó abiertas
-    // sobreviven al cierre de la ventana.
-    detached: true,
+    // A process group of its own: on exit the whole group is killed, not just
+    // node — otherwise whatever the server opened (agents, their tools)
+    // outlives the window.
+    //
+    // POSIX only, which is where "group" means anything. On Windows this flag
+    // buys nothing — `taskkill /T` walks the tree without it, see
+    // kill-tree.mjs — and it costs something: `detached` opens a new console
+    // window on every launch. Same split as `scripts/smoke-package.mjs`.
+    detached: process.platform !== "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -239,9 +251,11 @@ function startServer() {
  */
 function stopServer(forQuit = true) {
   quitting = true;
-  if (server?.pid) {
-    try { process.kill(-server.pid, "SIGTERM"); } catch { /* ya se fue */ }
-  }
+  // How a process and its children are killed depends on the operating system,
+  // and that difference lives in kill-tree.mjs: here it used to be written the
+  // POSIX way inside an empty catch, and on Windows it killed nothing without
+  // saying so.
+  if (server?.pid) killTree(server.pid);
   server = null;
   if (!forQuit) quitting = false;
 }
@@ -294,7 +308,11 @@ function readState() {
 function writeState(win) {
   if (!win || win.isDestroyed()) return;
   const b = win.isMaximized() || win.isFullScreen() ? win.getNormalBounds() : win.getBounds();
-  try { fs.writeFileSync(STATE, JSON.stringify({ ...b, maximized: win.isMaximized() })); } catch { /* no es crítico */ }
+  // The zoom travels with the window bounds because it is the same kind of
+  // thing: a choice about this window that nobody wants to make twice. Having
+  // to re-zoom on every launch is what makes an app "not really" zoomable.
+  const zoom = win.webContents.getZoomLevel();
+  try { fs.writeFileSync(STATE, JSON.stringify({ ...b, maximized: win.isMaximized(), zoom })); } catch { /* no es crítico */ }
 }
 
 // ─── Ventana ────────────────────────────────────────────────────────────────
@@ -362,6 +380,7 @@ async function createWindow() {
   if (s.maximized) win.maximize();
   win.once("ready-to-show", () => win.show());
 
+
   // Enlaces externos al navegador del sistema, no dentro de la app: una
   // ventana de Electron sin barra de direcciones es una ratonera.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -391,7 +410,23 @@ async function createWindow() {
     // Cerrar la ventana mientras Next compila la primera ruta aborta esta
     // navegación, y `loadURL` rechaza con ERR_FAILED. No es un error que
     // haya que mostrar: es la salida normal de quien se cansa de esperar.
-    await win.loadURL(ORIGIN).catch(() => {});
+    //
+    // On a first run the address is the onboarding route, not the front page.
+    // `/` would get there on its own, but only through a streamed redirect that
+    // paints an empty encyclopedia for a second first — see `needsOnboarding`.
+    await win.loadURL(needsOnboarding() ? `${ORIGIN}/onboarding` : ORIGIN).catch(() => {});
+
+    /*
+     * The zoom the window was closed at, restored once the app's own origin is
+     * loaded — and only once. Electron keeps a zoom level PER ORIGIN for the
+     * life of the session, so the later navigations (a vault switch restarts
+     * the server and reloads this same origin) inherit it on their own.
+     * Re-applying on every load would undo a zoom change made in between.
+     *
+     * It is set here and not before loadURL because the splash is a `file://`
+     * page: a different origin, and zooming it would only scale the splash.
+     */
+    if (typeof s.zoom === "number" && s.zoom !== 0) win.webContents.setZoomLevel(s.zoom);
   } else {
     await win.webContents.executeJavaScript(
       `document.body.dataset.state = "error"`,
@@ -424,9 +459,17 @@ function press(key, mods = {}) {
  * decirlo. El primero lo publica TabsProvider, que vive en el layout, y trae
  * de serie la navegación a /workspace cuando no hay panes.
  */
-function newTerminal() {
+/**
+ * Abre una conversación con un agente en una pestaña nueva.
+ *
+ * Ocupa el ⌘T que era de la terminal integrada, retirada en la fase 6: es el
+ * atajo de "pestaña nueva de la cosa que uno abre a menudo", y esa cosa pasó a
+ * ser el chat. El id no lleva el agente dentro (ver `components/Tabs.tsx`), así
+ * que el chat abre con el harness por omisión y se cambia desde dentro.
+ */
+function newChat() {
   win?.webContents.executeJavaScript(
-    `window.__wikiOpenTab && window.__wikiOpenTab("term:" + Date.now().toString(36), "Terminal", true)`,
+    `window.__wikiOpenTab && window.__wikiOpenTab("chat:" + Date.now().toString(36), "Chat", true)`,
   ).catch(() => {});
 }
 
@@ -509,7 +552,7 @@ function buildMenu() {
       label: t("file"),
       submenu: [
         { label: t("openNote"), accelerator: "CmdOrCtrl+O", click: () => press("o") },
-        { label: t("newTerminal"), accelerator: "CmdOrCtrl+T", click: newTerminal },
+        { label: t("newChat"), accelerator: "CmdOrCtrl+T", click: newChat },
         { type: "separator" },
         { label: t("openVault"), accelerator: "CmdOrCtrl+Shift+O", click: () => openVault() },
         {
@@ -533,8 +576,23 @@ function buildMenu() {
         { role: "toggleDevTools" },
         { type: "separator" },
         { role: "togglefullscreen" },
-        // Sin ítems de zoom a propósito: ZoomGuard.tsx bloquea el zoom en la
-        // página, y un menú que ofrece lo que la app rechaza miente.
+        { type: "separator" },
+        /*
+         * Zoom. Electron implements it in these roles, not in the page: a
+         * renderer cannot zoom itself the way a browser's chrome does, which is
+         * why the page's ZoomGuard only guards the trackpad pinch now.
+         *
+         * The `=` duplicate is hidden and deliberate. The accelerator Electron
+         * gives `zoomIn` is `CommandOrControl+Plus`, and on most layouts the
+         * plus sign needs Shift — so the key people actually press for "zoom
+         * in", ⌘ with the unshifted `=`, matched nothing. A hidden item is the
+         * documented way to bind a second accelerator to one role without
+         * showing the same command twice in the menu.
+         */
+        { role: "zoomIn", accelerator: "CmdOrCtrl+Plus" },
+        { role: "zoomIn", accelerator: "CmdOrCtrl+=", visible: false },
+        { role: "zoomOut", accelerator: "CmdOrCtrl+-" },
+        { role: "resetZoom", accelerator: "CmdOrCtrl+0" },
       ],
     },
     { role: "windowMenu" },

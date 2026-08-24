@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getIndex } from "@/lib/server.ts";
 import { search } from "@/src/search.ts";
 import { getT } from "@/lib/i18n.server.ts";
+import AskAgent from "@/components/AskAgent.tsx";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,11 @@ export default async function SearchPage({
           <span className="dim">— {h.note.type} · {h.note.bundle} · {h.note.updated}</span>
           <div style={{ fontSize: 13.4 }}>{h.note.excerpt.slice(0, 240)}…</div>
           <div className="dim" style={{ fontSize: 11.5 }}>{h.note.path}</div>
+          <AskAgent
+            label={t("chat.askResult")}
+            prompt={t("chat.askResultPrompt", { title: h.note.title, query: q })}
+            resource={{ id: h.note.id, title: h.note.title, path: h.note.path, description: h.note.excerpt }}
+          />
         </div>
       ))}
     </article>

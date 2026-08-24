@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import CodePane from "./CodePane.tsx";
+import Editor, { useImageStrings } from "./Editor.tsx";
 import { FileIcon, extOf } from "./FileIcon.tsx";
 import { useT } from "./I18n";
 import type { MessageKey } from "@/lib/i18n.ts";
@@ -29,6 +30,8 @@ const NOTA: Record<string, MessageKey> = {
 };
 const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "ogg", "ogv", "mov"]);
 const HTML_EXTENSIONS = new Set(["html", "htm"]);
+const MARKDOWN_EXTENSIONS = new Set(["md", "markdown"]);
+const AUTOSAVE_DELAY = 700;
 
 const kb = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
@@ -43,6 +46,7 @@ interface Loaded {
 
 export default function RawFilePane({ rel }: { rel: string }) {
   const t = useT();
+  const imageStrings = useImageStrings();
   const name = rel.split("/").pop() ?? rel;
   const ext = extOf(name);
   const href = `/api/asset?p=${encodeURIComponent(rel)}`;
@@ -53,16 +57,23 @@ export default function RawFilePane({ rel }: { rel: string }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [htmlMode, setHtmlMode] = useState<"view" | "raw">("view");
+  const [markdownMode, setMarkdownMode] = useState<"preview" | "raw">("preview");
   const [previewHtml, setPreviewHtml] = useState("");
   // El texto en vuelo no vive en el estado de React: cambiarlo en cada
   // pulsación volvería a renderizar el panel entero y CodeMirror ya lleva su
   // propio documento. Solo se lee al guardar.
   const draft = useRef("");
   const mtime = useRef(0);
+  const revision = useRef(0);
+  const savingRef = useRef(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     let alive = true;
-    setData(null); setErr(""); setDirty(false); setHtmlMode("view");
+    setData(null); setErr(""); setDirty(false); setHtmlMode("view"); setMarkdownMode("preview");
+    revision.current = 0;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     fetch(`/api/file?p=${encodeURIComponent(rel)}`)
       .then((r) => r.json())
       .then((d: Loaded & { error?: string }) => {
@@ -74,7 +85,10 @@ export default function RawFilePane({ rel }: { rel: string }) {
         setData(d);
       })
       .catch(() => { if (alive) setErr(t("raw.readFailed")); });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
   }, [rel]);
 
   const showHtml = useCallback(() => {
@@ -85,12 +99,15 @@ export default function RawFilePane({ rel }: { rel: string }) {
   }, []);
 
   const save = useCallback(async () => {
-    if (saving) return;
+    if (savingRef.current) return;
+    const savingRevision = revision.current;
+    const text = draft.current;
+    savingRef.current = true;
     setSaving(true); setErr("");
     try {
       const r = await fetch("/api/file", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ p: rel, text: draft.current, mtimeMs: mtime.current }),
+        body: JSON.stringify({ p: rel, text, mtimeMs: mtime.current }),
       });
       const d = await r.json();
       if (r.status === 409) {
@@ -101,13 +118,31 @@ export default function RawFilePane({ rel }: { rel: string }) {
       }
       if (!r.ok) { setErr(d.error ?? t("raw.saveFailed")); return; }
       mtime.current = d.mtimeMs;
-      setDirty(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1400);
+      if (revision.current === savingRevision) {
+        setDirty(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1400);
+      }
     } finally {
+      savingRef.current = false;
       setSaving(false);
+      // Si el usuario siguió escribiendo durante la petición, guarda esa
+      // revisión después de que el mtime de la anterior ya esté actualizado.
+      if (revision.current !== savingRevision) {
+        autosaveTimer.current = setTimeout(() => void saveRef.current(), AUTOSAVE_DELAY);
+      }
     }
-  }, [rel, saving]);
+  }, [rel, t]);
+  saveRef.current = save;
+
+  const changeDraft = useCallback((value: string, autosave: boolean) => {
+    draft.current = value;
+    revision.current++;
+    setDirty(true);
+    if (!autosave) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => void saveRef.current(), AUTOSAVE_DELAY);
+  }, []);
 
   // ⌘S también fuera del editor: el foco puede estar en la barra del panel.
   useEffect(() => {
@@ -171,6 +206,7 @@ export default function RawFilePane({ rel }: { rel: string }) {
   }
 
   const isHtml = HTML_EXTENSIONS.has(ext);
+  const isMarkdown = MARKDOWN_EXTENSIONS.has(ext);
   const previewBase = `/api/html-preview/${rel.split("/").slice(0, -1).map(encodeURIComponent).join("/")}${rel.includes("/") ? "/" : ""}`;
   const htmlWithBase = previewHtml.replace(
     /<head(\s[^>]*)?>/i,
@@ -179,6 +215,39 @@ export default function RawFilePane({ rel }: { rel: string }) {
 
   return (
     <div className="imgview">
+      {isMarkdown ? <>
+        <div className="markdown-file-controls">
+          {(saving || saved || err) && <span className={err ? "err" : "dim"}>
+            {err || (saving ? t("common.saving") : t("common.saved"))}
+          </span>}
+          <span className="markdown-view-toggle" role="group" aria-label={t("raw.markdownDisplayMode")}>
+            <button type="button" className={markdownMode === "preview" ? "on" : ""}
+                    aria-pressed={markdownMode === "preview"} onClick={() => setMarkdownMode("preview")}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>
+              {t("raw.preview")}
+            </button>
+            <button type="button" className={markdownMode === "raw" ? "on" : ""}
+                    aria-pressed={markdownMode === "raw"} onClick={() => setMarkdownMode("raw")}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4l-3 16"/></svg>
+              {t("raw.raw")}
+            </button>
+          </span>
+        </div>
+        <div className="markdown-file-editor">
+          <Editor
+            key={rel}
+            value={data.text ?? ""}
+            onChange={(value) => changeDraft(value, true)}
+            resolve={() => null}
+            imageStrings={imageStrings}
+            onNavigate={(url) => {
+              if (/^https?:/i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+            }}
+            showFrontmatter={markdownMode === "raw"}
+            rawMarkdown={markdownMode === "raw"}
+          />
+        </div>
+      </> : <>
       <div className="imgbar">
         <FileIcon name={name} />
         <span className="imgname">{name}{dirty ? " •" : ""}</span>
@@ -213,10 +282,11 @@ export default function RawFilePane({ rel }: { rel: string }) {
           key={rel}
           filename={name}
           value={data.text ?? ""}
-          onChange={(v) => { draft.current = v; if (!dirty) setDirty(true); }}
+          onChange={(v) => changeDraft(v, false)}
           onSave={() => { if (dirty) save(); }}
         />
       </div>}
+      </>}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { openInWorkspace, newTermId } from "../Tabs.tsx";
-import { runInNewTerminal } from "../TerminalPane.tsx";
-import { AGENTS, promptCommand } from "../agent-session.ts";
+import { openInWorkspace, newChatId, rememberChatAgent } from "../Tabs.tsx";
+import { runInNewChat } from "../AgentChat.tsx";
+import { ACP_PRESETS } from "@/src/acp/presets.ts";
 
 const LESSONS = [
   { id: "navigate", target: '[data-tour="file-tree"]', title: { es: "Navega el contexto", en: "Navigate the context" }, body: { es: "Abre “Estudio creativo” y después “Fondo de emergencia” desde el árbol. El recorrido avanzará cuando hayas abierto ambas notas.", en: "Open “Creative studio” and then “Emergency fund” from the tree. The tour will continue after you open both notes." } },
@@ -15,21 +15,23 @@ const LESSONS = [
   { id: "authorship", target: '[data-tour="editor-toolbar"]', title: { es: "Distingue autoría", en: "Distinguish authorship" }, body: { es: "La barra permite añadir títulos, negritas, cursivas, subrayado, listas, enlaces, citas, colores y otros formatos. Selecciona un fragmento y usa también los controles de autoría para marcarlo como humano o IA.", en: "The toolbar lets you add headings, bold, italic, underline, lists, links, quotes, colors, and other formatting. Select a passage and also use the authorship controls to mark it as human or AI." } },
   { id: "media", target: '[data-tour="media-tools"]', title: { es: "Trabaja con recursos", en: "Work with media" }, body: { es: "Usa el control resaltado para insertar una imagen o un video en la nota.", en: "Use the highlighted controls to insert an image or video into the note." } },
   { id: "orchestration", target: '[data-tour="file-tree"]', title: { es: "Contexto para agentes", en: "Context for agents" }, body: { es: "Abre AGENTS.md desde la raíz o explora la carpeta visible skills/. Estos archivos explican al agente qué contexto debe respetar y cómo ejecutar procesos específicos.", en: "Open AGENTS.md from the root or explore the visible skills/ folder. These files tell the agent which context to respect and how to run specific processes." } },
-  { id: "terminal", target: '[data-tour="new-terminal"]', title: { es: "Pregunta al vault con IA", en: "Query the vault with AI" }, body: { es: "Inicia el agente que elegiste con una pregunta en lenguaje natural. Observa en la terminal cómo recorre distintos archivos, reúne evidencia y construye una respuesta con el contexto del vault.", en: "Start your selected agent with a natural-language question. Watch the terminal as it explores files, gathers evidence, and builds an answer using the vault context." } },
-  { id: "add-to-chat", target: '[data-tour="workspace-tabs"]', title: { es: "Añade un archivo a la conversación", en: "Add a file to the conversation" }, body: { es: "Ahora que hay una conversación abierta, haz clic derecho sobre una pestaña de nota y elige “Agregar al chat”. Summa escribirá la ruta del archivo en la terminal activa para que el agente pueda usar ese contexto.", en: "Now that a conversation is open, right-click a note tab and choose “Add to chat.” Summa will type the file path into the active terminal so the agent can use that context." } },
+  { id: "chat", target: '[data-tour="agent-menu"]', title: { es: "Pregunta al vault con IA", en: "Query the vault with AI" }, body: { es: "Inicia el agente que elegiste con una pregunta en lenguaje natural. Observa en el chat cómo recorre distintos archivos, reúne evidencia y construye una respuesta con el contexto del vault. Dentro del chat puedes cambiar de agente sin perder la conversación.", en: "Start your selected agent with a natural-language question. Watch the chat as it explores files, gathers evidence, and builds an answer using the vault context. Inside the chat you can switch agents without losing the conversation." } },
+  { id: "add-to-chat", target: '[data-tour="workspace-tabs"]', title: { es: "Añade un archivo a la conversación", en: "Add a file to the conversation" }, body: { es: "Ahora que hay una conversación abierta, haz clic derecho sobre una pestaña de nota y elige “Agregar al chat”. Summa escribirá la ruta del archivo en el chat activo para que el agente pueda usar ese contexto.", en: "Now that a conversation is open, right-click a note tab and choose “Add to chat.” Summa will type the file path into the active chat so the agent can use that context." } },
   { id: "ai", target: '[data-tour="agent-menu"]', title: { es: "Trabaja con un agente", en: "Work with an agent" }, body: { es: "Abre el menú de IA. Desde ahí puedes pedir un brief que separe hechos, inferencias, contradicciones y preguntas.", en: "Open the AI menu. From there you can request a brief separating facts, inferences, contradictions, and questions." }, requiresAi: true },
 ] as const;
+
+const FILE_TREE_LESSONS = new Set(["navigate", "create", "file-context", "open-beside", "orchestration"]);
 
 type Rect = { left: number; top: number; width: number; height: number };
 type Point = { left: number; top: number };
 
-export default function DemoGuide({ locale, initialLesson, completed, skipped, aiConfigured, agent, model, vaultPath }: { locale: "es" | "en"; initialLesson: string | null; completed: string[]; skipped: string[]; aiConfigured: boolean; agent: string | null; model: string; vaultPath: string }) {
+export default function DemoGuide({ locale, initialLesson, completed, skipped, aiConfigured, agent, vaultPath }: { locale: "es" | "en"; initialLesson: string | null; completed: string[]; skipped: string[]; aiConfigured: boolean; agent: string | null; vaultPath: string }) {
   const start = Math.max(0, LESSONS.findIndex((l) => l.id === initialLesson));
   const [index, setIndex] = useState(start);
   const [hidden, setHidden] = useState(false);
   const [rect, setRect] = useState<Rect | null>(null);
   const [navigationProgress, setNavigationProgress] = useState(0);
-  const [terminalStarted, setTerminalStarted] = useState(false);
+  const [chatStarted, setChatStarted] = useState(false);
   const [chatMenuOpened, setChatMenuOpened] = useState(false);
   const [manualPosition, setManualPosition] = useState<Point | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -42,11 +44,25 @@ export default function DemoGuide({ locale, initialLesson, completed, skipped, a
   const omitted = useRef(new Set(skipped));
   const advancing = useRef(false);
   const lesson = LESSONS[index];
-  const lessonTarget = lesson.id === "terminal" && terminalStarted
-    ? '[data-tour="terminal-pane"]'
+  const lessonTarget = lesson.id === "chat" && chatStarted
+    ? '[data-tour="agent-chat"]'
     : lesson.id === "add-to-chat" && chatMenuOpened
       ? '[data-tour="tab-add-chat"]'
       : lesson.target;
+
+  // A lesson must make its own target reachable. Persisted UI state from a
+  // previous session can otherwise start the tour with the sidebar collapsed
+  // or on Categories while the instructions ask for the file tree.
+  useEffect(() => {
+    if (!FILE_TREE_LESSONS.has(lesson.id)) return;
+    const width = `${localStorage.getItem("wiki.sidew") || 195}px`;
+    document.documentElement.style.setProperty("--sidew", width);
+    delete document.documentElement.dataset.side;
+    localStorage.setItem("wiki.sidecollapsed", "0");
+    localStorage.setItem("wiki.sideview", "files");
+    window.dispatchEvent(new CustomEvent("summa:sidebar-state", { detail: { collapsed: false } }));
+    window.dispatchEvent(new Event("summa:show-file-tree"));
+  }, [lesson.id]);
 
   useEffect(() => {
     setNewTabModifier(/Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd" : "Ctrl");
@@ -187,19 +203,20 @@ export default function DemoGuide({ locale, initialLesson, completed, skipped, a
     return () => { document.removeEventListener("click", onClick, true); document.removeEventListener("contextmenu", onContextMenu, true); document.removeEventListener("input", onEdit, true); };
   }, [index, lesson.id, persist]);
 
-  function terminalPreset() {
+  function startDemoChat() {
     if (!aiConfigured || !agent) return;
     const prompt = locale === "es"
       ? "Analiza este vault y responde: ¿qué tensión existe entre el plan de abrir el estudio creativo, el fondo de emergencia y el registro de energía de Alex? Cita las rutas de los archivos que sustentan cada hallazgo, separa hechos de inferencias y no modifiques ningún archivo."
       : "Analyze this vault and answer: what tension exists between Alex's plan to open the creative studio, emergency fund, and energy log? Cite the file paths supporting each finding, separate facts from inferences, and do not modify any files.";
-    const id = newTermId();
-    runInNewTerminal(id, promptCommand(agent, model, prompt), vaultPath);
+    const id = newChatId();
+    rememberChatAgent(id, agent);
+    runInNewChat(id, prompt, vaultPath);
     openInWorkspace(id, locale === "es" ? "Consulta del vault" : "Vault query", true);
-    setTerminalStarted(true);
+    setChatStarted(true);
   }
 
   if (hidden) return <button className="tour-restore" onClick={() => setHidden(false)}>Demo · {index + 1}/{LESSONS.length}</button>;
-  const cardSide = lesson.id === "terminal" && terminalStarted ? "tour-card-left" : rect && rect.left > 500 ? "tour-card-left" : "tour-card-right";
+  const cardSide = lesson.id === "chat" && chatStarted ? "tour-card-left" : rect && rect.left > 500 ? "tour-card-left" : "tour-card-right";
   return <>
     {rect && <div className="tour-spotlight" style={rect} aria-hidden="true" />}
     <aside ref={cardRef} className={`tour-card ${manualPosition ? "tour-card-manual" : cardSide}${dragging ? " dragging" : ""}`} style={manualPosition ? { left: manualPosition.left, top: manualPosition.top, right: "auto", bottom: "auto" } : undefined} aria-live="polite">
@@ -208,9 +225,9 @@ export default function DemoGuide({ locale, initialLesson, completed, skipped, a
       <h2>{lesson.title[locale]}</h2><p>{lesson.body[locale]}</p>
       {lesson.id === "navigate" && <p className="tour-tip">{newTabModifier} + click · {locale === "es" ? "Abrir en otra pestaña" : "Open in another tab"}</p>}
       {lesson.id === "navigate" && navigationProgress === 1 && <div className="tour-status">✓ {locale === "es" ? "Estudio creativo abierto. Ahora abre Fondo de emergencia." : "Creative studio opened. Now open Emergency fund."}</div>}
-      {!rect && lesson.id !== "terminal" && <div className="tour-status">{locale === "es" ? "Abre una nota para mostrar el control correspondiente." : "Open a note to reveal the relevant control."}</div>}
-      {lesson.id === "terminal" && aiConfigured && agent && <><div className="tour-status">{terminalStarted ? (locale === "es" ? "El agente está trabajando. Sigue su proceso en la terminal resaltada y avanza cuando termine de responder." : "The agent is working. Follow its process in the highlighted terminal and continue when it finishes responding.") : `${locale === "es" ? "Agente" : "Agent"}: ${AGENTS.find((item) => item.id === agent)?.name ?? agent}${model ? ` · ${model}` : ""}`}</div><button className="tour-do" onClick={terminalPreset}>{terminalStarted ? (locale === "es" ? "Ejecutar de nuevo" : "Run again") : (locale === "es" ? "Preguntar a la IA" : "Ask the AI")}</button></>}
-      {lesson.id === "terminal" && (!aiConfigured || !agent) && <div className="tour-warning">{locale === "es" ? "No configuraste un agente de IA. Para ver este proceso necesitas volver a la configuración, instalar o elegir uno; también puedes omitir esta lección." : "You did not configure an AI agent. To see this process, return to setup and install or select one; you can also skip this lesson."}</div>}
+      {!rect && lesson.id !== "chat" && <div className="tour-status">{locale === "es" ? "Abre una nota para mostrar el control correspondiente." : "Open a note to reveal the relevant control."}</div>}
+      {lesson.id === "chat" && aiConfigured && agent && <><div className="tour-status">{chatStarted ? (locale === "es" ? "El agente está trabajando. Sigue su proceso en el chat resaltado y avanza cuando termine de responder." : "The agent is working. Follow its process in the highlighted chat and continue when it finishes responding.") : `${locale === "es" ? "Agente" : "Agent"}: ${ACP_PRESETS.find((item) => item.id === agent)?.name ?? agent}`}</div><button className="tour-do" onClick={startDemoChat}>{chatStarted ? (locale === "es" ? "Ejecutar de nuevo" : "Run again") : (locale === "es" ? "Preguntar a la IA" : "Ask the AI")}</button></>}
+      {lesson.id === "chat" && (!aiConfigured || !agent) && <div className="tour-warning">{locale === "es" ? "No configuraste un agente de IA. Para ver este proceso necesitas volver a la configuración, instalar o elegir uno; también puedes omitir esta lección." : "You did not configure an AI agent. To see this process, return to setup and install or select one; you can also skip this lesson."}</div>}
       {lesson.id === "ai" && !aiConfigured && <div className="tour-warning">{locale === "es" ? "No hay un agente configurado. Puedes instalar uno desde este menú o continuar sin probar la lección." : "No agent is configured. You can install one from this menu or continue without trying the lesson."}</div>}
       <div className="tour-actions"><button disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>{locale === "es" ? "Atrás" : "Back"}</button><button onClick={() => persist(index + 1, "skip")}>{locale === "es" ? "Omitir" : "Skip"}</button><button className="tour-next" onClick={() => persist(index + 1, "complete")}>{index === LESSONS.length - 1 ? (locale === "es" ? "Crear mi vault" : "Create my vault") : (locale === "es" ? "Siguiente" : "Next")} →</button></div>
     </aside>

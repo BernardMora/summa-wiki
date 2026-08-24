@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { postJSON, TimeoutError } from "./net";
-import AgentSession from "./AgentSession";
+import AgentChat from "./AgentChat";
+import { ACP_PRESETS } from "@/src/acp/presets.ts";
 import { useT } from "./I18n";
 import { bold } from "./markup";
 
@@ -49,7 +50,8 @@ export default function Ingest() {
   const [folders, setFolders] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [desktop, setDesktop] = useState(false);
-  const [claude, setClaude] = useState<string | null>(null);
+  const [agent, setAgent] = useState("claude-code");
+  const [chatId] = useState(() => `ingest-${crypto.randomUUID()}`);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [done, setDone] = useState<Done | null>(null);
   const [busy, setBusy] = useState("");
@@ -65,7 +67,6 @@ export default function Ingest() {
 
   useEffect(() => {
     setDesktop(typeof window !== "undefined" && !!window.summa);
-    fetch("/api/ingest").then((r) => r.json()).then((d) => setClaude(d.claude)).catch(() => {});
   }, []);
 
   const chosen = desktop ? folders : text.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -129,13 +130,16 @@ export default function Ingest() {
         <h2 style={{ marginTop: 26 }}>{t("ingest.nowSorting")}</h2>
         <p>{t("ingest.sortedBySkill", { skill: "/vault-ingest" })}</p>
 
-        {done.claude ? (
-          <AgentSession cwd={done.vault} />
-        ) : (
-          <div className="warnbox">
-            {bold(t("ingest.noClaude", { cmd: "claude", skill: "claude '/vault-ingest'" }))}
-          </div>
-        )}
+        <div className="cfgmodes aichat">
+          {ACP_PRESETS.map((preset) => (
+            <button key={preset.id} className={agent === preset.id ? "on" : ""}
+                    onClick={() => setAgent(preset.id)}>{preset.name}</button>
+          ))}
+        </div>
+        <div className="agentterm">
+          <AgentChat key={agent} tabId={`${chatId}-${agent}`} cwd={done.vault} agent={agent}
+                     initialPrompt="/vault-ingest" />
+        </div>
       </div>
     );
   }
@@ -180,11 +184,6 @@ export default function Ingest() {
                 disabled={!chosen.length || !!busy} onClick={analyse}>
           {busy === "analizando" ? t("setup.analysing", { n: elapsed }) : t("setup.analyse")}
         </button>
-        {claude === null && (
-          <span className="dim" style={{ fontSize: 11.5 }}>
-            {t("ingest.noClaudeWarn", { cmd: "claude" })}
-          </span>
-        )}
       </div>
 
       {preview && (
